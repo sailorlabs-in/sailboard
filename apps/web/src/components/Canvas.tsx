@@ -85,6 +85,48 @@ export const Canvas: React.FC<CanvasProps> = ({
   });
 
   const [selectionBox, setSelectionBox] = useState<BoundingBox | null>(null);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const previousToolRef = useRef<ElementType | 'eraser' | 'pan'>('selection');
+
+  const latestElementsRef = useRef(elements);
+  latestElementsRef.current = elements;
+
+  // Spacebar Hand Tool (Hold Space to temporarily pan)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) return;
+
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+        previousToolRef.current = activeTool;
+        if (activeTool !== 'pan') {
+          onToolChange('pan');
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsSpacePressed(false);
+        if (previousToolRef.current && previousToolRef.current !== 'pan') {
+          onToolChange(previousToolRef.current);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [activeTool, onToolChange]);
 
   // Inline Text Editing State
   const [editingTextElement, setEditingTextElement] = useState<{
@@ -94,6 +136,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     width: number;
     height: number;
     text: string;
+    textColor?: string;
   } | null>(null);
 
   // Convert Client Window Coordinates to Canvas World Coordinates
@@ -164,37 +207,48 @@ export const Canvas: React.FC<CanvasProps> = ({
     render();
   }, [render]);
 
-  // Mouse Wheel: Zoom and Two-Finger Pan
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
-      // Zoom
-      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-      const newZoom = Math.min(5, Math.max(0.1, zoom * zoomFactor));
+  // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, or regular scroll to pan
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect) {
+    const onWheelNonPassive = (e: WheelEvent) => {
+      e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom towards mouse pointer
+        const rect = container.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
+
+        const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+        const newZoom = Math.min(3, Math.max(0.2, zoom * zoomFactor));
+
         const newPanX = mouseX - (mouseX - pan.x) * (newZoom / zoom);
         const newPanY = mouseY - (mouseY - pan.y) * (newZoom / zoom);
+
         onZoomChange(newZoom);
         onPanChange({ x: newPanX, y: newPanY });
+      } else {
+        // Pan
+        onPanChange({
+          x: pan.x - e.deltaX,
+          y: pan.y - e.deltaY,
+        });
       }
-    } else {
-      // Pan
-      onPanChange({
-        x: pan.x - e.deltaX,
-        y: pan.y - e.deltaY,
-      });
-    }
-  };
+    };
+
+    container.addEventListener('wheel', onWheelNonPassive, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onWheelNonPassive);
+    };
+  }, [zoom, pan, onZoomChange, onPanChange]);
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent) => {
     const worldPoint = clientToWorld(e.clientX, e.clientY);
     const isMiddleClick = e.button === 1;
-    const isSpacePan = e.buttons === 4 || activeTool === 'pan' || isMiddleClick;
+    const isSpacePan = isSpacePressed || activeTool === 'pan' || isMiddleClick || e.buttons === 4;
 
     if (isSpacePan) {
       setDragState({
@@ -473,10 +527,16 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
+  const lastCursorEmitRef = useRef<number>(0);
+
   // Pointer Move
   const handlePointerMove = (e: React.PointerEvent) => {
     const worldPoint = clientToWorld(e.clientX, e.clientY);
-    onCursorMove(worldPoint);
+    const now = Date.now();
+    if (now - lastCursorEmitRef.current > 20) {
+      onCursorMove(worldPoint);
+      lastCursorEmitRef.current = now;
+    }
 
     if (dragState.mode === 'none') return;
 
@@ -528,23 +588,23 @@ export const Canvas: React.FC<CanvasProps> = ({
       const finalDx = gridSnap ? snapToGrid(dx) : dx;
       const finalDy = gridSnap ? snapToGrid(dy) : dy;
 
-      onElementsChange(
-        elements.map((el) => {
-          if (selectedElementIds.includes(el.id)) {
-            const start = dragState.elementStartPositions?.get(el.id);
-            if (start) {
-              return {
-                ...el,
-                x: start.x + finalDx,
-                y: start.y + finalDy,
-                updatedAt: Date.now(),
-              };
-            }
+      const updated = elements.map((el) => {
+        if (selectedElementIds.includes(el.id)) {
+          const start = dragState.elementStartPositions?.get(el.id);
+          if (start) {
+            return {
+              ...el,
+              x: start.x + finalDx,
+              y: start.y + finalDy,
+              updatedAt: Date.now(),
+            };
           }
-          return el;
-        }),
-        false
-      );
+        }
+        return el;
+      });
+
+      latestElementsRef.current = updated;
+      onElementsChange(updated, false);
       return;
     }
 
@@ -641,24 +701,24 @@ export const Canvas: React.FC<CanvasProps> = ({
       const scaleX = newBounds.width / Math.max(1, init.width);
       const scaleY = newBounds.height / Math.max(1, init.height);
 
-      onElementsChange(
-        elements.map((el) => {
-          if (selectedElementIds.includes(el.id)) {
-            const relX = (el.x - init.minX) * scaleX;
-            const relY = (el.y - init.minY) * scaleY;
-            return {
-              ...el,
-              x: newBounds.minX + relX,
-              y: newBounds.minY + relY,
-              width: Math.max(20, el.width * scaleX),
-              height: Math.max(20, el.height * scaleY),
-              updatedAt: Date.now(),
-            };
-          }
-          return el;
-        }),
-        false
-      );
+      const updated = elements.map((el) => {
+        if (selectedElementIds.includes(el.id)) {
+          const relX = (el.x - init.minX) * scaleX;
+          const relY = (el.y - init.minY) * scaleY;
+          return {
+            ...el,
+            x: newBounds.minX + relX,
+            y: newBounds.minY + relY,
+            width: Math.max(20, el.width * scaleX),
+            height: Math.max(20, el.height * scaleY),
+            updatedAt: Date.now(),
+          };
+        }
+        return el;
+      });
+
+      latestElementsRef.current = updated;
+      onElementsChange(updated, false);
     }
   };
 
@@ -666,7 +726,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const handlePointerUp = () => {
     if (dragState.mode === 'drawing' || dragState.mode === 'moving' || dragState.mode === 'resizing') {
       // Record history on drag completion
-      onElementsChange(elements, true);
+      onElementsChange(latestElementsRef.current, true);
 
       if (dragState.mode === 'drawing') {
         onToolChange('selection');
@@ -685,10 +745,12 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Double click on element: Open inline text editor
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isViewer) return;
     const worldPoint = clientToWorld(e.clientX, e.clientY);
     const hit = [...elements].reverse().find((el) => !el.isDeleted && isPointInElement(worldPoint, el));
 
     if (hit) {
+      onSelectElements([hit.id]);
       setEditingTextElement({
         elementId: hit.id,
         x: hit.x,
@@ -696,6 +758,44 @@ export const Canvas: React.FC<CanvasProps> = ({
         width: hit.width,
         height: hit.height,
         text: hit.text || '',
+        textColor: hit.textColor,
+      });
+    } else if (activeTool === 'selection' || activeTool === 'text') {
+      const textColor = (currentStyle as any).textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a');
+      const newEl: CanvasElement = {
+        id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        type: 'text',
+        x: worldPoint.x,
+        y: worldPoint.y,
+        width: 140,
+        height: 36,
+        angle: 0,
+        strokeColor: currentStyle.strokeColor,
+        backgroundColor: 'transparent',
+        textColor: textColor,
+        fillStyle: 'none',
+        strokeWidth: 2,
+        strokeStyle: 'solid',
+        roughness: 0,
+        opacity: 100,
+        seed: Math.floor(Math.random() * 100000),
+        version: 1,
+        versionNonce: 1,
+        isDeleted: false,
+        updatedAt: Date.now(),
+        text: '',
+        fontSize: currentStyle.fontSize || 18,
+      };
+      onElementsChange([...elements, newEl], true);
+      onSelectElements([newEl.id]);
+      setEditingTextElement({
+        elementId: newEl.id,
+        x: newEl.x,
+        y: newEl.y,
+        width: newEl.width,
+        height: newEl.height,
+        text: '',
+        textColor: textColor,
       });
     }
   };
@@ -706,7 +806,12 @@ export const Canvas: React.FC<CanvasProps> = ({
       onElementsChange(
         elements.map((el) =>
           el.id === editingTextElement.elementId
-            ? { ...el, text: newText, updatedAt: Date.now() }
+            ? {
+                ...el,
+                text: newText,
+                textColor: el.textColor || editingTextElement.textColor || (currentStyle as any).textColor,
+                updatedAt: Date.now(),
+              }
             : el
         ),
         true
@@ -718,7 +823,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Dynamic Cursor Style
   const getCursor = () => {
     if (dragState.mode === 'panning') return 'grabbing';
-    if (activeTool === 'pan') return 'grab';
+    if (activeTool === 'pan' || isSpacePressed) return 'grab';
     if (activeTool === 'eraser') return 'crosshair';
     if (activeTool === 'selection') {
       if (dragState.activeHandle) {
@@ -743,7 +848,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         cursor: getCursor(),
         touchAction: 'none',
       }}
-      onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -773,7 +877,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             height: `${Math.max(60, editingTextElement.height * zoom)}px`,
             transformOrigin: 'top left',
             background: theme === 'dark' ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            color: theme === 'dark' ? '#f8fafc' : '#0f172a',
+            color: editingTextElement.textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
             border: '2px solid #6366f1',
             borderRadius: 6,
             padding: 8,
@@ -785,6 +889,38 @@ export const Canvas: React.FC<CanvasProps> = ({
             boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
           }}
         />
+      )}
+
+      {/* Neumorphic Hand Tool Active Indicator */}
+      {(isSpacePressed || activeTool === 'pan') && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 18px',
+            borderRadius: '24px',
+            backgroundColor: theme === 'dark' ? '#1c2030' : '#e6ecf2',
+            boxShadow:
+              theme === 'dark'
+                ? '6px 6px 16px rgba(0,0,0,0.5), -4px -4px 10px rgba(255,255,255,0.05)'
+                : '6px 6px 16px #c2c9d1, -6px -6px 16px #ffffff',
+            border: theme === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.8)',
+            color: theme === 'dark' ? '#f1f5f9' : '#1e293b',
+            fontSize: '12px',
+            fontWeight: 600,
+            zIndex: 30,
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <span style={{ fontSize: '15px' }}>✋</span>
+          <span>Hand Tool Active {isSpacePressed ? '(Space held)' : ''} • Drag to Pan</span>
+        </div>
       )}
     </div>
   );

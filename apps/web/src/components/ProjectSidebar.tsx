@@ -23,6 +23,8 @@ import {
   DialogActions,
   Avatar,
   Badge,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   FolderOutlined,
@@ -40,6 +42,7 @@ import {
   VisibilityOutlined,
   AdminPanelSettingsOutlined,
   SyncOutlined,
+  SpaceDashboardOutlined,
 } from '@mui/icons-material';
 import { Project, WhiteboardDocument, ProjectRole } from '@rea/shared-types';
 import { useAuth } from '../context/AuthContext';
@@ -58,6 +61,7 @@ interface ProjectSidebarProps {
   onOpenShare: () => void;
   onOpenAuth: () => void;
   userRole: ProjectRole;
+  onNavigateHome?: () => void;
 }
 
 export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
@@ -74,7 +78,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onOpenShare,
   onOpenAuth,
   userRole = 'editor',
+  onNavigateHome,
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
   const [projectMenuAnchor, setProjectMenuAnchor] = useState<null | HTMLElement>(null);
 
@@ -123,19 +130,22 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   return (
     <>
       <Drawer
-        variant="permanent"
+        variant={isMobile ? 'temporary' : 'permanent'}
+        open={open}
+        onClose={onToggle}
+        ModalProps={{ keepMounted: true }}
         sx={{
-          width: open ? 280 : 56,
+          width: open ? 280 : isMobile ? 0 : 56,
           flexShrink: 0,
           transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           '& .MuiDrawer-paper': {
-            width: open ? 280 : 56,
+            width: open ? 280 : isMobile ? 0 : 56,
             transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             overflowX: 'hidden',
             boxSizing: 'border-box',
             bgcolor: 'background.paper',
             borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
+            display: isMobile && !open ? 'none' : 'flex',
             flexDirection: 'column',
           },
         }}
@@ -229,12 +239,14 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           anchorEl={projectMenuAnchor}
           open={Boolean(projectMenuAnchor)}
           onClose={() => setProjectMenuAnchor(null)}
-          PaperProps={{
-            sx: {
-              width: 260,
-              maxHeight: 340,
-              borderRadius: 2,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+          slotProps={{
+            paper: {
+              sx: {
+                width: 260,
+                maxHeight: 340,
+                borderRadius: 2,
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              },
             },
           }}
         >
@@ -365,16 +377,24 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                         <DescriptionOutlined sx={{ fontSize: 18 }} />
                       </ListItemIcon>
                       <ListItemText
-                        primary={f.title}
-                        primaryTypographyProps={{
-                          variant: 'body2',
-                          fontWeight: isActive ? 700 : 500,
-                          color: isActive ? 'primary.main' : 'text.primary',
-                          noWrap: true,
-                          fontSize: '0.825rem',
-                        }}
-                        secondary={`${f.elements?.length || 0} shapes`}
-                        secondaryTypographyProps={{ fontSize: '0.7rem' }}
+                        primary={
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{
+                              fontWeight: isActive ? 700 : 500,
+                              color: isActive ? 'primary.main' : 'text.primary',
+                              fontSize: '0.825rem',
+                            }}
+                          >
+                            {f.title}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                            {`${f.elements?.length || 0} shapes`}
+                          </Typography>
+                        }
                       />
                     </ListItemButton>
                   </ListItem>
@@ -438,10 +458,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   {user?.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
                 </Avatar>
                 <Box sx={{ overflow: 'hidden' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.1, noWrap: true }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 600, lineHeight: 1.1 }}>
                     {user?.name || 'Guest User'}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', noWrap: true }}>
+                  <Typography variant="caption" noWrap color="text.secondary" sx={{ fontSize: '0.68rem' }}>
                     {user?.email || 'Click to switch/login'}
                   </Typography>
                 </Box>

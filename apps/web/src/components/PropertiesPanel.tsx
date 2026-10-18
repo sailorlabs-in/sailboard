@@ -20,6 +20,7 @@ import {
   LineWeightOutlined,
   OpacityOutlined,
   AutoAwesomeOutlined,
+  TextFieldsOutlined,
 } from '@mui/icons-material';
 import { CanvasElement, FillStyle, StrokeStyle } from '@rea/shared-types';
 
@@ -28,6 +29,7 @@ interface PropertiesPanelProps {
   currentStyle: {
     strokeColor: string;
     backgroundColor: string;
+    textColor?: string;
     fillStyle: FillStyle;
     strokeWidth: number;
     strokeStyle: StrokeStyle;
@@ -69,6 +71,19 @@ const FILL_COLORS = [
   '#f1f5f9',
 ];
 
+const TEXT_COLORS = [
+  '#ffffff',
+  '#000000',
+  '#f87171',
+  '#fb923c',
+  '#facc15',
+  '#4ade80',
+  '#38bdf8',
+  '#818cf8',
+  '#c084fc',
+  '#94a3b8',
+];
+
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   selectedElements,
   currentStyle,
@@ -85,6 +100,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   // Active values (either from first selected element or default currentStyle)
   const activeStroke = hasSelection ? selectedElements[0].strokeColor : currentStyle.strokeColor;
   const activeBg = hasSelection ? selectedElements[0].backgroundColor : currentStyle.backgroundColor;
+  const activeTextColor = hasSelection
+    ? selectedElements[0].textColor || (isDark ? '#f8fafc' : '#0f172a')
+    : currentStyle.textColor || (isDark ? '#f8fafc' : '#0f172a');
+  const activeFontSize = hasSelection
+    ? selectedElements[0].fontSize || currentStyle.fontSize
+    : currentStyle.fontSize;
   const activeFillStyle = hasSelection ? selectedElements[0].fillStyle : currentStyle.fillStyle;
   const activeWidth = hasSelection ? selectedElements[0].strokeWidth : currentStyle.strokeWidth;
   const activeStrokeStyle = hasSelection ? selectedElements[0].strokeStyle : currentStyle.strokeStyle;
@@ -93,7 +114,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   return (
     <Paper
-      elevation={4}
+      elevation={0}
       sx={{
         position: 'absolute',
         top: 80,
@@ -101,11 +122,12 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         width: 220,
         zIndex: 35,
         p: 2,
-        borderRadius: 3,
-        bgcolor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(16px)',
-        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
-        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)',
+        borderRadius: 3.5,
+        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
+        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(255, 255, 255, 0.8)',
+        boxShadow: isDark
+          ? '8px 8px 24px rgba(0, 0, 0, 0.55), -5px -5px 16px rgba(255, 255, 255, 0.04)'
+          : '8px 8px 24px #b8c0ca, -8px -8px 24px #ffffff',
         display: 'flex',
         flexDirection: 'column',
         gap: 1.6,
@@ -186,6 +208,50 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             />
           ))}
         </Box>
+      </Box>
+
+      {/* Text Color (Supports Double-Click Text on Shapes, Text Blocks & Sticky Notes) */}
+      <Box>
+        <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.6, fontWeight: 600 }}>
+          <TextFieldsOutlined sx={{ fontSize: 13 }} /> Text Color
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0.6 }}>
+          {TEXT_COLORS.map((color) => (
+            <Box
+              key={color}
+              onClick={() => onUpdateStyle({ textColor: color })}
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: 1.5,
+                bgcolor: color,
+                border: activeTextColor === color ? '2px solid #6366f1' : `1px solid ${isDark ? '#475569' : '#cbd5e1'}`,
+                cursor: 'pointer',
+                transition: 'transform 0.1s',
+                '&:hover': { transform: 'scale(1.15)' },
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+
+      {/* Font Size */}
+      <Box>
+        <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>
+          Font Size
+        </Typography>
+        <ButtonGroup size="small" fullWidth sx={{ height: 26 }}>
+          {[14, 18, 24, 32].map((fs) => (
+            <Button
+              key={fs}
+              variant={activeFontSize === fs ? 'contained' : 'outlined'}
+              onClick={() => onUpdateStyle({ fontSize: fs })}
+              sx={{ fontSize: '0.65rem' }}
+            >
+              {fs}px
+            </Button>
+          ))}
+        </ButtonGroup>
       </Box>
 
       {/* Fill Style */}

@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ThemeProvider, CssBaseline, Box } from '@mui/material';
+import {
+  ThemeProvider,
+  CssBaseline,
+  Box,
+  CircularProgress,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
 import {
   CanvasElement,
   ElementType,
@@ -19,22 +26,40 @@ import { Minimap } from './components/Minimap';
 import { ExportDialog } from './components/ExportDialog';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ShareDialog } from './components/ShareDialog';
-import { AuthDialog } from './components/AuthDialog';
 import { ViewerNoticeBanner } from './components/ViewerNoticeBanner';
+import { AuthScreen } from './components/AuthScreen';
+import { Dashboard } from './components/Dashboard';
 import { api } from './services/api';
 import { socketService } from './services/socket';
 import { useAuth } from './context/AuthContext';
 
 export const App: React.FC = () => {
-  const { user, token, isAuthenticated, loginAsDemo } = useAuth();
+  const { user, token, isAuthenticated, isLoading, logout } = useAuth();
 
-  // Theme & Layout State
+  // Figma Workflow View State: 'dashboard' (Projects/Files Grid) vs 'editor' (Active Canvas Workspace)
+  const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
+
+  // Theme & Responsive State
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  const theme = getAppTheme(themeMode);
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Layout State
   const [viewMode, setViewMode] = useState<'canvas' | 'split' | 'notes'>('split');
   const [styleMode, setStyleMode] = useState<'rough' | 'clean'>('rough');
   const [splitWidth, setSplitWidth] = useState<number>(440);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+
+  // Sync sidebar state on screen size changes
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false);
+      setViewMode((prev) => (prev === 'split' ? 'canvas' : prev));
+    } else {
+      setSidebarOpen(true);
+    }
+  }, [isMobile]);
 
   // Project & Multi-File State
   const [projects, setProjects] = useState<Project[]>([]);
@@ -43,7 +68,6 @@ export const App: React.FC = () => {
 
   // Modals
   const [shareOpen, setShareOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
   // Document State
@@ -80,6 +104,7 @@ export const App: React.FC = () => {
   const [currentStyle, setCurrentStyle] = useState({
     strokeColor: '#6366f1',
     backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    textColor: '#f8fafc',
     fillStyle: 'hachure' as const,
     strokeWidth: 2,
     strokeStyle: 'solid' as const,
@@ -119,24 +144,23 @@ export const App: React.FC = () => {
 
   // Load Projects and Initial Active File
   const loadProjects = useCallback(async () => {
+    if (!isAuthenticated || !token) return;
+
     try {
       const list = await api.getProjects();
       setProjects(list);
 
       if (list.length > 0) {
-        // Select first project or maintain current
         const targetProj = currentProject
           ? list.find((p) => p.id === currentProject.id) || list[0]
           : list[0];
 
-        // Fetch full project with files
         const fullProj = await api.getProject(targetProj.id);
         setCurrentProject(fullProj);
 
         const role = computeRoleForProject(fullProj);
         setUserRole(role);
 
-        // Select first file if available
         if (fullProj.files && fullProj.files.length > 0) {
           const targetFile =
             fullProj.files.find((f) => f.id === doc.id) || fullProj.files[0];
@@ -144,7 +168,6 @@ export const App: React.FC = () => {
           setHistory([targetFile.elements]);
           setHistoryIndex(0);
 
-          // Join WebSocket room
           if (user) {
             socketService.joinDocument(
               targetFile.id,
@@ -155,14 +178,9 @@ export const App: React.FC = () => {
         }
       }
     } catch (err: any) {
-      if (err.message === 'UNAUTHORIZED') {
-        // Auto-login Alice for instant demo convenience
-        await loginAsDemo('alice').catch(console.error);
-      } else {
-        console.warn('Could not load projects:', err);
-      }
+      console.warn('Could not load projects:', err);
     }
-  }, [user, computeRoleForProject, loginAsDemo, currentProject, doc.id]);
+  }, [isAuthenticated, token, user, computeRoleForProject, currentProject, doc.id]);
 
   useEffect(() => {
     loadProjects();
@@ -170,21 +188,57 @@ export const App: React.FC = () => {
 
   // Setup WebSocket Listeners for real-time multiplayer sync
   useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
     const cleanupUsers = socketService.onUsersUpdate((users) => {
-      if (user) {
-        setRemoteUsers(users.filter((u) => u.userId !== user.id));
-      } else {
-        setRemoteUsers(users);
-      }
+      setRemoteUsers(users.filter((u) => u.userId !== user.id));
+    });
+
+    const cleanupUserLeft = socketService.onUserLeft(({ userId }) => {
+      setRemoteUsers((prev) => prev.filter((u) => u.userId !== userId));
     });
 
     const cleanupCursor = socketService.onCursorUpdate((presence) => {
-      setRemoteUsers((prev) =>
-        prev.map((u) => (u.userId === presence.userId ? presence : u))
-      );
+      if (presence.userId === user.id) return;
+      setRemoteUsers((prev) => {
+        const idx = prev.findIndex((u) => u.userId === presence.userId);
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], ...presence };
+          return updated;
+        }
+        return [...prev, presence];
+      });
     });
 
-    // Real-time live canvas sync: when User A modifies elements, User B sees it immediately!
+    const cleanupSelection = socketService.onSelectionUpdate((sel) => {
+      if (sel.userId === user.id) return;
+      setRemoteUsers((prev) => {
+        const idx = prev.findIndex((u) => u.userId === sel.userId);
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            selectedElementIds: sel.selectedElementIds,
+          };
+          return updated;
+        }
+        return [
+          ...prev,
+          {
+            userId: sel.userId,
+            userName: sel.userName,
+            color: sel.color,
+            role: 'editor',
+            cursor: null,
+            selectedElementIds: sel.selectedElementIds,
+            lastActive: Date.now(),
+          },
+        ];
+      });
+    });
+
+    // Real-time live canvas sync: when another user modifies elements, we see it immediately!
     const cleanupElements = socketService.onElementsUpdate((remoteElements) => {
       setDoc((prev) => ({ ...prev, elements: remoteElements }));
     });
@@ -196,12 +250,14 @@ export const App: React.FC = () => {
 
     return () => {
       cleanupUsers();
+      cleanupUserLeft();
       cleanupCursor();
+      cleanupSelection();
       cleanupElements();
       cleanupNote();
       socketService.disconnect();
     };
-  }, [user]);
+  }, [isAuthenticated, user]);
 
   // Switch Active File inside current Project Folder
   const handleSelectFile = useCallback(
@@ -218,8 +274,24 @@ export const App: React.FC = () => {
           userRole
         );
       }
+
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
     },
-    [user, userRole]
+    [user, userRole, isMobile]
+  );
+
+  // Open file and launch Canvas Editor (from Dashboard or Sidebar)
+  const handleOpenFile = useCallback(
+    (project: Project, file: WhiteboardDocument) => {
+      setCurrentProject(project);
+      const role = computeRoleForProject(project);
+      setUserRole(role);
+      handleSelectFile(file);
+      setCurrentView('editor');
+    },
+    [computeRoleForProject, handleSelectFile]
   );
 
   // Switch Active Project Folder
@@ -283,7 +355,7 @@ export const App: React.FC = () => {
   // Update Elements (Editor action) & Broadcast Live to Other Users
   const handleElementsChange = useCallback(
     (newElements: CanvasElement[], recordHistory = true) => {
-      if (isViewer) return; // Viewers cannot edit
+      if (isViewer) return;
 
       setDoc((prev) => ({ ...prev, elements: newElements }));
 
@@ -356,23 +428,79 @@ export const App: React.FC = () => {
     }
   };
 
-  // Keyboard Shortcuts
+  // Zoom Helpers
+  const handleZoomIn = useCallback(() => setZoom((prev) => Math.min(prev + 0.15, 3)), []);
+  const handleZoomOut = useCallback(() => setZoom((prev) => Math.max(prev - 0.15, 0.2)), []);
+  const handleZoomReset = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 60, y: 60 });
+  }, []);
+
+  const handleZoomToFit = useCallback(() => {
+    const active = doc.elements.filter((el) => !el.isDeleted);
+    if (active.length === 0) return handleZoomReset();
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    active.forEach((el) => {
+      minX = Math.min(minX, el.x);
+      minY = Math.min(minY, el.y);
+      maxX = Math.max(maxX, el.x + el.width);
+      maxY = Math.max(maxY, el.y + el.height);
+    });
+
+    const w = canvasContainerRef.current?.clientWidth || 800;
+    const h = canvasContainerRef.current?.clientHeight || 600;
+    const boundingW = maxX - minX + 160;
+    const boundingH = maxY - minY + 160;
+
+    const fitZoom = Math.min(w / boundingW, h / boundingH, 1.5);
+    setZoom(fitZoom);
+    setPan({
+      x: (w - (maxX - minX) * fitZoom) / 2 - minX * fitZoom,
+      y: (h - (maxY - minY) * fitZoom) / 2 - minY * fitZoom,
+    });
+  }, [doc.elements, handleZoomReset]);
+
+  // Global Keyboard Shortcuts (Zoom, Undo, Redo, Tools)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
-        return;
-      }
+      // Ctrl + / Ctrl - / Ctrl 0 zoom shortcuts
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          handleZoomIn();
+          return;
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          handleZoomOut();
+          return;
+        }
+        if (e.key === '0') {
+          e.preventDefault();
+          handleZoomReset();
+          return;
+        }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        handleRedo();
-        return;
+        if (e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) handleRedo();
+          else handleUndo();
+          return;
+        }
+
+        if (e.key.toLowerCase() === 'y') {
+          e.preventDefault();
+          handleRedo();
+          return;
+        }
       }
 
       if (isViewer) return;
@@ -444,7 +572,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElementIds, handleUndo, handleRedo, isViewer]);
+  }, [selectedElementIds, handleUndo, handleRedo, handleZoomIn, handleZoomOut, handleZoomReset, isViewer]);
 
   // Element Actions (Duplicate, Delete, Reorder)
   const handleDuplicate = () => {
@@ -470,8 +598,13 @@ export const App: React.FC = () => {
     });
 
     handleElementsChange([...doc.elements, ...duplicated]);
-    setSelectedElementIds(newSelectedIds);
+    handleSelectElements(newSelectedIds);
   };
+
+  const handleSelectElements = useCallback((ids: string[]) => {
+    setSelectedElementIds(ids);
+    socketService.emitSelectionChange(ids);
+  }, []);
 
   const handleDeleteSelected = () => {
     if (isViewer || selectedElementIds.length === 0) return;
@@ -479,7 +612,7 @@ export const App: React.FC = () => {
       selectedElementIds.includes(el.id) ? { ...el, isDeleted: true } : el
     );
     handleElementsChange(updated);
-    setSelectedElementIds([]);
+    handleSelectElements([]);
   };
 
   const handleBringToFront = () => {
@@ -622,42 +755,6 @@ export const App: React.FC = () => {
     handleElementsChange([...doc.elements, ...generatedElements]);
   };
 
-  // Zoom Helpers
-  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 3));
-  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.2));
-  const handleZoomReset = () => {
-    setZoom(1);
-    setPan({ x: 60, y: 60 });
-  };
-  const handleZoomToFit = () => {
-    const active = doc.elements.filter((el) => !el.isDeleted);
-    if (active.length === 0) return handleZoomReset();
-
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    active.forEach((el) => {
-      minX = Math.min(minX, el.x);
-      minY = Math.min(minY, el.y);
-      maxX = Math.max(maxX, el.x + el.width);
-      maxY = Math.max(maxY, el.y + el.height);
-    });
-
-    const w = canvasContainerRef.current?.clientWidth || 800;
-    const h = canvasContainerRef.current?.clientHeight || 600;
-    const boundingW = maxX - minX + 160;
-    const boundingH = maxY - minY + 160;
-
-    const fitZoom = Math.min(w / boundingW, h / boundingH, 1.5);
-    setZoom(fitZoom);
-    setPan({
-      x: (w - (maxX - minX) * fitZoom) / 2 - minX * fitZoom,
-      y: (h - (maxY - minY) * fitZoom) / 2 - minY * fitZoom,
-    });
-  };
-
   // Import JSON File
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -701,8 +798,109 @@ export const App: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  // 1. Loading State
+  if (isLoading) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box
+          sx={{
+            width: '100vw',
+            height: '100vh',
+            bgcolor: '#090d16',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+          }}
+        >
+          <Box
+            sx={{
+              width: 50,
+              height: 50,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.6rem',
+              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
+            }}
+          >
+            ⛵
+          </Box>
+          <CircularProgress size={32} sx={{ color: '#6366f1' }} />
+          <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
+            Loading Sailboard...
+          </Typography>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // 2. Unauthenticated: Show production login page by default
+  if (!isAuthenticated) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AuthScreen />
+      </ThemeProvider>
+    );
+  }
+
+  // 3. Authenticated: Render Figma-style Projects Workspace Dashboard
+  if (currentView === 'dashboard') {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Dashboard
+          user={user}
+          projects={projects}
+          currentProject={currentProject}
+          onSelectProject={(projectId) => {
+            const found = projects.find((p) => p.id === projectId);
+            if (found) setCurrentProject(found);
+          }}
+          onOpenFile={handleOpenFile}
+          onCreateProject={handleCreateProject}
+          onCreateFile={async (projectId, title) => {
+            try {
+              const newFile = await api.createProjectFile(projectId, title);
+              await loadProjects();
+              const updatedProj = await api.getProject(projectId);
+              handleOpenFile(updatedProj, newFile);
+            } catch (err: any) {
+              alert(err.message || 'Failed to create file');
+            }
+          }}
+          onDeleteFile={handleDeleteFile}
+          onOpenShare={(proj) => {
+            setCurrentProject(proj);
+            setShareOpen(true);
+          }}
+          onLogout={logout}
+          themeMode={themeMode}
+          onToggleTheme={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
+        />
+
+        {/* Share & Permissions Dialog */}
+        <ShareDialog
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          project={currentProject}
+          onProjectUpdated={(p) => {
+            setCurrentProject(p);
+            const role = computeRoleForProject(p);
+            setUserRole(role);
+            loadProjects();
+          }}
+        />
+      </ThemeProvider>
+    );
+  }
+
   const selectedElements = doc.elements.filter((el) => selectedElementIds.includes(el.id) && !el.isDeleted);
-  const theme = getAppTheme(themeMode);
 
   return (
     <ThemeProvider theme={theme}>
@@ -749,9 +947,11 @@ export const App: React.FC = () => {
           remoteUsers={remoteUsers}
           saveStatus={saveStatus}
           onOpenShare={() => setShareOpen(true)}
-          onOpenAuth={() => setAuthOpen(true)}
+          onOpenAuth={() => {}}
+          onLogout={logout}
           currentUser={user}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          onNavigateHome={() => setCurrentView('dashboard')}
         />
 
         {/* Viewer Mode Alert Banner */}
@@ -759,7 +959,7 @@ export const App: React.FC = () => {
           <ViewerNoticeBanner
             ownerName={currentProject?.ownerName || 'Project Owner'}
             onOpenShare={() => setShareOpen(true)}
-            onOpenAuth={() => setAuthOpen(true)}
+            onOpenAuth={() => {}}
           />
         )}
 
@@ -778,8 +978,9 @@ export const App: React.FC = () => {
             onDeleteFile={handleDeleteFile}
             onCreateProject={handleCreateProject}
             onOpenShare={() => setShareOpen(true)}
-            onOpenAuth={() => setAuthOpen(true)}
+            onOpenAuth={() => {}}
             userRole={userRole}
+            onNavigateHome={() => setCurrentView('dashboard')}
           />
 
           {/* Left Split: Eraser-Style Markdown Documentation */}
@@ -859,7 +1060,7 @@ export const App: React.FC = () => {
                 elements={doc.elements}
                 onElementsChange={handleElementsChange}
                 selectedElementIds={selectedElementIds}
-                onSelectElements={setSelectedElementIds}
+                onSelectElements={handleSelectElements}
                 activeTool={activeTool}
                 onToolChange={setActiveTool}
                 theme={themeMode}
@@ -873,7 +1074,7 @@ export const App: React.FC = () => {
                 onPanChange={setPan}
                 currentStyle={currentStyle}
                 remoteUsers={remoteUsers}
-                onCursorMove={(cursor) => socketService.emitCursorMove(cursor)}
+                onCursorMove={(cursor) => socketService.emitCursorMove(cursor, selectedElementIds)}
                 isViewer={isViewer}
               />
 
@@ -901,13 +1102,6 @@ export const App: React.FC = () => {
             const role = computeRoleForProject(p);
             setUserRole(role);
           }}
-        />
-
-        {/* Auth & Account Switcher Dialog */}
-        <AuthDialog
-          open={authOpen}
-          onClose={() => setAuthOpen(false)}
-          onSuccess={() => loadProjects()}
         />
 
         {/* Export Modal */}
