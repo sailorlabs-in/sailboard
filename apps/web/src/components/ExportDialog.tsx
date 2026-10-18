@@ -166,11 +166,13 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       onClose={onClose}
       maxWidth="xs"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: isDark ? '#1e293b' : '#ffffff',
-          borderRadius: 3,
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: isDark ? '#1e293b' : '#ffffff',
+            borderRadius: 3,
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+          },
         },
       }}
     >

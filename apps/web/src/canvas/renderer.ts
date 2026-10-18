@@ -69,6 +69,18 @@ export function renderScene(
     ctx.restore();
   }
 
+  // Render Remote Collaborators' Selections (Figma Style)
+  for (const user of remoteUsers) {
+    if (user.selectedElementIds && user.selectedElementIds.length > 0) {
+      const userElements = elements.filter(
+        (el) => !el.isDeleted && user.selectedElementIds?.includes(el.id)
+      );
+      if (userElements.length > 0) {
+        renderRemoteSelection(ctx, userElements, user, zoom);
+      }
+    }
+  }
+
   // Render Remote Collaborators' Cursors
   for (const user of remoteUsers) {
     if (user.cursor) {
@@ -367,7 +379,7 @@ function renderStickyNote(
   // Sticky Text
   if (el.text) {
     ctx.save();
-    ctx.fillStyle = isDark ? '#fef3c7' : '#1e293b';
+    ctx.fillStyle = el.textColor || (isDark ? '#fef3c7' : '#1e293b');
     ctx.font = `500 ${el.fontSize || 14}px 'Caveat', 'Inter', cursive, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -442,7 +454,7 @@ function renderElementText(
 ) {
   if (!el.text) return;
   ctx.save();
-  ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a';
+  ctx.fillStyle = el.textColor || (isDark ? '#f8fafc' : '#0f172a');
   ctx.font = `600 ${el.fontSize || 14}px 'Inter', sans-serif`;
   ctx.textAlign = (el.textAlign as CanvasTextAlign) || 'center';
   ctx.textBaseline = 'middle';
@@ -472,7 +484,7 @@ function renderStandaloneText(
 ) {
   if (!el.text) return;
   ctx.save();
-  ctx.fillStyle = el.strokeColor || (isDark ? '#f8fafc' : '#0f172a');
+  ctx.fillStyle = el.textColor || el.strokeColor || (isDark ? '#f8fafc' : '#0f172a');
   ctx.font = `500 ${el.fontSize || 18}px 'Inter', sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
@@ -522,6 +534,55 @@ function renderSelection(
   ctx.restore();
 }
 
+function renderRemoteSelection(
+  ctx: CanvasRenderingContext2D,
+  selectedElements: CanvasElement[],
+  user: UserPresence,
+  zoom: number
+) {
+  ctx.save();
+  const padding = 6 / zoom;
+  const color = user.color || '#ec4899';
+
+  for (const el of selectedElements) {
+    const bounds = getElementBounds(el);
+    const x = bounds.minX - padding;
+    const y = bounds.minY - padding;
+    const w = bounds.width + padding * 2;
+    const h = bounds.height + padding * 2;
+
+    // Tint background
+    ctx.fillStyle = `${color}18`;
+    ctx.fillRect(x, y, w, h);
+
+    // Bounding outline
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 / zoom;
+    ctx.setLineDash([5 / zoom, 3 / zoom]);
+    ctx.strokeRect(x, y, w, h);
+
+    // Attached collaborator badge pinned to top-left (Figma style)
+    const label = `${user.userName}${user.role === 'viewer' ? ' (viewer)' : ''}`;
+    const fontSize = Math.max(9, 11 / zoom);
+    ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
+    const textMetrics = ctx.measureText(label);
+    const badgeW = textMetrics.width + 10 / zoom;
+    const badgeH = 18 / zoom;
+    const badgeX = x;
+    const badgeY = y - badgeH;
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, [4 / zoom, 4 / zoom, 0, 0]);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, badgeX + 5 / zoom, badgeY + badgeH * 0.72);
+  }
+  ctx.restore();
+}
+
 function renderRemoteCursor(
   ctx: CanvasRenderingContext2D,
   user: UserPresence,
@@ -534,35 +595,45 @@ function renderRemoteCursor(
   ctx.save();
   ctx.translate(x, y);
 
-  // Draw pointer cursor icon
+  // Draw sharp Figma pointer arrow with white border
   ctx.fillStyle = color;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5 / zoom;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.lineTo(0, 16 / zoom);
-  ctx.lineTo(4 / zoom, 12 / zoom);
-  ctx.lineTo(9 / zoom, 19 / zoom);
-  ctx.lineTo(12 / zoom, 17 / zoom);
-  ctx.lineTo(7 / zoom, 10 / zoom);
-  ctx.lineTo(12 / zoom, 10 / zoom);
+  ctx.lineTo(0, 17 / zoom);
+  ctx.lineTo(4.5 / zoom, 12.5 / zoom);
+  ctx.lineTo(9.5 / zoom, 21 / zoom);
+  ctx.lineTo(13 / zoom, 19.5 / zoom);
+  ctx.lineTo(8 / zoom, 11 / zoom);
+  ctx.lineTo(13.5 / zoom, 11 / zoom);
   ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 
   // Draw User Name badge
   const label = user.userName;
-  ctx.font = `600 ${Math.max(10, 11 / zoom)}px 'Inter', sans-serif`;
+  const fontSize = Math.max(9, 11 / zoom);
+  ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
   const textMetrics = ctx.measureText(label);
   const tagW = textMetrics.width + 12 / zoom;
-  const tagH = 18 / zoom;
+  const tagH = 19 / zoom;
   const tagX = 14 / zoom;
   const tagY = 12 / zoom;
 
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
+
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.roundRect(tagX, tagY, tagW, tagH, 4 / zoom);
+  ctx.roundRect(tagX, tagY, tagW, tagH, 5 / zoom);
   ctx.fill();
 
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(label, tagX + 6 / zoom, tagY + tagH / 2 + 4 / zoom);
+  ctx.fillText(label, tagX + 6 / zoom, tagY + tagH * 0.72);
 
   ctx.restore();
 }

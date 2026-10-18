@@ -48,7 +48,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
 
   return (
     <Paper
-      elevation={4}
+      elevation={0}
       sx={{
         position: 'absolute',
         top: 16,
@@ -57,15 +57,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
         zIndex: 40,
         display: 'flex',
         alignItems: 'center',
-        gap: 0.5,
-        p: 0.6,
-        borderRadius: 3,
-        bgcolor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(255, 255, 255, 0.92)',
-        backdropFilter: 'blur(16px)',
-        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+        gap: 0.8,
+        p: 0.8,
+        borderRadius: 3.5,
+        maxWidth: 'calc(100vw - 32px)',
+        overflowX: 'auto',
+        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
+        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(255, 255, 255, 0.8)',
         boxShadow: isDark
-          ? '0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.05)'
-          : '0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.05)',
+          ? '8px 8px 24px rgba(0, 0, 0, 0.55), -5px -5px 16px rgba(255, 255, 255, 0.04)'
+          : '8px 8px 24px #b8c0ca, -8px -8px 24px #ffffff',
       }}
     >
       {tools.map((item, index) => {
@@ -74,7 +75,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
         return (
           <React.Fragment key={item.id}>
             {index === 2 || index === 8 || index === 10 ? (
-              <Divider orientation="vertical" flexItem sx={{ my: 0.5, mx: 0.2 }} />
+              <Divider
+                orientation="vertical"
+                flexItem
+                sx={{
+                  my: 0.8,
+                  mx: 0.4,
+                  borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+                }}
+              />
             ) : null}
             <Tooltip
               title={
@@ -91,16 +100,41 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                   disabled={isDisabled}
                   onClick={() => onToolSelect(item.id)}
                   sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 2,
-                    color: isActive ? '#fff' : isDark ? '#cbd5e1' : '#475569',
-                    bgcolor: isActive ? '#6366f1' : 'transparent',
+                    width: 38,
+                    height: 38,
+                    borderRadius: 2.5,
+                    color: isActive ? (isDark ? '#818cf8' : '#4f46e5') : isDark ? '#94a3b8' : '#475569',
+                    bgcolor: isActive
+                      ? isDark
+                        ? '#141724'
+                        : '#d8dfe8'
+                      : isDark
+                      ? '#1c2030'
+                      : '#e6ecf2',
+                    boxShadow: isActive
+                      ? isDark
+                        ? 'inset 3px 3px 6px rgba(0,0,0,0.65), inset -2px -2px 4px rgba(255,255,255,0.05), 0 0 12px rgba(99,102,241,0.35)'
+                        : 'inset 3px 3px 6px #b4bcc6, inset -3px -3px 6px #ffffff, 0 0 12px rgba(79,70,229,0.3)'
+                      : isDark
+                      ? '3px 3px 7px rgba(0,0,0,0.45), -2px -2px 6px rgba(255,255,255,0.03)'
+                      : '3px 3px 7px #c2c9d1, -3px -3px 7px #ffffff',
+                    border: isActive
+                      ? '1px solid rgba(99, 102, 241, 0.4)'
+                      : isDark
+                      ? '1px solid rgba(255,255,255,0.04)'
+                      : '1px solid rgba(255,255,255,0.6)',
                     opacity: isDisabled ? 0.35 : 1,
                     '&:hover': {
-                      bgcolor: isActive ? '#4f46e5' : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                      bgcolor: isActive
+                        ? isDark
+                          ? '#141724'
+                          : '#d8dfe8'
+                        : isDark
+                        ? '#22273a'
+                        : '#e2e8ef',
+                      transform: isDisabled ? 'none' : 'translateY(-1px)',
                     },
-                    transition: 'all 0.15s ease-in-out',
+                    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
                   }}
                 >
                   {item.icon}
@@ -111,10 +145,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                     position: 'absolute',
                     bottom: 2,
                     right: 4,
-                    fontSize: '0.55rem',
+                    fontSize: '0.52rem',
                     fontWeight: 700,
                     pointerEvents: 'none',
-                    color: isActive ? 'rgba(255,255,255,0.85)' : isDark ? '#64748b' : '#94a3b8',
+                    color: isActive ? '#818cf8' : isDark ? '#64748b' : '#94a3b8',
                   }}
                 >
                   {item.shortcut}

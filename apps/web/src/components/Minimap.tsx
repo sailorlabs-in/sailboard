@@ -128,21 +128,22 @@ export const Minimap: React.FC<MinimapProps> = ({
 
   return (
     <Paper
-      elevation={4}
+      elevation={0}
       sx={{
         position: 'absolute',
         bottom: 16,
         right: 16,
         width,
         height,
-        borderRadius: 2,
+        borderRadius: 3,
         overflow: 'hidden',
         zIndex: 30,
-        bgcolor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-        backdropFilter: 'blur(12px)',
-        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
+        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(255, 255, 255, 0.8)',
         cursor: 'crosshair',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+        boxShadow: isDark
+          ? '6px 6px 18px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04)'
+          : '6px 6px 18px #b8c0ca, -6px -6px 18px #ffffff',
       }}
     >
       <canvas ref={canvasRef} width={width} height={height} onClick={handleClick} />
