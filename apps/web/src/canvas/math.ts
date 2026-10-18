@@ -1,0 +1,208 @@
+import { CanvasElement, Point } from '@rea/shared-types';
+
+export interface BoundingBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
+export type ResizeHandle =
+  | 'nw'
+  | 'n'
+  | 'ne'
+  | 'e'
+  | 'se'
+  | 's'
+  | 'sw'
+  | 'w'
+  | 'start'
+  | 'end';
+
+export function distance(p1: Point, p2: Point): number {
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+export function getElementBounds(el: CanvasElement): BoundingBox {
+  if (el.type === 'draw' || el.type === 'line' || el.type === 'arrow') {
+    if (!el.points || el.points.length === 0) {
+      return {
+        minX: el.x,
+        minY: el.y,
+        maxX: el.x + el.width,
+        maxY: el.y + el.height,
+        width: Math.abs(el.width),
+        height: Math.abs(el.height),
+      };
+    }
+    const absPoints = el.points.map((p) => ({ x: el.x + p.x, y: el.y + p.y }));
+    const xs = absPoints.map((p) => p.x);
+    const ys = absPoints.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: Math.max(20, maxX - minX),
+      height: Math.max(20, maxY - minY),
+    };
+  }
+
+  const minX = Math.min(el.x, el.x + el.width);
+  const maxX = Math.max(el.x, el.x + el.width);
+  const minY = Math.min(el.y, el.y + el.height);
+  const maxY = Math.max(el.y, el.y + el.height);
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+export function getGroupBounds(elements: CanvasElement[]): BoundingBox | null {
+  if (elements.length === 0) return null;
+  const bounds = elements.map(getElementBounds);
+  const minX = Math.min(...bounds.map((b) => b.minX));
+  const minY = Math.min(...bounds.map((b) => b.minY));
+  const maxX = Math.max(...bounds.map((b) => b.maxX));
+  const maxY = Math.max(...bounds.map((b) => b.maxY));
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+export function isPointInElement(point: Point, el: CanvasElement): boolean {
+  const bounds = getElementBounds(el);
+  const padding = Math.max(8, el.strokeWidth);
+
+  // Quick bounding box check
+  if (
+    point.x < bounds.minX - padding ||
+    point.x > bounds.maxX + padding ||
+    point.y < bounds.minY - padding ||
+    point.y > bounds.maxY + padding
+  ) {
+    return false;
+  }
+
+  if (el.type === 'rectangle' || el.type === 'sticky') {
+    return (
+      point.x >= bounds.minX &&
+      point.x <= bounds.maxX &&
+      point.y >= bounds.minY &&
+      point.y <= bounds.maxY
+    );
+  }
+
+  if (el.type === 'ellipse') {
+    const rx = bounds.width / 2;
+    const ry = bounds.height / 2;
+    const cx = bounds.minX + rx;
+    const cy = bounds.minY + ry;
+    if (rx === 0 || ry === 0) return false;
+    const normX = (point.x - cx) / (rx + padding);
+    const normY = (point.y - cy) / (ry + padding);
+    return normX * normX + normY * normY <= 1;
+  }
+
+  if (el.type === 'diamond') {
+    const cx = bounds.minX + bounds.width / 2;
+    const cy = bounds.minY + bounds.height / 2;
+    const dx = Math.abs(point.x - cx);
+    const dy = Math.abs(point.y - cy);
+    const w = bounds.width / 2 + padding;
+    const h = bounds.height / 2 + padding;
+    return dx / w + dy / h <= 1;
+  }
+
+  if (el.type === 'line' || el.type === 'arrow') {
+    if (el.points && el.points.length >= 2) {
+      for (let i = 0; i < el.points.length - 1; i++) {
+        const p1 = { x: el.x + el.points[i].x, y: el.y + el.points[i].y };
+        const p2 = { x: el.x + el.points[i + 1].x, y: el.y + el.points[i + 1].y };
+        if (distanceToSegment(point, p1, p2) <= padding + 4) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  if (el.type === 'draw') {
+    if (el.points) {
+      for (const p of el.points) {
+        if (distance(point, { x: el.x + p.x, y: el.y + p.y }) <= padding + 5) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  if (el.type === 'text') {
+    return (
+      point.x >= bounds.minX &&
+      point.x <= bounds.maxX &&
+      point.y >= bounds.minY &&
+      point.y <= bounds.maxY
+    );
+  }
+
+  return true;
+}
+
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
+  const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  if (l2 === 0) return distance(p, a);
+  let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+}
+
+export function getResizeHandles(bounds: BoundingBox, zoom: number): { handle: ResizeHandle; x: number; y: number }[] {
+  const { minX, minY, maxX, maxY, width, height } = bounds;
+  const midX = minX + width / 2;
+  const midY = minY + height / 2;
+
+  return [
+    { handle: 'nw', x: minX, y: minY },
+    { handle: 'n', x: midX, y: minY },
+    { handle: 'ne', x: maxX, y: minY },
+    { handle: 'e', x: maxX, y: midY },
+    { handle: 'se', x: maxX, y: maxY },
+    { handle: 's', x: midX, y: maxY },
+    { handle: 'sw', x: minX, y: maxY },
+    { handle: 'w', x: minX, y: midY },
+  ];
+}
+
+export function getHitResizeHandle(point: Point, bounds: BoundingBox, zoom: number): ResizeHandle | null {
+  const handles = getResizeHandles(bounds, zoom);
+  const handleRadius = 8 / zoom;
+
+  for (const h of handles) {
+    if (distance(point, { x: h.x, y: h.y }) <= handleRadius) {
+      return h.handle;
+    }
+  }
+  return null;
+}
+
+export function snapToGrid(val: number, gridSize = 16): number {
+  return Math.round(val / gridSize) * gridSize;
+}
