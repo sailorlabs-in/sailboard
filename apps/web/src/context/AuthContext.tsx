@@ -10,7 +10,6 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResponse>;
   register: (email: string, name: string, password: string) => Promise<AuthResponse>;
   logout: () => void;
-  loginAsDemo: (type: 'alice' | 'bob') => Promise<AuthResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,20 +34,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(profile);
           localStorage.setItem('sailboard_user', JSON.stringify(profile));
         } catch {
-          // Token expired or invalid, auto-login with Alice as default demo user for seamless start
-          await loginAsDemo('alice').catch(() => {
-            setUser(null);
-            setToken(null);
-            api.setToken(null);
-            localStorage.removeItem('sailboard_token');
-            localStorage.removeItem('sailboard_user');
-          });
+          // Token expired or invalid
+          setUser(null);
+          setToken(null);
+          api.setToken(null);
+          localStorage.removeItem('sailboard_token');
+          localStorage.removeItem('sailboard_user');
         }
       } else {
-        // Auto log in as Alice for instant out-of-the-box demo experience
-        await loginAsDemo('alice').catch(() => {
-          // Ignore fallback
-        });
+        // No token present: User must see login page by default
+        setUser(null);
+        setToken(null);
+        api.setToken(null);
       }
       setIsLoading(false);
     }
@@ -81,12 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('sailboard_user');
   };
 
-  const loginAsDemo = async (type: 'alice' | 'bob'): Promise<AuthResponse> => {
-    const email = type === 'alice' ? 'alice@sailboard.io' : 'bob@sailboard.io';
-    const password = 'password123';
-    return login(email, password);
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -97,7 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-        loginAsDemo,
       }}
     >
       {children}
