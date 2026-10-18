@@ -39,17 +39,71 @@ export const App: React.FC = () => {
   // Figma Workflow View State: 'dashboard' (Projects/Files Grid) vs 'editor' (Active Canvas Workspace)
   const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
 
-  // Theme & Responsive State
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  // Theme & Responsive State (Persisted in localStorage)
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('sailboard_theme_mode');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {}
+    return 'dark';
+  });
   const theme = getAppTheme(themeMode);
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Layout State
-  const [viewMode, setViewMode] = useState<'canvas' | 'split' | 'notes'>('split');
-  const [styleMode, setStyleMode] = useState<'rough' | 'clean'>('rough');
+  // Layout State (Persisted in localStorage)
+  const [viewMode, setViewMode] = useState<'canvas' | 'split' | 'notes'>(() => {
+    try {
+      const saved = localStorage.getItem('sailboard_view_mode');
+      if (saved === 'canvas' || saved === 'split' || saved === 'notes') return saved;
+    } catch {}
+    return 'split';
+  });
+  const [styleMode, setStyleMode] = useState<'rough' | 'clean'>(() => {
+    try {
+      const saved = localStorage.getItem('sailboard_style_mode');
+      if (saved === 'rough' || saved === 'clean') return saved;
+    } catch {}
+    return 'rough';
+  });
   const [splitWidth, setSplitWidth] = useState<number>(440);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sailboard_sidebar_open');
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return true;
+  });
+
+  // Persist Theme Mode
+  useEffect(() => {
+    try {
+      localStorage.setItem('sailboard_theme_mode', themeMode);
+    } catch {}
+  }, [themeMode]);
+
+  // Persist View Mode (Split, Canvas, Notes)
+  useEffect(() => {
+    try {
+      localStorage.setItem('sailboard_view_mode', viewMode);
+    } catch {}
+  }, [viewMode]);
+
+  // Persist Sidebar Expanded/Collapsed
+  useEffect(() => {
+    if (!isMobile) {
+      try {
+        localStorage.setItem('sailboard_sidebar_open', String(sidebarOpen));
+      } catch {}
+    }
+  }, [sidebarOpen, isMobile]);
+
+  // Persist Style Mode (Rough, Clean)
+  useEffect(() => {
+    try {
+      localStorage.setItem('sailboard_style_mode', styleMode);
+    } catch {}
+  }, [styleMode]);
 
   // Sync sidebar state on screen size changes
   useEffect(() => {
@@ -57,7 +111,16 @@ export const App: React.FC = () => {
       setSidebarOpen(false);
       setViewMode((prev) => (prev === 'split' ? 'canvas' : prev));
     } else {
-      setSidebarOpen(true);
+      try {
+        const saved = localStorage.getItem('sailboard_sidebar_open');
+        if (saved !== null) {
+          setSidebarOpen(saved === 'true');
+        } else {
+          setSidebarOpen(true);
+        }
+      } catch {
+        setSidebarOpen(true);
+      }
     }
   }, [isMobile]);
 
