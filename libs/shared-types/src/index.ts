@@ -58,6 +58,7 @@ export interface CanvasElement {
   fontSize?: number;
   fontFamily?: string;
   textAlign?: TextAlign;
+  textColor?: string;
   points?: Point[];
   startBinding?: ArrowBinding | null;
   endBinding?: ArrowBinding | null;
@@ -108,7 +109,7 @@ export interface Project {
 
 export interface WhiteboardDocument {
   id: string;
-  projectId: string;
+  projectId?: string;
   title: string;
   description?: string;
   notes: string;
@@ -144,7 +145,7 @@ export interface AddProjectMemberDto {
 }
 
 export interface CreateDocumentDto {
-  projectId: string;
+  projectId?: string;
   title: string;
   description?: string;
   notes?: string;
@@ -164,7 +165,7 @@ export interface UpdateDocumentDto {
 
 export interface DocumentExportData {
   version: number;
-  source: 'sailboard';
+  source: 'sailboard' | 'eraser-excalidraw-clone';
   timestamp: number;
   document: WhiteboardDocument;
 }

@@ -240,6 +240,7 @@ This unified platform combines Markdown documentation with an infinite whiteboar
   private toModel(entity: DocumentEntity): WhiteboardDocument {
     return {
       id: entity.id,
+      projectId: entity.projectId || 'proj-sailboard-demo',
       title: entity.title,
       description: entity.description,
       notes: entity.notes || '',
@@ -374,9 +375,6 @@ This unified platform combines Markdown documentation with an infinite whiteboar
   }
 
   async syncElements(documentId: string, elements: CanvasElement[]): Promise<CanvasElement[]> {
-    // Delete previous elements for document
-    await this.elementRepo.delete({ documentId });
-
     if (elements.length > 0) {
       const entities = elements.map((el) =>
         this.elementRepo.create({
@@ -409,7 +407,19 @@ This unified platform combines Markdown documentation with an infinite whiteboar
           updatedAt: el.updatedAt || Date.now(),
         })
       );
-      await this.elementRepo.save(entities);
+
+      // Atomic PostgreSQL upsert (ON CONFLICT (id) DO UPDATE)
+      await this.elementRepo.upsert(entities, ['id']);
+
+      // Clean up any removed elements that are no longer in this document
+      const activeIds = elements.map((e) => e.id);
+      await this.elementRepo
+        .createQueryBuilder()
+        .delete()
+        .where('documentId = :documentId AND id NOT IN (:...activeIds)', { documentId, activeIds })
+        .execute();
+    } else {
+      await this.elementRepo.delete({ documentId });
     }
 
     await this.redisService.invalidateDocument(documentId);
@@ -420,7 +430,7 @@ This unified platform combines Markdown documentation with an infinite whiteboar
     const doc = await this.findOne(id);
     return {
       version: 1,
-      source: 'eraser-excalidraw-clone',
+      source: 'sailboard',
       timestamp: Date.now(),
       document: doc,
     };
@@ -431,7 +441,7 @@ This unified platform combines Markdown documentation with an infinite whiteboar
     let title = 'Imported Diagram';
     let notes = '# Imported Document\n\nImported from file.';
 
-    if (data.source === 'eraser-excalidraw-clone' && data.document) {
+    if ((data.source === 'sailboard' || data.source === 'eraser-excalidraw-clone') && data.document) {
       return this.create({
         title: data.document.title || title,
         description: data.document.description || '',

@@ -362,7 +362,7 @@ Use colorful sticky notes to map out action items and roadmap goals.
           elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
           createdAt: f.createdAt.toISOString(),
           updatedAt: f.updatedAt.toISOString(),
-        })),
+        })) as unknown as WhiteboardDocument[],
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
       });
@@ -398,7 +398,7 @@ Use colorful sticky notes to map out action items and roadmap goals.
             elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
             createdAt: f.createdAt.toISOString(),
             updatedAt: f.updatedAt.toISOString(),
-          })),
+          })) as unknown as WhiteboardDocument[],
           createdAt: p.createdAt.toISOString(),
           updatedAt: p.updatedAt.toISOString(),
         });
@@ -448,7 +448,7 @@ Use colorful sticky notes to map out action items and roadmap goals.
         elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
         createdAt: f.createdAt.toISOString(),
         updatedAt: f.updatedAt.toISOString(),
-      })),
+      })) as unknown as WhiteboardDocument[],
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
     };
