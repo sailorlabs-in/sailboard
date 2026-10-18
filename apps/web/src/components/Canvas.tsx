@@ -165,32 +165,10 @@ export const Canvas: React.FC<CanvasProps> = ({
     [pan, zoom]
   );
 
-  // High DPI Canvas Resizing
-  useEffect(() => {
-    const handleResize = () => {
-      if (!canvasRef.current || !containerRef.current) return;
-      const dpr = window.devicePixelRatio || 1;
-      const { clientWidth, clientHeight } = containerRef.current;
-      canvasRef.current.width = clientWidth * dpr;
-      canvasRef.current.height = clientHeight * dpr;
-      canvasRef.current.style.width = `${clientWidth}px`;
-      canvasRef.current.style.height = `${clientHeight}px`;
-
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
-      render();
-    };
-
-    handleResize();
-    const ro = new ResizeObserver(handleResize);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, [containerRef.current]);
-
-  // Main Render Loop
+  // Main Render Loop (always uses latest elements and state)
   const render = useCallback(() => {
     if (!canvasRef.current) return;
-    renderScene(canvasRef.current, elements, {
+    renderScene(canvasRef.current, latestElementsRef.current, {
       theme,
       gridVisible,
       gridType,
@@ -201,11 +179,52 @@ export const Canvas: React.FC<CanvasProps> = ({
       remoteUsers,
       activeStyleMode: styleMode,
     });
-  }, [elements, theme, gridVisible, gridType, zoom, pan, selectedElementIds, selectionBox, remoteUsers, styleMode]);
+  }, [theme, gridVisible, gridType, zoom, pan, selectedElementIds, selectionBox, remoteUsers, styleMode]);
+
+  const renderRef = useRef(render);
+  renderRef.current = render;
+
+  // High DPI Canvas Resizing & ResizeObserver
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
+
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+      const { clientWidth, clientHeight } = container;
+      if (clientWidth === 0 || clientHeight === 0) return;
+
+      const targetW = Math.round(clientWidth * dpr);
+      const targetH = Math.round(clientHeight * dpr);
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+        canvas.style.width = `${clientWidth}px`;
+        canvas.style.height = `${clientHeight}px`;
+      }
+
+      // Re-render immediately so the canvas is never left blank!
+      renderRef.current?.();
+    };
+
+    handleResize();
+
+    const ro = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+    }
+
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     render();
-  }, [render]);
+  }, [render, elements]);
 
   // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, or regular scroll to pan
   useEffect(() => {

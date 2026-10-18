@@ -22,6 +22,7 @@ export function renderScene(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const width = canvas.width;
   const height = canvas.height;
   const { theme, gridVisible, gridType = 'dots', zoom, pan, selectedElementIds, selectionBox, remoteUsers, activeStyleMode } = options;
@@ -33,13 +34,14 @@ export function renderScene(
   ctx.fillStyle = isDark ? '#0b0f19' : '#f8fafc';
   ctx.fillRect(0, 0, width, height);
 
-  // Apply Camera Transform (Pan and Zoom)
+  // Apply High-DPI Camera Transform (DPR * Pan and Zoom)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
 
   // Render Background Grid
   if (gridVisible && gridType !== 'blank') {
-    renderGrid(ctx, width, height, zoom, pan, isDark, gridType);
+    renderGrid(ctx, width / dpr, height / dpr, zoom, pan, isDark, gridType);
   }
 
   // Initialize Rough.js canvas generator
