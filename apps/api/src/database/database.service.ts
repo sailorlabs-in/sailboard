@@ -13,8 +13,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     await this.initDatabase();
-    this.seedDefaultDocumentIfEmpty();
-  }
+      }
 
   async onModuleDestroy() {
     if (this.pool) {
@@ -24,7 +23,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async initDatabase() {
-    const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/eraser_excalidraw';
+    const connectionString = process.env.DATABASE_URL || 'postgresql://umang:secret123@localhost:5432/sailboard';
 
     try {
       this.pool = new Pool({
@@ -69,194 +68,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private seedDefaultDocumentIfEmpty() {
-    if (this.inMemoryDocuments.size === 0) {
-      const demoId = 'doc-welcome-sample';
-      const now = new Date().toISOString();
-      const sampleDoc: WhiteboardDocument = {
-        id: demoId,
-        title: 'System Architecture & Engineering Canvas',
-        description: 'Interactive diagram and system design documentation',
-        notes: `# Engineering System Architecture
-
-Welcome to the **Eraser + Excalidraw** workspace!
-This unified tool combines a live technical document with an infinite interactive whiteboard canvas.
-
-### Architecture Highlights:
-- **Frontend**: React 19 + Material-UI (MUI v6) + TypeScript + Rough.js
-- **Backend**: Nest.js + PostgreSQL + WebSockets + Nx Monorepo
-- **Dual Mode**: Split screen for Notes & Canvas, or full-screen Excalidraw canvas
-
-### Quick Workflow:
-1. Select shapes from the top floating toolbar (Rectangle, Diamond, Ellipse, Arrows).
-2. Toggle between **Sketchy / Hand-drawn (Excalidraw)** and **Clean / Technical (Eraser)** roughness modes.
-3. Drag Sticky Notes for agile retrospectives and sprint planning.
-4. Export as high-resolution PNG, SVG, or JSON!
-`,
-        elements: [
-          {
-            id: 'el-1',
-            type: 'rectangle',
-            x: 220,
-            y: 120,
-            width: 200,
-            height: 90,
-            angle: 0,
-            strokeColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.15)',
-            fillStyle: 'hachure',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            seed: 12345,
-            version: 1,
-            versionNonce: 54321,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            text: 'Client Web App\n(React + MUI)',
-            fontSize: 16,
-            textAlign: 'center',
-          },
-          {
-            id: 'el-2',
-            type: 'arrow',
-            x: 420,
-            y: 165,
-            width: 140,
-            height: 0,
-            angle: 0,
-            strokeColor: '#94a3b8',
-            backgroundColor: 'transparent',
-            fillStyle: 'none',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            seed: 67890,
-            version: 1,
-            versionNonce: 98765,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            points: [
-              { x: 0, y: 0 },
-              { x: 140, y: 0 },
-            ],
-            endArrowhead: 'arrow',
-          },
-          {
-            id: 'el-3',
-            type: 'diamond',
-            x: 560,
-            y: 110,
-            width: 160,
-            height: 110,
-            angle: 0,
-            strokeColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.15)',
-            fillStyle: 'solid',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            seed: 23456,
-            version: 1,
-            versionNonce: 65432,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            text: 'API Gateway\n(Nest.js)',
-            fontSize: 15,
-            textAlign: 'center',
-          },
-          {
-            id: 'el-4',
-            type: 'arrow',
-            x: 720,
-            y: 165,
-            width: 130,
-            height: 0,
-            angle: 0,
-            strokeColor: '#94a3b8',
-            backgroundColor: 'transparent',
-            fillStyle: 'none',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            seed: 34567,
-            version: 1,
-            versionNonce: 76543,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            points: [
-              { x: 0, y: 0 },
-              { x: 130, y: 0 },
-            ],
-            endArrowhead: 'arrow',
-          },
-          {
-            id: 'el-5',
-            type: 'ellipse',
-            x: 850,
-            y: 115,
-            width: 170,
-            height: 100,
-            angle: 0,
-            strokeColor: '#8b5cf6',
-            backgroundColor: 'rgba(139, 92, 246, 0.15)',
-            fillStyle: 'cross-hatch',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            seed: 45678,
-            version: 1,
-            versionNonce: 87654,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            text: 'PostgreSQL DB\n(Persistent Store)',
-            fontSize: 15,
-            textAlign: 'center',
-          },
-          {
-            id: 'el-6',
-            type: 'sticky',
-            x: 230,
-            y: 280,
-            width: 190,
-            height: 130,
-            angle: -0.03,
-            strokeColor: '#f59e0b',
-            backgroundColor: '#fef3c7',
-            fillStyle: 'solid',
-            strokeWidth: 1.5,
-            strokeStyle: 'solid',
-            roughness: 0,
-            opacity: 95,
-            seed: 56789,
-            version: 1,
-            versionNonce: 98760,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            text: 'Sprint Idea:\nDual Eraser Notes &\nExcalidraw canvas!',
-            fontSize: 14,
-            textAlign: 'left',
-          },
-        ],
-        viewMode: 'split',
-        canvasTheme: 'dark',
-        gridVisible: true,
-        gridSnap: true,
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      this.inMemoryDocuments.set(demoId, sampleDoc);
-    }
-  }
-
   // --- Document Operations ---
+
 
   async getAllDocuments(): Promise<WhiteboardDocument[]> {
     if (this.isPostgresConnected && this.pool) {

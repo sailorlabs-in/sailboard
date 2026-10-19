@@ -11,7 +11,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private isConnected = false;
 
   onModuleInit() {
-    const host = process.env.REDIS_HOST || '192.168.1.2';
+    const host = process.env.REDIS_HOST || 'localhost';
     const port = parseInt(process.env.REDIS_PORT || '6379', 10);
 
     const redisOptions = {

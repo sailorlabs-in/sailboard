@@ -49,6 +49,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
   return (
     <Paper
       elevation={0}
+      className="neu-dock"
       sx={{
         position: 'absolute',
         top: 16,
@@ -59,14 +60,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
         alignItems: 'center',
         gap: 0.8,
         p: 0.8,
-        borderRadius: 3.5,
+        borderRadius: '16px',
         maxWidth: 'calc(100vw - 32px)',
         overflowX: 'auto',
-        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
-        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(255, 255, 255, 0.8)',
-        boxShadow: isDark
-          ? '8px 8px 24px rgba(0, 0, 0, 0.55), -5px -5px 16px rgba(255, 255, 255, 0.04)'
-          : '8px 8px 24px #b8c0ca, -8px -8px 24px #ffffff',
       }}
     >
       {tools.map((item, index) => {
@@ -81,7 +77,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                 sx={{
                   my: 0.8,
                   mx: 0.4,
-                  borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+                  borderColor: 'var(--neu-border-subtle)',
                 }}
               />
             ) : null}
@@ -102,36 +98,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                   sx={{
                     width: 38,
                     height: 38,
-                    borderRadius: 2.5,
-                    color: isActive ? (isDark ? '#818cf8' : '#4f46e5') : isDark ? '#94a3b8' : '#475569',
-                    bgcolor: isActive
-                      ? isDark
-                        ? '#141724'
-                        : '#d8dfe8'
-                      : isDark
-                      ? '#1c2030'
-                      : '#e6ecf2',
-                    boxShadow: isActive
-                      ? isDark
-                        ? 'inset 3px 3px 6px rgba(0,0,0,0.65), inset -2px -2px 4px rgba(255,255,255,0.05), 0 0 12px rgba(99,102,241,0.35)'
-                        : 'inset 3px 3px 6px #b4bcc6, inset -3px -3px 6px #ffffff, 0 0 12px rgba(79,70,229,0.3)'
-                      : isDark
-                      ? '3px 3px 7px rgba(0,0,0,0.45), -2px -2px 6px rgba(255,255,255,0.03)'
-                      : '3px 3px 7px #c2c9d1, -3px -3px 7px #ffffff',
-                    border: isActive
-                      ? '1px solid rgba(99, 102, 241, 0.4)'
-                      : isDark
-                      ? '1px solid rgba(255,255,255,0.04)'
-                      : '1px solid rgba(255,255,255,0.6)',
+                    borderRadius: '10px',
+                    color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
+                    bgcolor: isActive ? 'var(--neu-bg)' : 'var(--neu-surface)',
+                    boxShadow: isActive ? 'var(--neu-shadow-pressed)' : 'var(--neu-shadow-btn)',
+                    border: isActive ? 'var(--neu-border-inset)' : 'var(--neu-border)',
                     opacity: isDisabled ? 0.35 : 1,
                     '&:hover': {
-                      bgcolor: isActive
-                        ? isDark
-                          ? '#141724'
-                          : '#d8dfe8'
-                        : isDark
-                        ? '#22273a'
-                        : '#e2e8ef',
+                      bgcolor: isActive ? 'var(--neu-bg)' : 'var(--neu-surface-hover)',
+                      boxShadow: isActive ? 'var(--neu-shadow-pressed)' : 'var(--neu-shadow-btn-hover)',
+                      color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-primary)',
                       transform: isDisabled ? 'none' : 'translateY(-1px)',
                     },
                     transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -148,7 +124,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                     fontSize: '0.52rem',
                     fontWeight: 700,
                     pointerEvents: 'none',
-                    color: isActive ? '#818cf8' : isDark ? '#64748b' : '#94a3b8',
+                    color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-muted)',
                   }}
                 >
                   {item.shortcut}

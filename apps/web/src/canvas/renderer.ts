@@ -31,7 +31,7 @@ export function renderScene(
   // Clear canvas
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = isDark ? '#0b0f19' : '#f8fafc';
+  ctx.fillStyle = isDark ? '#121622' : '#e2e8f0';
   ctx.fillRect(0, 0, width, height);
 
   // Apply High-DPI Camera Transform (DPR * Pan and Zoom)

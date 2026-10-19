@@ -50,10 +50,11 @@ Sailboard is a production-grade collaborative engineering canvas combining **Era
 ### 1. Environment Configuration
 Create a `.env` file in the root directory:
 ```env
-DATABASE_URL=postgresql://umangsailor:Umang6Sailor@192.168.1.2:5432/sailboard?schema=public
-REDIS_HOST=192.168.1.2
+DATABASE_URL=postgresql://user:password@localhost:5432/sailboard?schema=public
+REDIS_HOST=localhost
 REDIS_PORT=6379
 PORT=3333
+JWT_SECRET=sailboard_super_secret_jwt_key_2026
 NODE_ENV=development
 ```
 

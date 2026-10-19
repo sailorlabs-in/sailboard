@@ -129,21 +129,20 @@ export const Minimap: React.FC<MinimapProps> = ({
   return (
     <Paper
       elevation={0}
+      className="neu-flat"
       sx={{
         position: 'absolute',
         bottom: 16,
         right: 16,
         width,
         height,
-        borderRadius: 3,
+        borderRadius: '14px',
         overflow: 'hidden',
         zIndex: 30,
-        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
-        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(255, 255, 255, 0.8)',
+        bgcolor: 'var(--neu-surface)',
+        border: 'var(--neu-border)',
+        boxShadow: 'var(--neu-shadow-raised)',
         cursor: 'crosshair',
-        boxShadow: isDark
-          ? '6px 6px 18px rgba(0, 0, 0, 0.55), -4px -4px 12px rgba(255, 255, 255, 0.04)'
-          : '6px 6px 18px #b8c0ca, -6px -6px 18px #ffffff',
       }}
     >
       <canvas ref={canvasRef} width={width} height={height} onClick={handleClick} />

@@ -84,6 +84,9 @@ export class CanvasElementEntity {
   @Column({ type: 'varchar', length: 64, nullable: true })
   textAlign: string;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  textColor: string;
+
   @Column({ type: 'jsonb', nullable: true })
   points: any;
 

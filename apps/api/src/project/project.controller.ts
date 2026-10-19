@@ -38,11 +38,16 @@ export class ProjectController {
 
   @Post()
   async createProject(
-    @Body() body: { name: string; description?: string },
+    @Body() body: { name: string; description?: string; createInitialFile?: boolean },
     @Headers('authorization') authHeader?: string
   ): Promise<Project> {
     const user = await this.getAuthUser(authHeader);
-    return this.projectService.createProject(body.name, body.description || '', user);
+    return this.projectService.createProject(
+      body.name,
+      body.description || '',
+      user,
+      Boolean(body.createInitialFile)
+    );
   }
 
   @Get(':id')

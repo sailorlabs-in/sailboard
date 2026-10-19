@@ -139,8 +139,8 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: isDark ? '#0f172a' : '#ffffff',
-        borderRight: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+        bgcolor: 'var(--neu-bg)',
+        borderRight: 'var(--neu-border)',
       }}
     >
       {/* Doc Header & Action Bar */}
@@ -150,32 +150,34 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
-          bgcolor: isDark ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.8)',
+          borderBottom: 'var(--neu-border)',
+          bgcolor: 'var(--neu-surface)',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: -0.2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }}>
             Engineering Spec
           </Typography>
-          <ButtonGroup size="small" variant="outlined" sx={{ height: 26 }}>
-            <Button
-              variant={tab === 'edit' ? 'contained' : 'outlined'}
+          <Box className="neu-segmented">
+            <button
+              type="button"
+              className={`neu-segmented-item ${tab === 'edit' ? 'active' : ''}`}
               onClick={() => setTab('edit')}
-              startIcon={<EditOutlined sx={{ fontSize: 13 }} />}
-              sx={{ fontSize: '0.68rem', px: 1 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: '0.68rem' }}
             >
+              <EditOutlined sx={{ fontSize: 13 }} />
               Edit
-            </Button>
-            <Button
-              variant={tab === 'preview' ? 'contained' : 'outlined'}
+            </button>
+            <button
+              type="button"
+              className={`neu-segmented-item ${tab === 'preview' ? 'active' : ''}`}
               onClick={() => setTab('preview')}
-              startIcon={<VisibilityOutlined sx={{ fontSize: 13 }} />}
-              sx={{ fontSize: '0.68rem', px: 1 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: '0.68rem' }}
             >
+              <VisibilityOutlined sx={{ fontSize: 13 }} />
               Preview
-            </Button>
-          </ButtonGroup>
+            </button>
+          </Box>
         </Box>
 
         {/* Generate Diagram from Markdown */}
@@ -184,15 +186,16 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
             <Button
               size="small"
               variant="contained"
-              color="primary"
               disabled={isViewer}
               startIcon={<AutoAwesomeOutlined />}
               onClick={() => onGenerateDiagramFromNotes(notes)}
+              className="neu-btn-primary"
               sx={{
                 fontSize: '0.72rem',
-                py: 0.3,
-                px: 1.2,
-                background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                py: 0.4,
+                px: 1.4,
+                borderRadius: '8px',
+                textTransform: 'none',
               }}
             >
               Doc → Diagram
@@ -207,47 +210,48 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 0.5,
+            gap: 0.6,
             px: 1.5,
             py: 0.8,
-            borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'}`,
+            borderBottom: 'var(--neu-border-subtle)',
+            bgcolor: 'var(--neu-surface)',
           }}
         >
           <Tooltip title="Heading 1 (#)">
-            <IconButton size="small" onClick={() => insertText('# ')}>
-              <TitleOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('# ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <TitleOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Bold (**text**)">
-            <IconButton size="small" onClick={() => insertText('**', '**')}>
-              <FormatBoldOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('**', '**')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <FormatBoldOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Italic (*text*)">
-            <IconButton size="small" onClick={() => insertText('*', '*')}>
-              <FormatItalicOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('*', '*')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <FormatItalicOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Code Block (```)">
-            <IconButton size="small" onClick={() => insertText('```\n', '\n```')}>
-              <CodeOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('```\n', '\n```')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <CodeOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Bullet List (- )">
-            <IconButton size="small" onClick={() => insertText('- ')}>
-              <FormatListBulletedOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('- ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <FormatListBulletedOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Task Checklist (- [ ] )">
-            <IconButton size="small" onClick={() => insertText('- [ ] ')}>
-              <CheckCircleOutlined fontSize="small" />
+            <IconButton size="small" onClick={() => insertText('- [ ] ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+              <CheckCircleOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
         </Box>
       )}
 
       {/* Editor Body or Preview Body */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
         {tab === 'edit' ? (
           <textarea
             id="eraser-notes-textarea"
@@ -259,6 +263,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
                 ? 'Read-only notes preview...'
                 : 'Write design notes, system specs, flow descriptions in Markdown...'
             }
+            className="neu-inset"
             style={{
               width: '100%',
               height: '100%',
@@ -270,12 +275,14 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
               fontFamily: "'Inter', sans-serif",
               fontSize: '0.875rem',
               lineHeight: 1.7,
-              background: 'transparent',
-              color: isDark ? '#f1f5f9' : '#0f172a',
+              borderRadius: '12px',
+              color: 'var(--neu-text-primary)',
             }}
           />
         ) : (
-          renderMarkdownPreview(notes)
+          <Box className="neu-inset" sx={{ p: 1.5, borderRadius: '12px', minHeight: '100%' }}>
+            {renderMarkdownPreview(notes)}
+          </Box>
         )}
       </Box>
     </Box>

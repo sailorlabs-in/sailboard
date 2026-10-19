@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Dialog,
   DialogTitle,
@@ -154,7 +155,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     canvas.toBlob(async (blob) => {
       if (blob && navigator.clipboard && window.ClipboardItem) {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        alert('Diagram copied to clipboard as PNG image!');
+        toast.success('Diagram copied to clipboard as PNG image!');
         onClose();
       }
     });
@@ -168,17 +169,19 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       fullWidth
       slotProps={{
         paper: {
+          className: 'neu-floating',
           sx: {
-            bgcolor: isDark ? '#1e293b' : '#ffffff',
-            borderRadius: 3,
-            border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+            bgcolor: 'var(--neu-surface)',
+            borderRadius: '18px',
+            border: 'var(--neu-border)',
+            boxShadow: 'var(--neu-shadow-floating)',
           },
         },
       }}
     >
-      <DialogTitle sx={{ fontWeight: 700 }}>Export Diagram</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>Export Diagram</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{ color: 'var(--neu-text-secondary)' }}>
           Choose export format and rendering options.
         </Typography>
 
@@ -189,8 +192,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             control={<Radio size="small" />}
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ImageOutlined fontSize="small" sx={{ color: '#6366f1' }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>PNG Image (High Resolution)</Typography>
+                <ImageOutlined fontSize="small" sx={{ color: 'var(--neu-primary-light)' }} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>PNG Image (High Resolution)</Typography>
               </Box>
             }
           />
@@ -200,7 +203,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CodeOutlined fontSize="small" sx={{ color: '#ec4899' }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>SVG Vector File</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>SVG Vector File</Typography>
               </Box>
             }
           />
@@ -210,17 +213,17 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             label={
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <DataObjectOutlined fontSize="small" sx={{ color: '#10b981' }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>JSON (Excalidraw & Eraser Backup)</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>JSON (Excalidraw & Eraser Backup)</Typography>
               </Box>
             }
           />
         </RadioGroup>
 
-        <Divider />
+        <Divider sx={{ borderColor: 'var(--neu-border-subtle)' }} />
 
         {/* Options */}
         {exportFormat === 'png' && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -229,43 +232,44 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                   onChange={(e) => setTransparentBg(e.target.checked)}
                 />
               }
-              label={<Typography variant="body2">Transparent Background</Typography>}
+              label={<Typography variant="body2" sx={{ color: 'var(--neu-text-primary)' }}>Transparent Background</Typography>}
             />
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="caption" sx={{ fontWeight: 600 }}>Resolution Scale</Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>Resolution Scale</Typography>
+              <Box className="neu-segmented" sx={{ p: 0.3 }}>
                 {[1, 2, 3].map((s) => (
-                  <Button
+                  <button
                     key={s}
-                    size="small"
-                    variant={scale === s ? 'contained' : 'outlined'}
+                    type="button"
+                    className={`neu-segmented-item ${scale === s ? 'active' : ''}`}
                     onClick={() => setScale(s)}
-                    sx={{ minWidth: 36, px: 1, py: 0.2, fontSize: '0.75rem' }}
+                    style={{ minWidth: 32, padding: '3px 8px', fontSize: '0.75rem', textAlign: 'center' }}
                   >
                     {s}x
-                  </Button>
+                  </button>
                 ))}
               </Box>
             </Box>
           </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ p: 2, pt: 0, display: 'flex', justifyContent: 'space-between' }}>
+      <DialogActions sx={{ p: 2.5, pt: 0, display: 'flex', justifyContent: 'space-between' }}>
         {exportFormat === 'png' ? (
-          <Button startIcon={<ContentCopyOutlined />} onClick={handleCopyToClipboard} size="small">
+          <Button startIcon={<ContentCopyOutlined />} onClick={handleCopyToClipboard} size="small" className="neu-btn" sx={{ px: 1.5, py: 0.5, borderRadius: '8px' }}>
             Copy PNG
           </Button>
         ) : <Box />}
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={onClose} size="small">
+          <Button onClick={onClose} size="small" sx={{ color: 'var(--neu-text-secondary)' }}>
             Cancel
           </Button>
           <Button
             variant="contained"
-            color="primary"
             startIcon={<DownloadOutlined />}
             onClick={handleDownload}
             size="small"
+            className="neu-btn-primary"
+            sx={{ px: 2, py: 0.5, borderRadius: '8px', textTransform: 'none' }}
           >
             Download
           </Button>

@@ -12,20 +12,22 @@ import { WhiteboardModule } from './whiteboard/whiteboard.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url:
-        process.env.DATABASE_URL ||
-        'postgresql://umangsailor:Umang6Sailor@192.168.1.2:5432/sailboard?schema=public',
-      entities: [
-        UserEntity,
-        ProjectEntity,
-        ProjectMemberEntity,
-        DocumentEntity,
-        CanvasElementEntity,
-      ],
-      synchronize: true, // Auto synchronize TypeORM entity tables in PostgreSQL
-      logging: false,
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        url:
+          process.env.DATABASE_URL ||
+          'postgresql://umang:secret123@localhost:5432/sailboard?schema=public',
+        entities: [
+          UserEntity,
+          ProjectEntity,
+          ProjectMemberEntity,
+          DocumentEntity,
+          CanvasElementEntity,
+        ],
+        synchronize: true, // Auto synchronize TypeORM entity tables in PostgreSQL
+        logging: false,
+      }),
     }),
     AuthModule,
     ProjectModule,

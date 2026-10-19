@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  OnModuleInit,
   Logger,
   Inject,
 } from '@nestjs/common';
@@ -22,7 +21,7 @@ import {
 } from '@rea/shared-types';
 
 @Injectable()
-export class ProjectService implements OnModuleInit {
+export class ProjectService {
   private readonly logger = new Logger(ProjectService.name);
 
   constructor(
@@ -35,278 +34,8 @@ export class ProjectService implements OnModuleInit {
     @Inject(AuthService)
     private readonly authService: AuthService
   ) {}
-
-  async onModuleInit() {
-    await this.seedInitialProject();
-  }
-
-  private async seedInitialProject() {
-    try {
-      const projId = 'proj-sailboard-demo';
-      let project = await this.projectRepo.findOne({ where: { id: projId } });
-      if (!project) {
-        this.logger.log('Seeding demo project with multiple files and members...');
-        project = this.projectRepo.create({
-          id: projId,
-          name: 'Sailboard Core Architecture',
-          description: 'Production architecture diagrams, data flow and sprint boards',
-          ownerId: 'user-alice-101',
-          ownerName: 'Alice Walker',
-        });
-        await this.projectRepo.save(project);
-
-        // Add Alice as Owner and Bob as Editor
-        const aliceMember = this.memberRepo.create({
-          id: 'mem-alice-1',
-          projectId: projId,
-          userId: 'user-alice-101',
-          userEmail: 'alice@sailboard.io',
-          userName: 'Alice Walker',
-          role: 'owner',
-        });
-
-        const bobMember = this.memberRepo.create({
-          id: 'mem-bob-2',
-          projectId: projId,
-          userId: 'user-bob-102',
-          userEmail: 'bob@sailboard.io',
-          userName: 'Bob Martinez',
-          role: 'editor',
-        });
-        await this.memberRepo.save([aliceMember, bobMember]);
-      }
-
-      const docCount = await this.docRepo.count({ where: { projectId: projId } });
-      if (docCount === 0) {
-        this.logger.log('Seeding demo files for Sailboard Core Architecture...');
-        // Create File A: Architecture Diagram
-        const fileA = this.docRepo.create({
-          id: 'doc-welcome-sample',
-          projectId: projId,
-          title: 'File A: System Architecture',
-          description: 'Live architecture documentation with PostgreSQL & Redis',
-          notes: `# Engineering System Architecture
-
-Welcome to **Sailboard**!
-This project combines Markdown documentation with an infinite whiteboard canvas.
-
-### Architecture Highlights:
-- **Frontend**: React 19 + Material-UI (MUI v6) + TypeScript + Rough.js
-- **Backend**: Nest.js + TypeORM + PostgreSQL + Redis + WebSockets
-- **Multi-File Workspace**: Switch between files A, B, and C in the sidebar!
-- **Sharing & Roles**: Project Owner can invite collaborators as **Editor** or **Viewer**.
-
-Try opening this project in two browser tabs as **Alice (Editor)** and **Bob (Editor or Viewer)**!
-`,
-          elements: [
-            {
-              id: 'el-1',
-              type: 'rectangle',
-              x: 220,
-              y: 120,
-              width: 200,
-              height: 90,
-              angle: 0,
-              strokeColor: '#3b82f6',
-              backgroundColor: 'rgba(59, 130, 246, 0.15)',
-              fillStyle: 'hachure',
-              strokeWidth: 2,
-              strokeStyle: 'solid',
-              roughness: 1,
-              opacity: 100,
-              seed: 12345,
-              version: 1,
-              versionNonce: 54321,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              text: 'Client Web App\n(React + MUI)',
-              fontSize: 16,
-              textAlign: 'center',
-            },
-            {
-              id: 'el-2',
-              type: 'arrow',
-              x: 420,
-              y: 165,
-              width: 140,
-              height: 0,
-              angle: 0,
-              strokeColor: '#94a3b8',
-              backgroundColor: 'transparent',
-              fillStyle: 'none',
-              strokeWidth: 2,
-              strokeStyle: 'solid',
-              roughness: 1,
-              opacity: 100,
-              seed: 67890,
-              version: 1,
-              versionNonce: 98765,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              points: [
-                { x: 0, y: 0 },
-                { x: 140, y: 0 },
-              ],
-              endArrowhead: 'arrow',
-            },
-            {
-              id: 'el-3',
-              type: 'diamond',
-              x: 560,
-              y: 110,
-              width: 160,
-              height: 110,
-              angle: 0,
-              strokeColor: '#10b981',
-              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-              fillStyle: 'solid',
-              strokeWidth: 2,
-              strokeStyle: 'solid',
-              roughness: 1,
-              opacity: 100,
-              seed: 23456,
-              version: 1,
-              versionNonce: 65432,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              text: 'API Gateway\n(Nest.js)',
-              fontSize: 15,
-              textAlign: 'center',
-            },
-            {
-              id: 'el-4',
-              type: 'arrow',
-              x: 720,
-              y: 165,
-              width: 130,
-              height: 0,
-              angle: 0,
-              strokeColor: '#94a3b8',
-              backgroundColor: 'transparent',
-              fillStyle: 'none',
-              strokeWidth: 2,
-              strokeStyle: 'solid',
-              roughness: 1,
-              opacity: 100,
-              seed: 34567,
-              version: 1,
-              versionNonce: 76543,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              points: [
-                { x: 0, y: 0 },
-                { x: 130, y: 0 },
-              ],
-              endArrowhead: 'arrow',
-            },
-            {
-              id: 'el-5',
-              type: 'ellipse',
-              x: 850,
-              y: 115,
-              width: 170,
-              height: 100,
-              angle: 0,
-              strokeColor: '#8b5cf6',
-              backgroundColor: 'rgba(139, 92, 246, 0.15)',
-              fillStyle: 'cross-hatch',
-              strokeWidth: 2,
-              strokeStyle: 'solid',
-              roughness: 1,
-              opacity: 100,
-              seed: 45678,
-              version: 1,
-              versionNonce: 87654,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              text: 'PostgreSQL DB\n(TypeORM Schema)',
-              fontSize: 15,
-              textAlign: 'center',
-            },
-            {
-              id: 'el-6',
-              type: 'sticky',
-              x: 230,
-              y: 280,
-              width: 190,
-              height: 130,
-              angle: -0.03,
-              strokeColor: '#f59e0b',
-              backgroundColor: '#fef3c7',
-              fillStyle: 'solid',
-              strokeWidth: 1.5,
-              strokeStyle: 'solid',
-              roughness: 0,
-              opacity: 95,
-              seed: 56789,
-              version: 1,
-              versionNonce: 98760,
-              isDeleted: false,
-              updatedAt: Date.now(),
-              text: 'Redis Pub/Sub:\nLive collaboration &\nmultiplayer cursors!',
-              fontSize: 14,
-              textAlign: 'left',
-            },
-          ] as any,
-          viewMode: 'split',
-          canvasTheme: 'dark',
-          gridVisible: true,
-          gridSnap: true,
-          version: 1,
-        });
-        await this.docRepo.save(fileA);
-
-        // Create File B: Redis Data Flow
-        const fileB = this.docRepo.create({
-          id: 'doc-file-b',
-          projectId: projId,
-          title: 'File B: Live Redis Data Flow',
-          description: 'Pub/Sub and real-time state synchronization',
-          notes: `# Live Redis Data Flow Spec
-
-This document describes how **Sailboard** synchronizes concurrent user edits in real time.
-
-### Components:
-- **Socket.io Gateway**: Bi-directional event stream.
-- **Redis Pub/Sub**: Multi-server cross-broadcast channel.
-- **PostgreSQL**: Durable TypeORM storage.
-`,
-          elements: [],
-          viewMode: 'split',
-          canvasTheme: 'dark',
-          gridVisible: true,
-          gridSnap: true,
-          version: 1,
-        });
-        await this.docRepo.save(fileB);
-
-        // Create File C: Sprint Retrospective
-        const fileC = this.docRepo.create({
-          id: 'doc-file-c',
-          projectId: projId,
-          title: 'File C: Sprint Retrospective',
-          description: 'Sprint planning and retrospective sticky notes',
-          notes: `# Sprint Planning & Retrospective
-
-Use colorful sticky notes to map out action items and roadmap goals.
-`,
-          elements: [],
-          viewMode: 'canvas',
-          canvasTheme: 'dark',
-          gridVisible: true,
-          gridSnap: true,
-          version: 1,
-        });
-        await this.docRepo.save(fileC);
-
-        this.logger.log('Demo project and files seeded successfully.');
-      }
-    } catch (e: any) {
-      this.logger.error(`Seed project error: ${e.message}`);
-    }
-  }
-
   // --- Permissions Helper ---
+
   async getUserRole(projectId: string, userId: string): Promise<ProjectRole | null> {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) return null;
@@ -454,7 +183,12 @@ Use colorful sticky notes to map out action items and roadmap goals.
     };
   }
 
-  async createProject(name: string, description: string, user: User): Promise<Project> {
+  async createProject(
+    name: string,
+    description: string,
+    user: User,
+    createInitialFile = false
+  ): Promise<Project> {
     const id = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const project = this.projectRepo.create({
       id,
@@ -476,21 +210,23 @@ Use colorful sticky notes to map out action items and roadmap goals.
     });
     await this.memberRepo.save(ownerMember);
 
-    // Create default initial file
-    const initialDoc = this.docRepo.create({
-      id: `doc-${Date.now()}`,
-      projectId: id,
-      title: 'File A: Main Canvas',
-      description: 'Initial canvas file',
-      notes: `# ${name}\n\nProject workspace initialized.`,
-      elements: [],
-      viewMode: 'split',
-      canvasTheme: 'dark',
-      gridVisible: true,
-      gridSnap: true,
-      version: 1,
-    });
-    await this.docRepo.save(initialDoc);
+    // Create default initial file only if requested
+    if (createInitialFile) {
+      const initialDoc = this.docRepo.create({
+        id: `doc-${Date.now()}`,
+        projectId: id,
+        title: 'File A: Main Canvas',
+        description: 'Initial canvas file',
+        notes: `# ${name}\n\nProject workspace initialized.`,
+        elements: [],
+        viewMode: 'split',
+        canvasTheme: 'dark',
+        gridVisible: true,
+        gridSnap: true,
+        version: 1,
+      });
+      await this.docRepo.save(initialDoc);
+    }
 
     return this.getProjectById(id, user.id);
   }

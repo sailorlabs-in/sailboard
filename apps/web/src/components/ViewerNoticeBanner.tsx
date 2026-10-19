@@ -16,15 +16,15 @@ export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
   return (
     <Box
       sx={{
-        bgcolor: 'rgba(245, 158, 11, 0.12)',
-        borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
+        bgcolor: 'var(--neu-surface)',
+        borderBottom: 'var(--neu-border)',
+        boxShadow: 'var(--neu-shadow-raised-sm)',
         px: 2,
-        py: 0.65,
+        py: 0.8,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         zIndex: 40,
-        backdropFilter: 'blur(8px)',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -33,37 +33,38 @@ export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
           label="Viewer (Read-Only)"
           size="small"
           sx={{
-            bgcolor: 'rgba(245, 158, 11, 0.2)',
+            bgcolor: 'rgba(245, 158, 11, 0.15)',
             color: '#f59e0b',
             fontWeight: 700,
             fontSize: '0.72rem',
-            border: '1px solid rgba(245, 158, 11, 0.4)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            boxShadow: 'var(--neu-shadow-btn)',
           }}
         />
-        <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 500, fontSize: '0.8rem' }}>
+        <Typography variant="caption" sx={{ color: 'var(--neu-text-primary)', fontWeight: 500, fontSize: '0.8rem' }}>
           You have view-only access. You can pan, zoom, and inspect. <b>Live edits made by editors will update on your screen in real time!</b>
         </Typography>
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: { xs: 'none', md: 'block' } }}>
+        <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', display: { xs: 'none', md: 'block' } }}>
           Owner: {ownerName || 'Project Owner'}
         </Typography>
         <Button
           size="small"
           variant="outlined"
-          color="warning"
           onClick={onOpenShare}
-          sx={{ height: 24, fontSize: '0.7rem', textTransform: 'none', py: 0 }}
+          className="neu-btn"
+          sx={{ height: 26, fontSize: '0.7rem', textTransform: 'none', px: 1.2, borderRadius: '6px' }}
         >
           View Members
         </Button>
         <Button
           size="small"
           variant="contained"
-          color="warning"
           onClick={onOpenAuth}
-          sx={{ height: 24, fontSize: '0.7rem', textTransform: 'none', py: 0, fontWeight: 700 }}
+          className="neu-btn-primary"
+          sx={{ height: 26, fontSize: '0.7rem', textTransform: 'none', px: 1.2, fontWeight: 700, borderRadius: '6px' }}
         >
           Switch Account
         </Button>

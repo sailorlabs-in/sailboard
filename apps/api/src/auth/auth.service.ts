@@ -2,7 +2,6 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
-  OnModuleInit,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,53 +11,16 @@ import * as jwt from 'jsonwebtoken';
 import { UserEntity } from '../database/entities/user.entity';
 import { User, AuthResponse } from '@rea/shared-types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sailboard_super_secret_jwt_key_2026';
+const getJwtSecret = () => process.env.JWT_SECRET || 'sailboard_super_secret_jwt_key_2026';
 
 @Injectable()
-export class AuthService implements OnModuleInit {
+export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>
   ) {}
-
-  async onModuleInit() {
-    await this.seedDefaultUsers();
-  }
-
-  private async seedDefaultUsers() {
-    try {
-      const count = await this.userRepo.count();
-      if (count === 0) {
-        this.logger.log('Seeding demo users: Alice (Owner) and Bob (Collaborator)...');
-
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash('password123', salt);
-
-        const alice = this.userRepo.create({
-          id: 'user-alice-101',
-          email: 'alice@sailboard.io',
-          name: 'Alice Walker',
-          passwordHash,
-          color: '#6366f1',
-        });
-
-        const bob = this.userRepo.create({
-          id: 'user-bob-102',
-          email: 'bob@sailboard.io',
-          name: 'Bob Martinez',
-          passwordHash,
-          color: '#ec4899',
-        });
-
-        await this.userRepo.save([alice, bob]);
-        this.logger.log('Demo users created: alice@sailboard.io and bob@sailboard.io (pw: password123)');
-      }
-    } catch (e: any) {
-      this.logger.error(`Seed users error: ${e.message}`);
-    }
-  }
 
   private toUserDto(entity: UserEntity): User {
     return {
@@ -92,7 +54,7 @@ export class AuthService implements OnModuleInit {
 
     await this.userRepo.save(user);
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), {
       expiresIn: '7d',
     });
 
@@ -110,7 +72,7 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), {
       expiresIn: '7d',
     });
 
@@ -119,7 +81,7 @@ export class AuthService implements OnModuleInit {
 
   async verifyToken(token: string): Promise<User> {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+      const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; email: string };
       const user = await this.userRepo.findOne({ where: { id: decoded.userId } });
       if (!user) throw new UnauthorizedException('User not found');
       return this.toUserDto(user);

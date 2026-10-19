@@ -18,10 +18,6 @@ import {
   ListItemText,
   Divider,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -41,12 +37,18 @@ import {
   LogoutOutlined,
   DarkModeOutlined,
   LightModeOutlined,
+  SettingsBrightnessOutlined,
+  CheckOutlined,
+  SailingOutlined,
   MenuOpenOutlined,
   SpaceDashboardOutlined,
   AutoAwesomeOutlined,
 } from '@mui/icons-material';
 import { Project, WhiteboardDocument, ProjectRole, User } from '@rea/shared-types';
+import toast from 'react-hot-toast';
 import { renderScene } from '../canvas/renderer';
+import { ThemePreference } from '../theme/theme';
+import { ConfirmDeleteModal, CreateProjectModal, CreateFileModal } from './modals';
 
 interface DashboardProps {
   user: User | null;
@@ -59,6 +61,8 @@ interface DashboardProps {
   onDeleteFile: (projectId: string, fileId: string) => Promise<void>;
   onOpenShare: (project: Project) => void;
   onLogout: () => void;
+  themePreference?: ThemePreference;
+  onThemeChange?: (pref: ThemePreference) => void;
   themeMode: 'light' | 'dark';
   onToggleTheme: () => void;
 }
@@ -90,11 +94,13 @@ const FileThumbnail: React.FC<{
 
   return (
     <Box
+      className="neu-inset"
       sx={{
         width: '100%',
         height: 140,
-        bgcolor: themeMode === 'dark' ? '#0d111c' : '#f1f5f9',
-        borderBottom: `1px solid ${themeMode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+        bgcolor: 'var(--neu-bg)',
+        boxShadow: 'var(--neu-shadow-inset)',
+        borderBottom: 'var(--neu-border-inset)',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
@@ -146,6 +152,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onDeleteFile,
   onOpenShare,
   onLogout,
+  themePreference = 'system',
+  onThemeChange,
   themeMode,
   onToggleTheme,
 }) => {
@@ -156,18 +164,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all'); // 'all' or specific projectId
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [themeAnchorEl, setThemeAnchorEl] = useState<null | HTMLElement>(null);
 
-  // New Project Dialog
+  // Modal dialog states
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [creatingProject, setCreatingProject] = useState(false);
-
-  // New File Dialog
   const [newFileOpen, setNewFileOpen] = useState(false);
-  const [newFileTitle, setNewFileTitle] = useState('');
   const [targetProjectId, setTargetProjectId] = useState<string>('');
-  const [creatingFile, setCreatingFile] = useState(false);
+  const [deleteFileModalOpen, setDeleteFileModalOpen] = useState(false);
 
   // Context Menu state
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -197,54 +200,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }
 
-  const handleCreateProjectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjectName.trim()) return;
-    setCreatingProject(true);
-    try {
-      await onCreateProject(newProjectName.trim(), newProjectDesc.trim());
-      setNewProjectName('');
-      setNewProjectDesc('');
-      setNewProjectOpen(false);
-    } finally {
-      setCreatingProject(false);
-    }
-  };
-
-  const handleCreateFileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFileTitle.trim()) return;
-    const projId = targetProjectId || projects[0]?.id;
-    if (!projId) return;
-
-    setCreatingFile(true);
-    try {
-      await onCreateFile(projId, newFileTitle.trim());
-      setNewFileTitle('');
-      setNewFileOpen(false);
-    } finally {
-      setCreatingFile(false);
-    }
-  };
-
   return (
     <Box
       sx={{
         width: '100vw',
         height: '100vh',
-        bgcolor: isDark ? '#0b0f19' : '#f8fafc',
-        color: isDark ? '#f8fafc' : '#0f172a',
+        bgcolor: 'var(--neu-bg)',
+        color: 'var(--neu-text-primary)',
         display: 'flex',
         overflow: 'hidden',
+        transition: 'all 0.25s ease',
       }}
     >
       {/* Figma-Style Left Sidebar */}
       <Box
+        className="neu-flat"
         sx={{
           width: { xs: sidebarOpen ? 260 : 0, md: 260 },
           height: '100%',
-          bgcolor: isDark ? '#111827' : '#ffffff',
-          borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          bgcolor: 'var(--neu-surface)',
+          borderRight: 'var(--neu-border)',
+          boxShadow: 'var(--neu-shadow-raised)',
           display: 'flex',
           flexDirection: 'column',
           transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -260,7 +236,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+            borderBottom: 'var(--neu-border-subtle)',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
@@ -273,17 +249,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
-                fontSize: '1.1rem',
+                boxShadow: 'var(--neu-shadow-btn), 0 4px 12px var(--neu-primary-glow)',
               }}
             >
-              ⛵
+              <SailingOutlined sx={{ fontSize: 20, color: '#ffffff' }} />
             </Box>
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: -0.2 }}>
                 Sailboard
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
+              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontSize: '0.65rem' }}>
                 Engineering Canvas
               </Typography>
             </Box>
@@ -293,12 +268,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* User Profile Card */}
         {user && (
           <Box
+            className="neu-inset"
             sx={{
-              p: 1.8,
+              p: 1.6,
               m: 1.5,
               borderRadius: '12px',
-              bgcolor: isDark ? 'rgba(30, 41, 59, 0.5)' : '#f1f5f9',
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+              bgcolor: 'var(--neu-bg)',
+              boxShadow: 'var(--neu-shadow-inset)',
+              border: 'var(--neu-border-inset)',
               display: 'flex',
               alignItems: 'center',
               gap: 1.2,
@@ -339,29 +316,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
             onClick={() => setSelectedFolderId('all')}
             sx={{
               justifyContent: 'flex-start',
-              px: 1.2,
-              py: 0.8,
+              px: 1.4,
+              py: 0.9,
               my: 0.4,
-              borderRadius: '8px',
+              borderRadius: '10px',
               fontWeight: selectedFolderId === 'all' ? 700 : 500,
-              bgcolor: selectedFolderId === 'all' ? (isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)') : 'transparent',
-              color: selectedFolderId === 'all' ? '#818cf8' : 'inherit',
-              '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' },
+              bgcolor: selectedFolderId === 'all' ? 'var(--neu-bg)' : 'transparent',
+              boxShadow: selectedFolderId === 'all' ? 'var(--neu-shadow-pressed)' : 'none',
+              border: selectedFolderId === 'all' ? 'var(--neu-border-inset)' : '1px solid transparent',
+              color: selectedFolderId === 'all' ? 'var(--neu-primary-light)' : 'inherit',
+              '&:hover': { bgcolor: selectedFolderId === 'all' ? 'var(--neu-bg)' : 'var(--neu-surface-hover)' },
             }}
           >
             All Canvases & Files
           </Button>
 
-          <Divider sx={{ my: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }} />
+          <Divider sx={{ my: 1.5, borderColor: 'var(--neu-border-subtle)' }} />
 
           {/* Project Folders Header with "+ New Folder" */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, mb: 0.5 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: 'var(--neu-text-secondary)', letterSpacing: 0.5 }}>
               PROJECT FOLDERS ({projects.length})
             </Typography>
             <Tooltip title="Create new project folder">
-              <IconButton size="small" onClick={() => setNewProjectOpen(true)} sx={{ p: 0.3, color: 'primary.main' }}>
-                <AddOutlined sx={{ fontSize: 18 }} />
+              <IconButton size="small" onClick={() => setNewProjectOpen(true)} className="neu-icon-btn" sx={{ p: 0.5, width: 28, height: 28 }}>
+                <AddOutlined sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
           </Box>
@@ -374,19 +353,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 key={proj.id}
                 fullWidth
                 size="small"
-                startIcon={<FolderOutlined fontSize="small" sx={{ color: isSelected ? '#818cf8' : 'text.secondary' }} />}
+                startIcon={<FolderOutlined fontSize="small" sx={{ color: isSelected ? 'var(--neu-primary-light)' : 'text.secondary' }} />}
                 onClick={() => setSelectedFolderId(proj.id)}
                 sx={{
                   justifyContent: 'flex-start',
-                  px: 1.2,
-                  py: 0.7,
+                  px: 1.4,
+                  py: 0.8,
                   my: 0.3,
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   fontWeight: isSelected ? 700 : 500,
                   fontSize: '0.825rem',
-                  bgcolor: isSelected ? (isDark ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)') : 'transparent',
-                  color: isSelected ? '#818cf8' : 'inherit',
-                  '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' },
+                  bgcolor: isSelected ? 'var(--neu-bg)' : 'transparent',
+                  boxShadow: isSelected ? 'var(--neu-shadow-pressed)' : 'none',
+                  border: isSelected ? 'var(--neu-border-inset)' : '1px solid transparent',
+                  color: isSelected ? 'var(--neu-primary-light)' : 'inherit',
+                  '&:hover': { bgcolor: isSelected ? 'var(--neu-bg)' : 'var(--neu-surface-hover)' },
                 }}
               >
                 <Typography variant="body2" sx={{ fontSize: '0.825rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -407,11 +388,78 @@ export const Dashboard: React.FC<DashboardProps> = ({
             justifyContent: 'space-between',
           }}
         >
-          <Tooltip title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-            <IconButton size="small" onClick={onToggleTheme} sx={{ color: 'inherit' }}>
-              {isDark ? <LightModeOutlined fontSize="small" /> : <DarkModeOutlined fontSize="small" />}
+          <Tooltip title={`Theme: ${themePreference || themeMode}`}>
+            <IconButton
+              size="small"
+              onClick={(e) => setThemeAnchorEl(e.currentTarget)}
+              sx={{ color: 'inherit' }}
+            >
+              {themePreference === 'system' ? (
+                <SettingsBrightnessOutlined fontSize="small" />
+              ) : isDark ? (
+                <DarkModeOutlined fontSize="small" />
+              ) : (
+                <LightModeOutlined fontSize="small" />
+              )}
             </IconButton>
           </Tooltip>
+
+          <Menu
+            anchorEl={themeAnchorEl}
+            open={Boolean(themeAnchorEl)}
+            onClose={() => setThemeAnchorEl(null)}
+            slotProps={{
+              paper: {
+                sx: {
+                  borderRadius: '12px',
+                  bgcolor: isDark ? '#1e293b' : '#fff',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                },
+              },
+            }}
+          >
+            <MenuItem
+              onClick={() => {
+                if (onThemeChange) onThemeChange('light');
+                else if (isDark) onToggleTheme();
+                setThemeAnchorEl(null);
+              }}
+              selected={themePreference === 'light'}
+            >
+              <ListItemIcon>
+                <LightModeOutlined fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Light" />
+              {themePreference === 'light' && <CheckOutlined fontSize="small" sx={{ ml: 1 }} />}
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (onThemeChange) onThemeChange('dark');
+                else if (!isDark) onToggleTheme();
+                setThemeAnchorEl(null);
+              }}
+              selected={themePreference === 'dark'}
+            >
+              <ListItemIcon>
+                <DarkModeOutlined fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Dark" />
+              {themePreference === 'dark' && <CheckOutlined fontSize="small" sx={{ ml: 1 }} />}
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                if (onThemeChange) onThemeChange('system');
+                setThemeAnchorEl(null);
+              }}
+              selected={themePreference === 'system'}
+            >
+              <ListItemIcon>
+                <SettingsBrightnessOutlined fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="System mode" />
+              {themePreference === 'system' && <CheckOutlined fontSize="small" sx={{ ml: 1 }} />}
+            </MenuItem>
+          </Menu>
 
           <Button
             size="small"
@@ -437,20 +485,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
       >
         {/* Top Navbar */}
         <Box
+          className="neu-dock"
           sx={{
             height: 60,
             px: { xs: 2, sm: 3 },
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-            bgcolor: isDark ? 'rgba(17, 24, 39, 0.7)' : 'rgba(255, 255, 255, 0.7)',
-            backdropFilter: 'blur(16px)',
+            borderBottom: 'var(--neu-border)',
+            bgcolor: 'var(--neu-surface)',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {isMobile && (
-              <IconButton size="small" onClick={() => setSidebarOpen((prev) => !prev)}>
+              <IconButton size="small" onClick={() => setSidebarOpen((prev) => !prev)} className="neu-icon-btn">
                 <MenuOpenOutlined fontSize="small" />
               </IconButton>
             )}
@@ -465,21 +513,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+                      <SearchOutlined fontSize="small" sx={{ color: 'var(--neu-text-secondary)' }} />
                     </InputAdornment>
                   ),
                 },
               }}
               sx={{
                 width: { xs: 200, sm: 300, md: 360 },
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
-                  borderRadius: '10px',
-                  fontSize: '0.85rem',
-                  '& fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
-                  '&:hover fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)' },
-                  '&.Mui-focused fieldset': { borderColor: '#6366f1' },
-                },
               }}
             />
           </Box>
@@ -491,18 +531,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
               size="small"
               startIcon={<AddOutlined />}
               onClick={() => {
-                setTargetProjectId(projects[0]?.id || '');
+                if (projects.length === 0) {
+                  toast('Please create a project folder first to organize your canvases!', { icon: '📁' });
+                  setNewProjectOpen(true);
+                  return;
+                }
+                setTargetProjectId(selectedFolderId !== 'all' ? selectedFolderId : projects[0]?.id || '');
                 setNewFileOpen(true);
               }}
+              className="neu-btn-primary"
               sx={{
-                py: 0.8,
-                px: 2,
+                py: 0.9,
+                px: 2.2,
                 borderRadius: '10px',
                 fontWeight: 700,
                 fontSize: '0.85rem',
                 textTransform: 'none',
-                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
               }}
             >
               New Canvas
@@ -522,6 +566,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </Typography>
           </Box>
 
+          {/* Zero Projects Onboarding Banner */}
+          {projects.length === 0 && (
+            <Card
+              variant="outlined"
+              sx={{
+                p: 3,
+                mb: 3.5,
+                borderRadius: '16px',
+                background: isDark
+                  ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(56, 189, 248, 0.08) 100%)'
+                  : 'linear-gradient(135deg, #eef2ff 0%, #f0f9ff 100%)',
+                borderColor: isDark ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 2,
+              }}
+            >
+              <Box sx={{ maxWidth: 620 }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  No Project Folders Yet 📁
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  Sailboard organizes all your architectural diagrams, whiteboard canvases, and markdown specs into project folders. Create your first folder to begin designing!
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                startIcon={<CreateNewFolderOutlined />}
+                onClick={() => setNewProjectOpen(true)}
+                sx={{
+                  py: 1,
+                  px: 2.5,
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                }}
+              >
+                + Create Project Folder
+              </Button>
+            </Card>
+          )}
+
           {/* Quick Start Templates */}
           <Box sx={{ mb: 4 }}>
             <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5, mb: 1.5, display: 'block' }}>
@@ -537,18 +627,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
             >
               {/* Blank Canvas */}
               <Card
-                variant="outlined"
+                className="neu-card"
                 sx={{
-                  borderRadius: '14px',
-                  bgcolor: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-                  transition: 'all 0.2s',
-                  '&:hover': { transform: 'translateY(-2px)', borderColor: 'primary.main' },
+                  borderRadius: '16px',
+                  bgcolor: 'var(--neu-card)',
+                  boxShadow: 'var(--neu-shadow-raised)',
+                  border: 'var(--neu-border)',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    setTargetProjectId(projects[0]?.id || '');
+                    if (projects.length === 0) {
+                      toast('Please create a project folder first!', { icon: '📁' });
+                      setNewProjectOpen(true);
+                      return;
+                    }
+                    setTargetProjectId(selectedFolderId !== 'all' ? selectedFolderId : projects[0]?.id || '');
                     setNewFileOpen(true);
                   }}
                   sx={{ p: 2 }}
@@ -560,10 +654,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         height: 40,
                         borderRadius: '10px',
                         bgcolor: 'rgba(99, 102, 241, 0.15)',
-                        color: '#6366f1',
+                        color: 'var(--neu-primary-light)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        boxShadow: 'var(--neu-shadow-btn)',
                       }}
                     >
                       <AddOutlined fontSize="small" />
@@ -582,20 +677,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {/* System Architecture Template */}
               <Card
-                variant="outlined"
+                className="neu-card"
                 sx={{
-                  borderRadius: '14px',
-                  bgcolor: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-                  transition: 'all 0.2s',
-                  '&:hover': { transform: 'translateY(-2px)', borderColor: 'primary.main' },
+                  borderRadius: '16px',
+                  bgcolor: 'var(--neu-card)',
+                  boxShadow: 'var(--neu-shadow-raised)',
+                  border: 'var(--neu-border)',
                 }}
               >
                 <CardActionArea
                   onClick={async () => {
-                    const proj = projects[0];
+                    if (projects.length === 0) {
+                      toast('Please create a project folder first!', { icon: '📁' });
+                      setNewProjectOpen(true);
+                      return;
+                    }
+                    const proj = selectedFolderId !== 'all' ? projects.find((p) => p.id === selectedFolderId) || projects[0] : projects[0];
                     if (proj) {
-                      await onCreateFile(proj.id, 'System Architecture Blueprint');
+                      try {
+                        await onCreateFile(proj.id, 'System Architecture Blueprint');
+                        toast.success('Architecture blueprint created!');
+                      } catch (err: any) {
+                        toast.error(err.message || 'Failed to create template');
+                      }
                     }
                   }}
                   sx={{ p: 2 }}
@@ -611,6 +715,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        boxShadow: 'var(--neu-shadow-btn)',
                       }}
                     >
                       <AutoAwesomeOutlined fontSize="small" />
@@ -629,13 +734,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {/* New Folder */}
               <Card
-                variant="outlined"
+                className="neu-card"
                 sx={{
-                  borderRadius: '14px',
-                  bgcolor: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-                  transition: 'all 0.2s',
-                  '&:hover': { transform: 'translateY(-2px)', borderColor: 'primary.main' },
+                  borderRadius: '16px',
+                  bgcolor: 'var(--neu-card)',
+                  boxShadow: 'var(--neu-shadow-raised)',
+                  border: 'var(--neu-border)',
                 }}
               >
                 <CardActionArea onClick={() => setNewProjectOpen(true)} sx={{ p: 2 }}>
@@ -650,6 +754,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        boxShadow: 'var(--neu-shadow-btn)',
                       }}
                     >
                       <CreateNewFolderOutlined fontSize="small" />
@@ -668,18 +773,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
               {/* Share & Roles */}
               <Card
-                variant="outlined"
+                className="neu-card"
                 sx={{
-                  borderRadius: '14px',
-                  bgcolor: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-                  transition: 'all 0.2s',
-                  '&:hover': { transform: 'translateY(-2px)', borderColor: 'primary.main' },
+                  borderRadius: '16px',
+                  bgcolor: 'var(--neu-card)',
+                  boxShadow: 'var(--neu-shadow-raised)',
+                  border: 'var(--neu-border)',
                 }}
               >
                 <CardActionArea
                   onClick={() => {
-                    if (projects.length > 0) onOpenShare(projects[0]);
+                    if (projects.length === 0) {
+                      toast('Create a project folder first to manage permissions!', { icon: '📁' });
+                      setNewProjectOpen(true);
+                      return;
+                    }
+                    const proj = selectedFolderId !== 'all' ? projects.find((p) => p.id === selectedFolderId) || projects[0] : projects[0];
+                    if (proj) onOpenShare(proj);
                   }}
                   sx={{ p: 2 }}
                 >
@@ -694,6 +804,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        boxShadow: 'var(--neu-shadow-btn)',
                       }}
                     >
                       <ShareOutlined fontSize="small" />
@@ -741,7 +852,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   variant="contained"
                   startIcon={<AddOutlined />}
                   onClick={() => {
-                    setTargetProjectId(projects[0]?.id || '');
+                    if (projects.length === 0) {
+                      toast('Please create a project folder first!', { icon: '📁' });
+                      setNewProjectOpen(true);
+                      return;
+                    }
+                    setTargetProjectId(selectedFolderId !== 'all' ? selectedFolderId : projects[0]?.id || '');
                     setNewFileOpen(true);
                   }}
                   sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 700 }}
@@ -764,19 +880,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {allFilesWithProject.map(({ project, file }) => (
                   <Card
                     key={file.id}
-                    variant="outlined"
+                    className="neu-card"
                     sx={{
                       borderRadius: '16px',
-                      bgcolor: isDark ? '#1a2234' : '#ffffff',
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+                      bgcolor: 'var(--neu-card)',
+                      boxShadow: 'var(--neu-shadow-raised)',
+                      border: 'var(--neu-border)',
                       overflow: 'hidden',
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      '&:hover': {
-                        transform: 'translateY(-4px)',
-                        boxShadow: isDark
-                          ? '0 12px 28px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.4)'
-                          : '0 12px 28px rgba(0,0,0,0.1), 0 0 0 1px rgba(99,102,241,0.3)',
-                      },
                     }}
                   >
                     <CardActionArea onClick={() => onOpenFile(project, file)}>
@@ -878,13 +989,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <Divider />
 
         <MenuItem
-          onClick={async () => {
-            if (selectedFileForMenu) {
-              if (window.confirm(`Delete "${selectedFileForMenu.file.title}"?`)) {
-                await onDeleteFile(selectedFileForMenu.project.id, selectedFileForMenu.file.id);
-              }
-            }
+          onClick={() => {
             setMenuAnchor(null);
+            setDeleteFileModalOpen(true);
           }}
           sx={{ color: 'error.main' }}
         >
@@ -895,97 +1002,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </MenuItem>
       </Menu>
 
-      {/* New Project Dialog */}
-      <Dialog
+      {/* Confirm File Delete Modal */}
+      <ConfirmDeleteModal
+        open={deleteFileModalOpen}
+        title="Delete Canvas File"
+        itemType="canvas file"
+        itemName={selectedFileForMenu?.file.title}
+        onClose={() => setDeleteFileModalOpen(false)}
+        onConfirm={async () => {
+          if (selectedFileForMenu) {
+            await onDeleteFile(selectedFileForMenu.project.id, selectedFileForMenu.file.id);
+            setDeleteFileModalOpen(false);
+          }
+        }}
+      />
+
+      {/* Create Project Folder Modal */}
+      <CreateProjectModal
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '16px',
-              bgcolor: isDark ? '#1e293b' : '#ffffff',
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>Create Project Folder</DialogTitle>
-        <Box component="form" onSubmit={handleCreateProjectSubmit}>
-          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              autoFocus
-              label="Folder Name"
-              placeholder="e.g. Core System Architecture"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              required
-              fullWidth
-              size="small"
-            />
-            <TextField
-              label="Description (optional)"
-              placeholder="e.g. Microservices, DB schema & API blueprints"
-              value={newProjectDesc}
-              onChange={(e) => setNewProjectDesc(e.target.value)}
-              fullWidth
-              size="small"
-              multiline
-              rows={2}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5 }}>
-            <Button onClick={() => setNewProjectOpen(false)} color="inherit">
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={creatingProject || !newProjectName.trim()}>
-              {creatingProject ? 'Creating...' : 'Create Folder'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onCreateProject={onCreateProject}
+      />
 
-      {/* New File Dialog */}
-      <Dialog
+      {/* Create Canvas File Modal */}
+      <CreateFileModal
         open={newFileOpen}
+        projects={projects}
+        initialProjectId={targetProjectId}
         onClose={() => setNewFileOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '16px',
-              bgcolor: isDark ? '#1e293b' : '#ffffff',
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>Create New Canvas File</DialogTitle>
-        <Box component="form" onSubmit={handleCreateFileSubmit}>
-          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              autoFocus
-              label="File Title"
-              placeholder="e.g. File D - Kubernetes Cluster Topology"
-              value={newFileTitle}
-              onChange={(e) => setNewFileTitle(e.target.value)}
-              required
-              fullWidth
-              size="small"
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5 }}>
-            <Button onClick={() => setNewFileOpen(false)} color="inherit">
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" disabled={creatingFile || !newFileTitle.trim()}>
-              {creatingFile ? 'Creating...' : 'Create Canvas'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onCreateFile={onCreateFile}
+        onCreateProjectClick={() => setNewProjectOpen(true)}
+      />
     </Box>
   );
 };

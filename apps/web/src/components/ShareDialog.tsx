@@ -37,6 +37,7 @@ import {
 import { Project, ProjectMember, ProjectRole } from '@rea/shared-types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { ConfirmDeleteModal } from './modals';
 
 interface ShareDialogProps {
   open: boolean;
@@ -58,6 +59,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Modal state for removing members
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
 
   if (!project) return null;
 
@@ -90,18 +95,23 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     }
   };
 
-  const handleRemoveMember = async (member: ProjectMember) => {
-    if (!window.confirm(`Remove ${member.userName || member.userEmail} from this project?`)) {
-      return;
-    }
+  const handleRequestRemoveMember = (member: ProjectMember) => {
+    setMemberToRemove(member);
+    setConfirmRemoveOpen(true);
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
 
     setLoading(true);
     setErrorMsg(null);
     try {
-      await api.removeProjectMember(project.id, member.id);
+      await api.removeProjectMember(project.id, memberToRemove.id);
       const refreshed = await api.getProject(project.id);
       onProjectUpdated(refreshed);
-      setSuccessMsg(`Removed ${member.userEmail} from project`);
+      setSuccessMsg(`Removed ${memberToRemove.userEmail} from project`);
+      setConfirmRemoveOpen(false);
+      setMemberToRemove(null);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to remove member');
     } finally {
@@ -123,12 +133,12 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       fullWidth
       slotProps={{
         paper: {
+          className: 'neu-floating',
           sx: {
-            borderRadius: 3,
-            bgcolor: 'background.paper',
-            backgroundImage: 'none',
-            boxShadow: '0 20px 45px rgba(0,0,0,0.4)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '18px',
+            bgcolor: 'var(--neu-surface)',
+            border: 'var(--neu-border)',
+            boxShadow: 'var(--neu-shadow-floating)',
           },
         },
       }}
@@ -147,26 +157,27 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 2,
-              bgcolor: 'primary.main',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--neu-primary) 0%, var(--neu-primary-light) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#fff',
+              boxShadow: '0 2px 8px var(--neu-primary-glow)',
             }}
           >
             <FolderSpecialOutlined fontSize="small" />
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: 'var(--neu-text-primary)' }}>
               Share Project & Manage Permissions
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
               Folder: <b>{project.name}</b> • {project.files?.length || 0} Files
             </Typography>
           </Box>
         </Box>
-        <IconButton size="small" onClick={onClose}>
+        <IconButton size="small" onClick={onClose} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
           <CloseOutlined fontSize="small" />
         </IconButton>
       </DialogTitle>
@@ -186,7 +197,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         {/* Invite Form (Only enabled for Owner) */}
         {isOwner ? (
           <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'var(--neu-text-primary)' }}>
               Invite collaborator by email
             </Typography>
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
@@ -222,35 +233,11 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 onClick={() => handleInviteOrUpdateRole()}
                 disabled={loading || !inviteEmail.trim()}
                 startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PersonAddOutlined />}
-                sx={{ textTransform: 'none', px: 2, whiteSpace: 'nowrap' }}
+                className="neu-btn-primary"
+                sx={{ textTransform: 'none', px: 2, whiteSpace: 'nowrap', borderRadius: '10px' }}
               >
                 Invite
               </Button>
-            </Box>
-
-            {/* Quick Demo Invite Buttons */}
-            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Quick test:
-              </Typography>
-              <Chip
-                label="Set Bob as Editor"
-                size="small"
-                variant="outlined"
-                color="primary"
-                clickable
-                onClick={() => handleInviteOrUpdateRole('bob@sailboard.io', 'editor')}
-                sx={{ fontSize: '0.72rem' }}
-              />
-              <Chip
-                label="Set Bob as Viewer (Read-Only)"
-                size="small"
-                variant="outlined"
-                color="warning"
-                clickable
-                onClick={() => handleInviteOrUpdateRole('bob@sailboard.io', 'viewer')}
-                sx={{ fontSize: '0.72rem' }}
-              />
             </Box>
           </Box>
         ) : (
@@ -262,22 +249,22 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         <Divider sx={{ my: 2 }} />
 
         {/* Member List */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'var(--neu-text-primary)' }}>
           Project Members & Permissions ({project.members?.length || 1})
         </Typography>
 
-        <List sx={{ bgcolor: 'background.default', borderRadius: 2, p: 0.5, border: '1px solid rgba(255,255,255,0.05)' }}>
+        <List className="neu-inset" sx={{ borderRadius: '12px', p: 1 }}>
           {/* Owner Item */}
-          <ListItem sx={{ py: 1, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <ListItem sx={{ py: 1, borderBottom: 'var(--neu-border-subtle)' }}>
             <ListItemAvatar>
-              <Avatar sx={{ bgcolor: '#6366f1', width: 36, height: 36, fontSize: '0.875rem', fontWeight: 700 }}>
+              <Avatar sx={{ bgcolor: 'var(--neu-primary)', width: 36, height: 36, fontSize: '0.875rem', fontWeight: 700, boxShadow: 'var(--neu-shadow-btn)' }}>
                 {project.ownerName ? project.ownerName.slice(0, 2).toUpperCase() : 'OW'}
               </Avatar>
             </ListItemAvatar>
             <ListItemText
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>
                     {project.ownerName || 'Project Owner'}
                   </Typography>
                   {project.ownerId === user?.id && (
@@ -304,14 +291,14 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             .map((member) => (
               <ListItem key={member.id} sx={{ py: 1 }}>
                 <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: '#ec4899', width: 36, height: 36, fontSize: '0.875rem', fontWeight: 700 }}>
+                  <Avatar sx={{ bgcolor: '#ec4899', width: 36, height: 36, fontSize: '0.875rem', fontWeight: 700, boxShadow: 'var(--neu-shadow-btn)' }}>
                     {member.userName ? member.userName.slice(0, 2).toUpperCase() : member.userEmail.slice(0, 2).toUpperCase()}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>
                         {member.userName || member.userEmail.split('@')[0]}
                       </Typography>
                       {member.userId === user?.id && (
@@ -334,7 +321,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                         <MenuItem value="viewer">Viewer</MenuItem>
                       </Select>
                       <Tooltip title="Remove member">
-                        <IconButton size="small" color="error" onClick={() => handleRemoveMember(member)}>
+                        <IconButton size="small" color="error" onClick={() => handleRequestRemoveMember(member)} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
                           <DeleteOutlined fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -359,14 +346,29 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
           startIcon={copied ? <CheckCircleOutlined color="success" /> : <ContentCopyOutlined />}
           onClick={handleCopyLink}
           size="small"
-          sx={{ textTransform: 'none' }}
+          className="neu-btn"
+          sx={{ textTransform: 'none', px: 1.5, py: 0.5, borderRadius: '8px' }}
         >
           {copied ? 'Link Copied!' : 'Copy Project Link'}
         </Button>
-        <Button onClick={onClose} variant="contained" size="small">
+        <Button onClick={onClose} variant="contained" size="small" className="neu-btn-primary" sx={{ px: 2.5, py: 0.5, borderRadius: '8px' }}>
           Done
         </Button>
       </DialogActions>
+
+      {/* Confirm Remove Member Modal */}
+      <ConfirmDeleteModal
+        open={confirmRemoveOpen}
+        title="Remove Team Member"
+        itemType="team member"
+        itemName={memberToRemove?.userName || memberToRemove?.userEmail}
+        warningText="They will immediately lose access to all canvases and docs in this folder."
+        onClose={() => {
+          setConfirmRemoveOpen(false);
+          setMemberToRemove(null);
+        }}
+        onConfirm={handleConfirmRemoveMember}
+      />
     </Dialog>
   );
 };

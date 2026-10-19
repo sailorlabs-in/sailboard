@@ -16,7 +16,9 @@ import {
   Project,
   ProjectRole,
 } from '@rea/shared-types';
-import { getAppTheme } from './theme/theme';
+import toast, { Toaster } from 'react-hot-toast';
+import { SailingOutlined } from '@mui/icons-material';
+import { ThemePreference, getAppTheme } from './theme/theme';
 import { Header } from './components/Header';
 import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -28,6 +30,7 @@ import { ProjectSidebar } from './components/ProjectSidebar';
 import { ShareDialog } from './components/ShareDialog';
 import { ViewerNoticeBanner } from './components/ViewerNoticeBanner';
 import { AuthScreen } from './components/AuthScreen';
+import { AuthDialog } from './components/AuthDialog';
 import { Dashboard } from './components/Dashboard';
 import { api } from './services/api';
 import { socketService } from './services/socket';
@@ -39,16 +42,27 @@ export const App: React.FC = () => {
   // Figma Workflow View State: 'dashboard' (Projects/Files Grid) vs 'editor' (Active Canvas Workspace)
   const [currentView, setCurrentView] = useState<'dashboard' | 'editor'>('dashboard');
 
-  // Theme & Responsive State (Persisted in localStorage)
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+  // Theme Preference State: 'light' | 'dark' | 'system' (Persisted in localStorage)
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
     try {
-      const saved = localStorage.getItem('sailboard_theme_mode');
-      if (saved === 'light' || saved === 'dark') return saved;
+      const saved = localStorage.getItem('sailboard_theme_pref');
+      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+      // Backwards compatibility with old key
+      const oldMode = localStorage.getItem('sailboard_theme_mode');
+      if (oldMode === 'light' || oldMode === 'dark') return oldMode;
     } catch {}
-    return 'dark';
+    return 'system';
   });
-  const theme = getAppTheme(themeMode);
+
+  const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
+  const effectiveThemeMode: 'light' | 'dark' =
+    themePreference === 'system' ? (systemPrefersDark ? 'dark' : 'light') : themePreference;
+
+  const theme = getAppTheme(effectiveThemeMode);
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Auth Dialog state (for switching accounts or signing in)
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
 
   // Layout State (Persisted in localStorage)
   const [viewMode, setViewMode] = useState<'canvas' | 'split' | 'notes'>(() => {
@@ -75,12 +89,13 @@ export const App: React.FC = () => {
     return true;
   });
 
-  // Persist Theme Mode
+  // Persist Theme Preference & Synchronize data-theme for Neumorphic CSS
   useEffect(() => {
     try {
-      localStorage.setItem('sailboard_theme_mode', themeMode);
+      localStorage.setItem('sailboard_theme_pref', themePreference);
     } catch {}
-  }, [themeMode]);
+    document.documentElement.setAttribute('data-theme', effectiveThemeMode);
+  }, [themePreference, effectiveThemeMode]);
 
   // Persist View Mode (Split, Canvas, Notes)
   useEffect(() => {
@@ -135,11 +150,11 @@ export const App: React.FC = () => {
 
   // Document State
   const [doc, setDoc] = useState<WhiteboardDocument>({
-    id: 'doc-welcome-sample',
-    projectId: 'proj-sailboard-demo',
-    title: 'File A: System Architecture',
+    id: '',
+    projectId: '',
+    title: 'Untitled Canvas',
     description: '',
-    notes: `# Engineering System Architecture\n\nLoading workspace...`,
+    notes: '',
     elements: [],
     viewMode: 'split',
     canvasTheme: 'dark',
@@ -347,14 +362,25 @@ export const App: React.FC = () => {
 
   // Open file and launch Canvas Editor (from Dashboard or Sidebar)
   const handleOpenFile = useCallback(
-    (project: Project, file: WhiteboardDocument) => {
+    async (project: Project, file: WhiteboardDocument) => {
       setCurrentProject(project);
       const role = computeRoleForProject(project);
       setUserRole(role);
-      handleSelectFile(file);
+
+      // Prevent overwriting active state if reopening the current active document
+      if (doc.id === file.id && doc.elements && doc.elements.length >= (file.elements?.length || 0)) {
+        handleSelectFile({ ...file, elements: doc.elements, notes: doc.notes });
+      } else {
+        try {
+          const freshDoc = await api.getDocument(file.id);
+          handleSelectFile(freshDoc);
+        } catch {
+          handleSelectFile(file);
+        }
+      }
       setCurrentView('editor');
     },
-    [computeRoleForProject, handleSelectFile]
+    [computeRoleForProject, handleSelectFile, doc.id, doc.elements, doc.notes]
   );
 
   // Switch Active Project Folder
@@ -381,48 +407,92 @@ export const App: React.FC = () => {
     if (!currentProject) return;
     try {
       const newFile = await api.createProjectFile(currentProject.id, title);
+      toast.success(`Canvas "${title}" created!`);
       const updatedProj = await api.getProject(currentProject.id);
       setCurrentProject(updatedProj);
+      setProjects((prev) => prev.map((p) => (p.id === currentProject.id ? updatedProj : p)));
       handleSelectFile(newFile);
     } catch (err: any) {
-      alert(err.message || 'Failed to create file');
+      toast.error(err.message || 'Failed to create canvas');
     }
   };
 
-  // Delete File from current Project Folder
-  const handleDeleteFile = async (fileId: string) => {
-    if (!currentProject) return;
+  // Delete File from Project Folder (supports deleting the last remaining canvas as requested!)
+  const handleDeleteFile = async (fileIdOrProjectId: string, maybeFileId?: string) => {
+    const projectId = maybeFileId ? fileIdOrProjectId : currentProject?.id;
+    const fileId = maybeFileId ? maybeFileId : fileIdOrProjectId;
+    if (!projectId) return;
+
     try {
-      await api.deleteProjectFile(currentProject.id, fileId);
-      const updatedProj = await api.getProject(currentProject.id);
+      await api.deleteProjectFile(projectId, fileId);
+      toast.success('Canvas deleted successfully');
+      const updatedProj = await api.getProject(projectId);
       setCurrentProject(updatedProj);
-      if (doc.id === fileId && updatedProj.files && updatedProj.files.length > 0) {
-        handleSelectFile(updatedProj.files[0]);
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? updatedProj : p)));
+
+      if (doc.id === fileId) {
+        if (updatedProj.files && updatedProj.files.length > 0) {
+          handleSelectFile(updatedProj.files[0]);
+        } else {
+          // If no canvases remain in this project folder, smoothly redirect to dashboard
+          setCurrentView('dashboard');
+        }
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to delete file');
+      toast.error(err.message || 'Failed to delete canvas');
     }
   };
 
-  // Create New Project Folder
+  // Create New Project Folder (supports empty folder creation without forcing File A!)
   const handleCreateProject = async (name: string, description?: string) => {
     try {
-      const newProj = await api.createProject(name, description);
+      const newProj = await api.createProject(name, description, false);
+      toast.success(`Project folder "${name}" created!`);
       await loadProjects();
-      handleSelectProject(newProj.id);
+      setCurrentProject(newProj);
+      setProjects((prev) => {
+        if (prev.some((p) => p.id === newProj.id)) return prev;
+        return [...prev, newProj];
+      });
     } catch (err: any) {
-      alert(err.message || 'Failed to create project');
+      toast.error(err.message || 'Failed to create project');
     }
   };
 
+  // Navigate Home to Dashboard & Refresh state
+  const handleNavigateHome = useCallback(() => {
+    setCurrentView('dashboard');
+    loadProjects();
+  }, [loadProjects]);
+
   // Update Elements (Editor action) & Broadcast Live to Other Users
+  // CRITICAL FIX: Also updates in-memory currentProject and projects so navigating away and returning preserves data!
   const handleElementsChange = useCallback(
     (newElements: CanvasElement[], recordHistory = true) => {
       if (isViewer) return;
 
       setDoc((prev) => ({ ...prev, elements: newElements }));
 
-      // Broadcast live to WebSockets & Redis Pub/Sub (User B receives this in real time!)
+      // Update in-memory project structures so returning to Dashboard or switching files never serves stale data
+      setCurrentProject((prevProj) => {
+        if (!prevProj || !prevProj.files) return prevProj;
+        return {
+          ...prevProj,
+          files: prevProj.files.map((f) => (f.id === doc.id ? { ...f, elements: newElements } : f)),
+        };
+      });
+
+      setProjects((prevProjects) =>
+        prevProjects.map((p) => {
+          if (p.id !== doc.projectId) return p;
+          return {
+            ...p,
+            files: p.files?.map((f) => (f.id === doc.id ? { ...f, elements: newElements } : f)),
+          };
+        })
+      );
+
+      // Broadcast live to WebSockets & Redis Pub/Sub
       socketService.emitElementsChange(newElements);
 
       if (recordHistory) {
@@ -440,7 +510,7 @@ export const App: React.FC = () => {
           .catch(() => setSaveStatus('synced'));
       }
     },
-    [doc.id, historyIndex, isViewer]
+    [doc.id, doc.projectId, historyIndex, isViewer]
   );
 
   // Undo / Redo
@@ -470,6 +540,25 @@ export const App: React.FC = () => {
   const handleNotesChange = (newNotes: string) => {
     if (isViewer) return;
     setDoc((prev) => ({ ...prev, notes: newNotes }));
+
+    setCurrentProject((prevProj) => {
+      if (!prevProj || !prevProj.files) return prevProj;
+      return {
+        ...prevProj,
+        files: prevProj.files.map((f) => (f.id === doc.id ? { ...f, notes: newNotes } : f)),
+      };
+    });
+
+    setProjects((prevProjects) =>
+      prevProjects.map((p) => {
+        if (p.id !== doc.projectId) return p;
+        return {
+          ...p,
+          files: p.files?.map((f) => (f.id === doc.id ? { ...f, notes: newNotes } : f)),
+        };
+      })
+    );
+
     socketService.emitNoteChange(newNotes);
     api.updateDocument(doc.id, { notes: newNotes }).catch(console.error);
   };
@@ -479,6 +568,7 @@ export const App: React.FC = () => {
     if (isViewer) return;
     setDoc((prev) => ({ ...prev, title: newTitle }));
     api.updateDocument(doc.id, { title: newTitle }).catch(console.error);
+
     if (currentProject) {
       setCurrentProject((prev) =>
         prev
@@ -487,6 +577,16 @@ export const App: React.FC = () => {
               files: prev.files?.map((f) => (f.id === doc.id ? { ...f, title: newTitle } : f)),
             }
           : null
+      );
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === doc.projectId
+            ? {
+                ...p,
+                files: p.files?.map((f) => (f.id === doc.id ? { ...f, title: newTitle } : f)),
+              }
+            : p
+        )
       );
     }
   };
@@ -829,12 +929,14 @@ export const App: React.FC = () => {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.elements && Array.isArray(parsed.elements)) {
           handleElementsChange(parsed.elements);
+          toast.success('Whiteboard elements imported!');
         } else if (parsed.document && parsed.document.elements) {
           handleElementsChange(parsed.document.elements);
           if (parsed.document.notes) setDoc((prev) => ({ ...prev, notes: parsed.document.notes }));
+          toast.success('Document imported successfully!');
         }
       } catch (err) {
-        alert('Invalid JSON whiteboard file format');
+        toast.error('Invalid JSON whiteboard file format');
       }
     };
     reader.readAsText(file);
@@ -861,11 +963,29 @@ export const App: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const appToaster = (
+    <Toaster
+      position="bottom-right"
+      toastOptions={{
+        duration: 3500,
+        style: {
+          background: effectiveThemeMode === 'dark' ? '#1e293b' : '#ffffff',
+          color: effectiveThemeMode === 'dark' ? '#f8fafc' : '#0f172a',
+          border: `1px solid ${effectiveThemeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+          borderRadius: '12px',
+          fontSize: '0.875rem',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+        },
+      }}
+    />
+  );
+
   // 1. Loading State
   if (isLoading) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {appToaster}
         <Box
           sx={{
             width: '100vw',
@@ -887,11 +1007,10 @@ export const App: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '1.6rem',
               boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
             }}
           >
-            ⛵
+            <SailingOutlined sx={{ fontSize: 28, color: '#ffffff' }} />
           </Box>
           <CircularProgress size={32} sx={{ color: '#6366f1' }} />
           <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
@@ -907,6 +1026,7 @@ export const App: React.FC = () => {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {appToaster}
         <AuthScreen />
       </ThemeProvider>
     );
@@ -917,6 +1037,7 @@ export const App: React.FC = () => {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        {appToaster}
         <Dashboard
           user={user}
           projects={projects}
@@ -930,11 +1051,12 @@ export const App: React.FC = () => {
           onCreateFile={async (projectId, title) => {
             try {
               const newFile = await api.createProjectFile(projectId, title);
+              toast.success(`Canvas "${title}" created!`);
               await loadProjects();
               const updatedProj = await api.getProject(projectId);
               handleOpenFile(updatedProj, newFile);
             } catch (err: any) {
-              alert(err.message || 'Failed to create file');
+              toast.error(err.message || 'Failed to create canvas');
             }
           }}
           onDeleteFile={handleDeleteFile}
@@ -943,8 +1065,10 @@ export const App: React.FC = () => {
             setShareOpen(true);
           }}
           onLogout={logout}
-          themeMode={themeMode}
-          onToggleTheme={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
+          themePreference={themePreference}
+          onThemeChange={setThemePreference}
+          themeMode={effectiveThemeMode}
+          onToggleTheme={() => setThemePreference((m) => (m === 'light' ? 'dark' : 'light'))}
         />
 
         {/* Share & Permissions Dialog */}
@@ -959,6 +1083,9 @@ export const App: React.FC = () => {
             loadProjects();
           }}
         />
+
+        {/* Auth Dialog (switch accounts) */}
+        <AuthDialog open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />
       </ThemeProvider>
     );
   }
@@ -968,7 +1095,8 @@ export const App: React.FC = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {appToaster}
+      <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'var(--neu-bg)' }}>
         {/* Hidden File Input for Import */}
         <input
           type="file"
@@ -988,8 +1116,10 @@ export const App: React.FC = () => {
           onViewModeChange={setViewMode}
           styleMode={styleMode}
           onStyleModeChange={setStyleMode}
-          theme={themeMode}
-          onThemeToggle={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
+          theme={effectiveThemeMode}
+          themePreference={themePreference}
+          onThemeChange={setThemePreference}
+          onThemeToggle={() => setThemePreference((m) => (m === 'light' ? 'dark' : 'light'))}
           gridVisible={gridVisible}
           onGridVisibleToggle={() => setGridVisible((v) => !v)}
           gridSnap={gridSnap}
@@ -1010,11 +1140,11 @@ export const App: React.FC = () => {
           remoteUsers={remoteUsers}
           saveStatus={saveStatus}
           onOpenShare={() => setShareOpen(true)}
-          onOpenAuth={() => {}}
+          onOpenAuth={() => setAuthDialogOpen(true)}
           onLogout={logout}
           currentUser={user}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onNavigateHome={() => setCurrentView('dashboard')}
+          onNavigateHome={handleNavigateHome}
         />
 
         {/* Viewer Mode Alert Banner */}
@@ -1022,12 +1152,12 @@ export const App: React.FC = () => {
           <ViewerNoticeBanner
             ownerName={currentProject?.ownerName || 'Project Owner'}
             onOpenShare={() => setShareOpen(true)}
-            onOpenAuth={() => {}}
+            onOpenAuth={() => setAuthDialogOpen(true)}
           />
         )}
 
         {/* Workspace Body: Sidebar + Editor/Canvas Area */}
-        <Box sx={{ display: 'flex', flexGrow: 1, height: 'calc(100vh - 52px)', position: 'relative', overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', flexGrow: 1, height: 'calc(100vh - 52px)', position: 'relative', overflow: 'hidden', bgcolor: 'var(--neu-bg)' }}>
           {/* Project & Multi-File Explorer Drawer */}
           <ProjectSidebar
             open={sidebarOpen}
@@ -1041,9 +1171,9 @@ export const App: React.FC = () => {
             onDeleteFile={handleDeleteFile}
             onCreateProject={handleCreateProject}
             onOpenShare={() => setShareOpen(true)}
-            onOpenAuth={() => {}}
+            onOpenAuth={() => setAuthDialogOpen(true)}
             userRole={userRole}
-            onNavigateHome={() => setCurrentView('dashboard')}
+            onNavigateHome={handleNavigateHome}
           />
 
           {/* Left Split: Eraser-Style Markdown Documentation */}
@@ -1052,8 +1182,8 @@ export const App: React.FC = () => {
               sx={{
                 width: viewMode === 'notes' ? '100%' : `${splitWidth}px`,
                 height: '100%',
-                bgcolor: 'background.paper',
-                borderRight: viewMode === 'split' ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                bgcolor: 'var(--neu-bg)',
+                borderRight: viewMode === 'split' ? 'var(--neu-border)' : 'none',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
@@ -1064,7 +1194,7 @@ export const App: React.FC = () => {
                 notes={doc.notes}
                 onChange={handleNotesChange}
                 onGenerateDiagramFromNotes={handleGenerateDiagramFromNotes}
-                theme={themeMode}
+                theme={effectiveThemeMode}
                 isViewer={isViewer}
               />
             </Box>
@@ -1077,10 +1207,13 @@ export const App: React.FC = () => {
               sx={{
                 width: 6,
                 cursor: 'col-resize',
-                bgcolor: isDraggingSplit ? 'primary.main' : 'transparent',
+                bgcolor: isDraggingSplit ? 'var(--neu-primary)' : 'var(--neu-surface)',
+                borderLeft: 'var(--neu-border-subtle)',
+                borderRight: 'var(--neu-border-subtle)',
+                boxShadow: 'var(--neu-shadow-raised-sm)',
                 zIndex: 35,
                 transition: 'background-color 0.15s ease',
-                '&:hover': { bgcolor: 'primary.main' },
+                '&:hover': { bgcolor: 'var(--neu-primary)' },
               }}
             />
           )}
@@ -1100,7 +1233,7 @@ export const App: React.FC = () => {
               <Toolbar
                 activeTool={activeTool}
                 onToolSelect={setActiveTool}
-                theme={themeMode}
+                theme={effectiveThemeMode}
                 isViewer={isViewer}
               />
 
@@ -1114,7 +1247,7 @@ export const App: React.FC = () => {
                   onDelete={handleDeleteSelected}
                   onBringToFront={handleBringToFront}
                   onSendToBack={handleSendToBack}
-                  theme={themeMode}
+                  theme={effectiveThemeMode}
                 />
               )}
 
@@ -1126,7 +1259,7 @@ export const App: React.FC = () => {
                 onSelectElements={handleSelectElements}
                 activeTool={activeTool}
                 onToolChange={setActiveTool}
-                theme={themeMode}
+                theme={effectiveThemeMode}
                 styleMode={styleMode}
                 gridVisible={gridVisible}
                 gridSnap={gridSnap}
@@ -1149,7 +1282,7 @@ export const App: React.FC = () => {
                 containerWidth={canvasContainerRef.current?.clientWidth || 800}
                 containerHeight={canvasContainerRef.current?.clientHeight || 600}
                 onNavigate={setPan}
-                theme={themeMode}
+                theme={effectiveThemeMode}
               />
             </Box>
           )}
@@ -1172,9 +1305,12 @@ export const App: React.FC = () => {
           open={exportOpen}
           onClose={() => setExportOpen(false)}
           document={doc}
-          theme={themeMode}
+          theme={effectiveThemeMode}
           styleMode={styleMode}
         />
+
+        {/* Auth Dialog (switch accounts) */}
+        <AuthDialog open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />
       </Box>
     </ThemeProvider>
   );

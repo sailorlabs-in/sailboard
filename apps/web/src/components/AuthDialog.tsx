@@ -10,23 +10,21 @@ import {
   Typography,
   TextField,
   Button,
-  Avatar,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
   Alert,
   CircularProgress,
   IconButton,
+  InputAdornment,
 } from '@mui/material';
 import {
   CloseOutlined,
   PersonOutlined,
   LockOutlined,
   EmailOutlined,
-  AdminPanelSettingsOutlined,
-  GroupOutlined,
+  SailingOutlined,
+  VisibilityOutlined,
+  VisibilityOffOutlined,
 } from '@mui/icons-material';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthDialogProps {
@@ -43,28 +41,62 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMsg(null);
+
+    if (tabIndex === 1) {
+      if (!email.trim() || !name.trim() || !password) {
+        const msg = 'All fields are required';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password.length < 6) {
+        const msg = 'Password must be at least 6 characters';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password !== confirmPassword) {
+        const msg = 'Passwords do not match';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+    } else {
+      if (!email.trim() || !password) {
+        const msg = 'Email and password are required';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+
+    setLoading(true);
 
     try {
       if (tabIndex === 0) {
         // Sign In
-        if (!email || !password) throw new Error('Email and password are required');
-        await login(email, password);
+        await login(email.trim(), password);
+        toast.success('Signed in successfully!');
       } else if (tabIndex === 1) {
         // Register
-        if (!email || !name || !password) throw new Error('All fields are required');
-        await register(email, name, password);
+        await register(email.trim(), name.trim(), password);
+        toast.success('Account created successfully!');
       }
       onClose();
       if (onSuccess) onSuccess();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed');
+      const msg = err.message || 'Authentication failed';
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -78,12 +110,12 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
       fullWidth
       slotProps={{
         paper: {
+          className: 'neu-floating',
           sx: {
-            borderRadius: 3,
-            bgcolor: 'background.paper',
-            backgroundImage: 'none',
-            boxShadow: '0 20px 45px rgba(0,0,0,0.4)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '20px',
+            bgcolor: 'var(--neu-surface)',
+            border: 'var(--neu-border)',
+            boxShadow: 'var(--neu-shadow-floating)',
           },
         },
       }}
@@ -102,47 +134,55 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 2,
-              background: 'linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, var(--neu-primary) 0%, var(--neu-primary-light) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
+              boxShadow: '0 4px 12px var(--neu-primary-glow)',
             }}
           >
-            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800 }}>
-              ⛵
-            </Typography>
+            <SailingOutlined sx={{ color: '#fff', fontSize: 22 }} />
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: 'var(--neu-text-primary)' }}>
               Sailboard Account
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
               Production Collaborative Workspace
             </Typography>
           </Box>
         </Box>
-        <IconButton size="small" onClick={onClose}>
+        <IconButton size="small" onClick={onClose} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
           <CloseOutlined fontSize="small" />
         </IconButton>
       </DialogTitle>
 
-      <Box sx={{ px: 3 }}>
-        <Tabs
-          value={tabIndex}
-          onChange={(_, v) => {
-            setTabIndex(v);
-            setErrorMsg(null);
-          }}
-          textColor="primary"
-          indicatorColor="primary"
-          variant="fullWidth"
-          sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 44 }}
-        >
-          <Tab label="Sign In" sx={{ fontWeight: 600, fontSize: '0.85rem' }} />
-          <Tab label="Create Account" sx={{ fontWeight: 600, fontSize: '0.85rem' }} />
-        </Tabs>
+      <Box sx={{ px: 3, pt: 1 }}>
+        <Box className="neu-segmented" sx={{ width: '100%', display: 'flex' }}>
+          <button
+            type="button"
+            className={`neu-segmented-item ${tabIndex === 0 ? 'active' : ''}`}
+            onClick={() => {
+              setTabIndex(0);
+              setErrorMsg(null);
+            }}
+            style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            className={`neu-segmented-item ${tabIndex === 1 ? 'active' : ''}`}
+            onClick={() => {
+              setTabIndex(1);
+              setErrorMsg(null);
+            }}
+            style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
+          >
+            Create Account
+          </button>
+        </Box>
       </Box>
 
       <DialogContent sx={{ pt: 2.5, pb: 2 }}>
@@ -169,59 +209,91 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
               }}
             />
           )}
+          <TextField
+            label="Email Address"
+            type="email"
+            placeholder="name@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            fullWidth
+            size="small"
+            slotProps={{
+              input: {
+                startAdornment: <EmailOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
+              },
+            }}
+          />
+          <TextField
+            label="Password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            fullWidth
+            size="small"
+            slotProps={{
+              input: {
+                startAdornment: <LockOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setShowPassword((p) => !p)} edge="end">
+                      {showPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          {tabIndex === 1 && (
             <TextField
-              label="Email Address"
-              type="email"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              fullWidth
-              size="small"
-              slotProps={{
-                input: {
-                  startAdornment: <EmailOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
-                },
-              }}
-            />
-            <TextField
-              label="Password"
-              type="password"
+              label="Confirm Password"
+              type={showConfirmPassword ? 'text' : 'password'}
               placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               required
               fullWidth
               size="small"
               slotProps={{
                 input: {
                   startAdornment: <LockOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setShowConfirmPassword((p) => !p)} edge="end">
+                        {showConfirmPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
                 },
               }}
             />
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              disabled={loading}
-              sx={{ mt: 1, py: 1, fontWeight: 700, textTransform: 'none' }}
-            >
-              {loading ? (
-                <CircularProgress size={24} color="inherit" />
-              ) : tabIndex === 1 ? (
-                'Sign In to Sailboard'
-              ) : (
-                'Create Account & Start'
-              )}
-            </Button>
-          </Box>
+          )}
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            className="neu-btn-primary"
+            sx={{ mt: 1, py: 1.2, fontWeight: 700, textTransform: 'none', borderRadius: '10px' }}
+          >
+            {loading ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : tabIndex === 0 ? (
+              'Sign In to Sailboard'
+            ) : (
+              'Create Account & Start'
+            )}
+          </Button>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'space-between' }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
           Sailboard Monorepo • Redis & PostgreSQL Engine
         </Typography>
-        <Button onClick={onClose} color="inherit" size="small">
+        <Button onClick={onClose} size="small" sx={{ color: 'var(--neu-text-secondary)' }}>
           Cancel
         </Button>
       </DialogActions>

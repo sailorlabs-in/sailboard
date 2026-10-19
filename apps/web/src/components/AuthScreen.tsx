@@ -10,6 +10,8 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
+  Chip,
+  Divider,
 } from '@mui/material';
 import {
   EmailOutlined,
@@ -18,7 +20,9 @@ import {
   VisibilityOutlined,
   VisibilityOffOutlined,
   ArrowForwardOutlined,
+  SailingOutlined,
 } from '@mui/icons-material';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthScreen: React.FC = () => {
@@ -29,34 +33,60 @@ export const AuthScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    if (tabIndex === 1) {
+      if (!name.trim() || !email.trim() || !password) {
+        const msg = 'Please fill in all fields to create your account';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password.length < 6) {
+        const msg = 'Password must be at least 6 characters';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password !== confirmPassword) {
+        const msg = 'Passwords do not match. Please verify your password.';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+    } else {
+      if (!email.trim() || !password) {
+        const msg = 'Please enter both email and password';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
       if (tabIndex === 0) {
         // Sign In
-        if (!email.trim() || !password) {
-          throw new Error('Please enter both email and password');
-        }
         await login(email.trim(), password);
+        toast.success('Signed in successfully!');
       } else {
         // Create Account
-        if (!name.trim() || !email.trim() || !password) {
-          throw new Error('Please fill in all fields to create your account');
-        }
-        if (password.length < 6) {
-          throw new Error('Password must be at least 6 characters');
-        }
         await register(email.trim(), name.trim(), password);
+        toast.success('Account created successfully! Welcome to Sailboard.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
+      const msg = err.message || 'Authentication failed. Please check your credentials.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -67,19 +97,15 @@ export const AuthScreen: React.FC = () => {
       sx={{
         width: '100vw',
         minHeight: '100vh',
-        bgcolor: '#090d16',
-        backgroundImage: `
-          radial-gradient(ellipse 80% 60% at 50% -15%, rgba(99, 102, 241, 0.22) 0%, transparent 70%),
-          radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
-          radial-gradient(#1e293b 1px, transparent 1px)
-        `,
-        backgroundSize: '100% 100%, 100% 100%, 28px 28px',
+        bgcolor: 'var(--neu-bg)',
+        color: 'var(--neu-text-primary)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         p: { xs: 2, sm: 3 },
         boxSizing: 'border-box',
+        transition: 'all 0.25s ease',
       }}
     >
       {/* Brand Header */}
@@ -94,18 +120,18 @@ export const AuthScreen: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '1.75rem',
-            boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35)',
+            boxShadow: 'var(--neu-shadow-btn), 0 8px 24px var(--neu-primary-glow)',
             mb: 1.5,
           }}
         >
-          ⛵
+          <SailingOutlined sx={{ fontSize: 30, color: '#fff' }} />
         </Box>
         <Typography
           variant="h4"
           sx={{
             fontWeight: 800,
             letterSpacing: -0.5,
-            color: '#f8fafc',
+            color: 'var(--neu-text-primary)',
             fontSize: { xs: '1.75rem', sm: '2.1rem' },
             mb: 0.5,
           }}
@@ -115,7 +141,7 @@ export const AuthScreen: React.FC = () => {
         <Typography
           variant="body2"
           sx={{
-            color: '#94a3b8',
+            color: 'var(--neu-text-secondary)',
             maxWidth: 380,
             lineHeight: 1.5,
             fontSize: { xs: '0.8rem', sm: '0.875rem' },
@@ -125,29 +151,31 @@ export const AuthScreen: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Main Glass Card */}
+      {/* Main Neumorphic Card */}
       <Card
+        className="neu-floating"
         sx={{
           width: '100%',
           maxWidth: 420,
           borderRadius: '20px',
-          bgcolor: 'rgba(17, 24, 39, 0.85)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.1) inset',
+          bgcolor: 'var(--neu-surface)',
+          border: 'var(--neu-border)',
+          boxShadow: 'var(--neu-shadow-floating)',
           overflow: 'hidden',
         }}
       >
-        {/* Segmented Control Tabs (Linear / Apple style) */}
-        <Box sx={{ p: 2, pb: 0 }}>
+        {/* Segmented Control Tabs */}
+        <Box sx={{ p: 2.5, pb: 0 }}>
           <Box
+            className="neu-segmented"
             sx={{
               display: 'flex',
-              bgcolor: 'rgba(10, 15, 26, 0.7)',
-              p: '4px',
-              borderRadius: '12px',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              gap: '4px',
+              bgcolor: 'var(--neu-bg)',
+              boxShadow: 'var(--neu-shadow-inset)',
+              border: 'var(--neu-border-inset)',
+              p: '5px',
+              borderRadius: '14px',
+              gap: '6px',
             }}
           >
             <Button
@@ -158,23 +186,16 @@ export const AuthScreen: React.FC = () => {
                 setErrorMessage(null);
               }}
               sx={{
-                py: 0.8,
-                borderRadius: '8px',
+                py: 0.9,
+                borderRadius: '10px',
                 fontWeight: 700,
                 fontSize: '0.85rem',
                 textTransform: 'none',
-                color: tabIndex === 0 ? '#ffffff' : '#94a3b8',
-                bgcolor:
-                  tabIndex === 0
-                    ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(59, 130, 246, 0.2) 100%)'
-                    : 'transparent',
-                border: tabIndex === 0 ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid transparent',
-                boxShadow: tabIndex === 0 ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
-                '&:hover': {
-                  bgcolor: tabIndex === 0 ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
-                  color: '#ffffff',
-                },
-                transition: 'all 0.15s ease',
+                color: tabIndex === 0 ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
+                bgcolor: tabIndex === 0 ? 'var(--neu-surface)' : 'transparent',
+                border: tabIndex === 0 ? 'var(--neu-border)' : '1px solid transparent',
+                boxShadow: tabIndex === 0 ? 'var(--neu-shadow-btn)' : 'none',
+                transition: 'all 0.18s ease',
               }}
             >
               Sign In
@@ -187,23 +208,16 @@ export const AuthScreen: React.FC = () => {
                 setErrorMessage(null);
               }}
               sx={{
-                py: 0.8,
-                borderRadius: '8px',
+                py: 0.9,
+                borderRadius: '10px',
                 fontWeight: 700,
                 fontSize: '0.85rem',
                 textTransform: 'none',
-                color: tabIndex === 1 ? '#ffffff' : '#94a3b8',
-                bgcolor:
-                  tabIndex === 1
-                    ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(59, 130, 246, 0.2) 100%)'
-                    : 'transparent',
-                border: tabIndex === 1 ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid transparent',
-                boxShadow: tabIndex === 1 ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
-                '&:hover': {
-                  bgcolor: tabIndex === 1 ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255, 255, 255, 0.04)',
-                  color: '#ffffff',
-                },
-                transition: 'all 0.15s ease',
+                color: tabIndex === 1 ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
+                bgcolor: tabIndex === 1 ? 'var(--neu-surface)' : 'transparent',
+                border: tabIndex === 1 ? 'var(--neu-border)' : '1px solid transparent',
+                boxShadow: tabIndex === 1 ? 'var(--neu-shadow-btn)' : 'none',
+                transition: 'all 0.18s ease',
               }}
             >
               Create Account
@@ -229,10 +243,10 @@ export const AuthScreen: React.FC = () => {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}>
             {tabIndex === 1 && (
               <Box>
-                <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600, mb: 0.6, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
                   Full Name
                 </Typography>
                 <TextField
@@ -246,28 +260,17 @@ export const AuthScreen: React.FC = () => {
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <PersonOutlined sx={{ color: '#64748b', fontSize: 18 }} />
+                          <PersonOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
                         </InputAdornment>
                       ),
                     },
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      bgcolor: 'rgba(15, 23, 42, 0.6)',
-                      borderRadius: '10px',
-                      color: '#f8fafc',
-                      '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.12)' },
-                      '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.25)' },
-                      '&.Mui-focused fieldset': { borderColor: '#6366f1', borderWidth: '1.5px' },
-                    },
-                    '& input::placeholder': { color: '#64748b', opacity: 1 },
                   }}
                 />
               </Box>
             )}
 
             <Box>
-              <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600, mb: 0.6, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
                 Work Email
               </Typography>
               <TextField
@@ -282,27 +285,16 @@ export const AuthScreen: React.FC = () => {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <EmailOutlined sx={{ color: '#64748b', fontSize: 18 }} />
+                        <EmailOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
                       </InputAdornment>
                     ),
                   },
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    bgcolor: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: '10px',
-                    color: '#f8fafc',
-                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.12)' },
-                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.25)' },
-                    '&.Mui-focused fieldset': { borderColor: '#6366f1', borderWidth: '1.5px' },
-                  },
-                  '& input::placeholder': { color: '#64748b', opacity: 1 },
                 }}
               />
             </Box>
 
             <Box>
-              <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600, mb: 0.6, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
                 Password
               </Typography>
               <TextField
@@ -317,7 +309,7 @@ export const AuthScreen: React.FC = () => {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <LockOutlined sx={{ color: '#64748b', fontSize: 18 }} />
+                        <LockOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
                       </InputAdornment>
                     ),
                     endAdornment: (
@@ -326,7 +318,7 @@ export const AuthScreen: React.FC = () => {
                           size="small"
                           onClick={() => setShowPassword((prev) => !prev)}
                           edge="end"
-                          sx={{ color: '#64748b' }}
+                          sx={{ color: 'var(--neu-text-secondary)' }}
                         >
                           {showPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
                         </IconButton>
@@ -334,19 +326,46 @@ export const AuthScreen: React.FC = () => {
                     ),
                   },
                 }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    bgcolor: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: '10px',
-                    color: '#f8fafc',
-                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.12)' },
-                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.25)' },
-                    '&.Mui-focused fieldset': { borderColor: '#6366f1', borderWidth: '1.5px' },
-                  },
-                  '& input::placeholder': { color: '#64748b', opacity: 1 },
-                }}
               />
             </Box>
+
+            {tabIndex === 1 && (
+              <Box>
+                <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
+                  Confirm Password
+                </Typography>
+                <TextField
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  fullWidth
+                  size="small"
+                  required
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            onClick={() => setShowConfirmPassword((prev) => !prev)}
+                            edge="end"
+                            sx={{ color: 'var(--neu-text-secondary)' }}
+                          >
+                            {showConfirmPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
+            )}
 
             <Button
               type="submit"
@@ -354,20 +373,14 @@ export const AuthScreen: React.FC = () => {
               fullWidth
               disabled={loading}
               endIcon={!loading && <ArrowForwardOutlined />}
+              className="neu-btn-primary"
               sx={{
                 mt: 1,
-                py: 1.2,
-                borderRadius: '10px',
+                py: 1.3,
+                borderRadius: '12px',
                 fontWeight: 700,
-                fontSize: '0.9rem',
+                fontSize: '0.92rem',
                 textTransform: 'none',
-                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
-                  boxShadow: '0 6px 20px rgba(99, 102, 241, 0.55)',
-                },
               }}
             >
               {loading ? (
@@ -385,7 +398,7 @@ export const AuthScreen: React.FC = () => {
       {/* Footer Info */}
       <Box sx={{ mt: 3, textAlign: 'center' }}>
         <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.72rem' }}>
-          Sailboard • PostgreSQL, TypeORM, Redis Pub/Sub & WebSockets
+          Sailboard • Production Engineering & Architecture Workspace
         </Typography>
       </Box>
     </Box>

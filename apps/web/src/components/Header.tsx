@@ -43,8 +43,11 @@ import {
   FolderOutlined,
   MenuOpenOutlined,
   AccountCircleOutlined,
+  SailingOutlined,
+  SettingsBrightnessOutlined,
 } from '@mui/icons-material';
 import { UserPresence, ProjectRole, User } from '@rea/shared-types';
+import { ThemePreference } from '../theme/theme';
 
 interface HeaderProps {
   projectName: string;
@@ -56,7 +59,9 @@ interface HeaderProps {
   styleMode: 'rough' | 'clean';
   onStyleModeChange: (mode: 'rough' | 'clean') => void;
   theme: 'light' | 'dark';
-  onThemeToggle: () => void;
+  themePreference?: ThemePreference;
+  onThemeChange?: (mode: ThemePreference) => void;
+  onThemeToggle?: () => void;
   gridVisible: boolean;
   onGridVisibleToggle: () => void;
   gridSnap: boolean;
@@ -94,6 +99,8 @@ export const Header: React.FC<HeaderProps> = ({
   styleMode,
   onStyleModeChange,
   theme,
+  themePreference = 'system',
+  onThemeChange,
   onThemeToggle,
   gridVisible,
   onGridVisibleToggle,
@@ -122,6 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateHome,
 }) => {
   const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
+  const [themeMenuAnchor, setThemeMenuAnchor] = useState<null | HTMLElement>(null);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -148,12 +156,10 @@ export const Header: React.FC<HeaderProps> = ({
       position="static"
       elevation={0}
       sx={{
-        bgcolor: isDark ? '#1a1e2d' : '#e6ecf2',
-        borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.8)'}`,
-        boxShadow: isDark
-          ? '0 6px 16px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
-          : '0 6px 16px #c2c9d1, inset 0 1px 0 #ffffff',
-        color: isDark ? '#f8fafc' : '#0f172a',
+        bgcolor: 'var(--neu-surface)',
+        borderBottom: 'var(--neu-border)',
+        boxShadow: 'var(--neu-shadow-dock)',
+        color: 'var(--neu-text-primary)',
         zIndex: 50,
       }}
     >
@@ -167,13 +173,17 @@ export const Header: React.FC<HeaderProps> = ({
               sx={{
                 width: 32,
                 height: 32,
-                borderRadius: 2,
-                bgcolor: isDark ? '#1c2030' : '#e6ecf2',
-                boxShadow: isDark
-                  ? '3px 3px 6px rgba(0,0,0,0.4), -2px -2px 4px rgba(255,255,255,0.03)'
-                  : '3px 3px 6px #c2c9d1, -3px -3px 6px #ffffff',
-                color: 'inherit',
+                borderRadius: '10px',
+                bgcolor: 'var(--neu-surface)',
+                boxShadow: 'var(--neu-shadow-btn)',
+                border: 'var(--neu-border)',
+                color: 'var(--neu-text-primary)',
                 mr: 0.5,
+                transition: 'all 0.15s ease',
+                '&:hover': {
+                  boxShadow: 'var(--neu-shadow-btn-hover)',
+                  bgcolor: 'var(--neu-surface-hover)',
+                },
               }}
             >
               <MenuOpenOutlined fontSize="small" />
@@ -182,7 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Sailboard Logo & Brand */}
-        <Tooltip title="← All Projects (Figma Workspace)">
+        <Tooltip title="← All Projects (Workspace)">
           <Box
             onClick={onNavigateHome}
             sx={{
@@ -199,27 +209,25 @@ export const Header: React.FC<HeaderProps> = ({
               sx={{
                 width: 34,
                 height: 34,
-                borderRadius: 2.5,
-                background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, var(--neu-primary) 0%, var(--neu-primary-light) 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: isDark
-                  ? '3px 3px 8px rgba(0,0,0,0.5), 0 0 12px rgba(99,102,241,0.4)'
-                  : '3px 3px 8px #b4bcc6, 0 0 12px rgba(99,102,241,0.3)',
-                fontSize: '1rem',
+                boxShadow: 'var(--neu-shadow-btn), 0 0 12px var(--neu-primary-glow)',
+                border: 'var(--neu-border)',
               }}
             >
-              ⛵
+              <SailingOutlined sx={{ fontSize: 20, color: '#fff' }} />
             </Box>
             <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: -0.2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }}>
                 Sailboard
               </Typography>
               <Typography
                 variant="caption"
                 sx={{
-                  color: isDark ? '#94a3b8' : '#64748b',
+                  color: 'var(--neu-text-secondary)',
                   fontSize: '0.65rem',
                   display: { xs: 'none', sm: 'block' },
                 }}
@@ -236,27 +244,23 @@ export const Header: React.FC<HeaderProps> = ({
           sx={{
             my: 1,
             mx: 0.5,
-            borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+            borderColor: 'var(--neu-border-subtle)',
             display: { xs: 'none', sm: 'block' },
           }}
         />
 
         {/* Project Breadcrumb & Active File Title (Neumorphic Inset Well) */}
         <Box
+          className="neu-inset"
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 1,
             minWidth: { xs: 'auto', sm: 140 },
             maxWidth: { xs: 150, sm: 380 },
-            bgcolor: isDark ? '#141722' : '#dbe2ec',
-            boxShadow: isDark
-              ? 'inset 2px 2px 5px rgba(0,0,0,0.55), inset -2px -2px 4px rgba(255,255,255,0.03)'
-              : 'inset 2px 2px 5px #c2c9d1, inset -2px -2px 5px #ffffff',
-            border: isDark ? '1px solid rgba(0,0,0,0.2)' : '1px solid rgba(255,255,255,0.6)',
-            borderRadius: 2.5,
             px: 1.2,
             py: 0.4,
+            borderRadius: '10px',
           }}
         >
           <Box
@@ -266,15 +270,15 @@ export const Header: React.FC<HeaderProps> = ({
               alignItems: 'center',
               gap: 0.5,
               cursor: onNavigateHome ? 'pointer' : 'default',
-              '&:hover': onNavigateHome ? { color: 'primary.main' } : {},
+              '&:hover': onNavigateHome ? { color: 'var(--neu-primary)' } : {},
             }}
           >
-            <FolderOutlined sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <FolderOutlined sx={{ fontSize: 16, color: 'var(--neu-text-secondary)' }} />
             <Typography
               variant="caption"
               sx={{
                 fontWeight: 600,
-                color: 'text.secondary',
+                color: 'var(--neu-text-secondary)',
                 maxWidth: 100,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -283,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {projectName}
             </Typography>
-            <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+            <Typography variant="caption" sx={{ color: 'var(--neu-text-muted)' }}>
               /
             </Typography>
           </Box>
@@ -305,12 +309,13 @@ export const Header: React.FC<HeaderProps> = ({
                 fontFamily: 'inherit',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                color: isDark ? '#f8fafc' : '#0f172a',
-                background: isDark ? '#1e293b' : '#f1f5f9',
-                border: '1px solid #6366f1',
-                borderRadius: 4,
-                padding: '2px 6px',
+                color: 'var(--neu-text-primary)',
+                background: 'var(--neu-bg)',
+                border: '1px solid var(--neu-primary-light)',
+                borderRadius: 6,
+                padding: '2px 8px',
                 outline: 'none',
+                boxShadow: 'var(--neu-shadow-inset)',
               }}
             />
           ) : (
@@ -330,11 +335,11 @@ export const Header: React.FC<HeaderProps> = ({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 '&:hover': {
-                  bgcolor: isViewer ? 'transparent' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                  bgcolor: isViewer ? 'transparent' : 'rgba(255,255,255,0.06)',
                 },
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem' }} noWrap>
+              <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--neu-text-primary)' }} noWrap>
                 {title}
               </Typography>
             </Box>
@@ -350,7 +355,7 @@ export const Header: React.FC<HeaderProps> = ({
               height: 18,
               fontSize: '0.62rem',
               fontWeight: 700,
-              boxShadow: isDark ? '1px 1px 3px rgba(0,0,0,0.4)' : '1px 1px 3px #c2c9d1',
+              boxShadow: 'var(--neu-shadow-btn)',
               '& .MuiChip-label': { px: 0.6 },
             }}
           />
@@ -370,168 +375,106 @@ export const Header: React.FC<HeaderProps> = ({
 
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* View Mode Selector (Neumorphic Inset / Outset Buttons) */}
+        {/* View Mode Selector (Neumorphic Segmented Control) */}
         <Box
+          className="neu-segmented"
           sx={{
-            display: { xs: 'none', sm: 'flex' },
-            alignItems: 'center',
-            p: 0.4,
-            borderRadius: 2.5,
-            bgcolor: isDark ? '#141722' : '#dbe2ec',
-            boxShadow: isDark
-              ? 'inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 4px rgba(255,255,255,0.03)'
-              : 'inset 2px 2px 5px #c2c9d1, inset -2px -2px 5px #ffffff',
+            display: { xs: 'none', sm: 'inline-flex' },
             mr: 1,
-            gap: 0.4,
           }}
         >
-          <Tooltip title="Split View: Eraser Docs + Canvas">
-            <Button
-              size="small"
+          <Tooltip title="Split View: Docs + Canvas">
+            <button
+              type="button"
+              className={`neu-segmented-item ${viewMode === 'split' ? 'active' : ''}`}
               onClick={() => onViewModeChange('split')}
-              startIcon={<ViewSidebarOutlined sx={{ fontSize: '15px !important' }} />}
-              sx={{
-                px: { xs: 0.8, md: 1.2 },
-                py: 0.3,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                bgcolor: viewMode === 'split' ? (isDark ? '#21263c' : '#d4dce7') : 'transparent',
-                boxShadow: viewMode === 'split'
-                  ? isDark
-                    ? 'inset 2px 2px 4px rgba(0,0,0,0.6), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 10px rgba(99,102,241,0.3)'
-                    : 'inset 2px 2px 4px #b8c0ca, inset -2px -2px 4px #ffffff, 0 0 10px rgba(79,70,229,0.25)'
-                  : 'none',
-                color: viewMode === 'split' ? (isDark ? '#818cf8' : '#4f46e5') : 'text.secondary',
-                fontWeight: viewMode === 'split' ? 700 : 500,
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
+              <ViewSidebarOutlined sx={{ fontSize: 15 }} />
               <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Split</Box>
-            </Button>
+            </button>
           </Tooltip>
-          <Tooltip title="Canvas Only (Excalidraw Whiteboard)">
-            <Button
-              size="small"
+          <Tooltip title="Canvas Only (Whiteboard)">
+            <button
+              type="button"
+              className={`neu-segmented-item ${viewMode === 'canvas' ? 'active' : ''}`}
               onClick={() => onViewModeChange('canvas')}
-              startIcon={<SpaceDashboardOutlined sx={{ fontSize: '15px !important' }} />}
-              sx={{
-                px: { xs: 0.8, md: 1.2 },
-                py: 0.3,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                bgcolor: viewMode === 'canvas' ? (isDark ? '#21263c' : '#d4dce7') : 'transparent',
-                boxShadow: viewMode === 'canvas'
-                  ? isDark
-                    ? 'inset 2px 2px 4px rgba(0,0,0,0.6), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 10px rgba(99,102,241,0.3)'
-                    : 'inset 2px 2px 4px #b8c0ca, inset -2px -2px 4px #ffffff, 0 0 10px rgba(79,70,229,0.25)'
-                  : 'none',
-                color: viewMode === 'canvas' ? (isDark ? '#818cf8' : '#4f46e5') : 'text.secondary',
-                fontWeight: viewMode === 'canvas' ? 700 : 500,
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
+              <SpaceDashboardOutlined sx={{ fontSize: 15 }} />
               <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Canvas</Box>
-            </Button>
+            </button>
           </Tooltip>
           <Tooltip title="Notes Only (Markdown Docs)">
-            <Button
-              size="small"
+            <button
+              type="button"
+              className={`neu-segmented-item ${viewMode === 'notes' ? 'active' : ''}`}
               onClick={() => onViewModeChange('notes')}
-              startIcon={<DescriptionOutlined sx={{ fontSize: '15px !important' }} />}
-              sx={{
-                px: { xs: 0.8, md: 1.2 },
-                py: 0.3,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                bgcolor: viewMode === 'notes' ? (isDark ? '#21263c' : '#d4dce7') : 'transparent',
-                boxShadow: viewMode === 'notes'
-                  ? isDark
-                    ? 'inset 2px 2px 4px rgba(0,0,0,0.6), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 10px rgba(99,102,241,0.3)'
-                    : 'inset 2px 2px 4px #b8c0ca, inset -2px -2px 4px #ffffff, 0 0 10px rgba(79,70,229,0.25)'
-                  : 'none',
-                color: viewMode === 'notes' ? (isDark ? '#818cf8' : '#4f46e5') : 'text.secondary',
-                fontWeight: viewMode === 'notes' ? 700 : 500,
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
+              <DescriptionOutlined sx={{ fontSize: 15 }} />
               <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Notes</Box>
-            </Button>
+            </button>
           </Tooltip>
         </Box>
 
-        {/* Style Mode (Neumorphic Inset / Outset Buttons) */}
+        {/* Style Mode (Neumorphic Segmented Control) */}
         <Box
+          className="neu-segmented"
           sx={{
-            display: { xs: 'none', md: 'flex' },
-            alignItems: 'center',
-            p: 0.4,
-            borderRadius: 2.5,
-            bgcolor: isDark ? '#141722' : '#dbe2ec',
-            boxShadow: isDark
-              ? 'inset 2px 2px 5px rgba(0,0,0,0.5), inset -2px -2px 4px rgba(255,255,255,0.03)'
-              : 'inset 2px 2px 5px #c2c9d1, inset -2px -2px 5px #ffffff',
+            display: { xs: 'none', md: 'inline-flex' },
             mr: 1,
-            gap: 0.4,
           }}
         >
-          <Tooltip title="Hand-drawn Rough.js Style (Excalidraw)">
-            <Button
-              size="small"
+          <Tooltip title="Hand-drawn Rough.js Style">
+            <button
+              type="button"
+              className={`neu-segmented-item ${styleMode === 'rough' ? 'active' : ''}`}
               onClick={() => onStyleModeChange('rough')}
-              startIcon={<BrushOutlined sx={{ fontSize: '15px !important' }} />}
-              sx={{
-                px: 1,
-                py: 0.3,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                bgcolor: styleMode === 'rough' ? (isDark ? '#261b2c' : '#ebdce6') : 'transparent',
-                boxShadow: styleMode === 'rough'
-                  ? isDark
-                    ? 'inset 2px 2px 4px rgba(0,0,0,0.6), 0 0 10px rgba(236,72,153,0.3)'
-                    : 'inset 2px 2px 4px #c9b4c4, 0 0 10px rgba(236,72,153,0.25)'
-                  : 'none',
-                color: styleMode === 'rough' ? '#ec4899' : 'text.secondary',
-                fontWeight: styleMode === 'rough' ? 700 : 500,
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
+              <BrushOutlined sx={{ fontSize: 15 }} />
               <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>Sketch</Box>
-            </Button>
+            </button>
           </Tooltip>
-          <Tooltip title="Clean Architectural Geometric Mode">
-            <Button
-              size="small"
+          <Tooltip title="Clean Geometric Mode">
+            <button
+              type="button"
+              className={`neu-segmented-item ${styleMode === 'clean' ? 'active' : ''}`}
               onClick={() => onStyleModeChange('clean')}
-              startIcon={<ArchitectureOutlined sx={{ fontSize: '15px !important' }} />}
-              sx={{
-                px: 1,
-                py: 0.3,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                bgcolor: styleMode === 'clean' ? (isDark ? '#261b2c' : '#ebdce6') : 'transparent',
-                boxShadow: styleMode === 'clean'
-                  ? isDark
-                    ? 'inset 2px 2px 4px rgba(0,0,0,0.6), 0 0 10px rgba(236,72,153,0.3)'
-                    : 'inset 2px 2px 4px #c9b4c4, 0 0 10px rgba(236,72,153,0.25)'
-                  : 'none',
-                color: styleMode === 'clean' ? '#ec4899' : 'text.secondary',
-                fontWeight: styleMode === 'clean' ? 700 : 500,
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
+              <ArchitectureOutlined sx={{ fontSize: 15 }} />
               <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>Clean</Box>
-            </Button>
+            </button>
           </Tooltip>
         </Box>
 
         {/* Undo / Redo */}
         {!isViewer && (
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', mr: 0.5 }}>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.5, mr: 0.5 }}>
             <Tooltip title="Undo (Ctrl+Z)">
               <span>
-                <IconButton size="small" onClick={onUndo} disabled={!canUndo} sx={{ color: 'inherit' }}>
+                <IconButton
+                  size="small"
+                  onClick={onUndo}
+                  disabled={!canUndo}
+                  className="neu-icon-btn"
+                  sx={{ width: 30, height: 30 }}
+                >
                   <UndoOutlined fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
             <Tooltip title="Redo (Ctrl+Y)">
               <span>
-                <IconButton size="small" onClick={onRedo} disabled={!canRedo} sx={{ color: 'inherit' }}>
+                <IconButton
+                  size="small"
+                  onClick={onRedo}
+                  disabled={!canRedo}
+                  className="neu-icon-btn"
+                  sx={{ width: 30, height: 30 }}
+                >
                   <RedoOutlined fontSize="small" />
                 </IconButton>
               </span>
@@ -540,9 +483,14 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Zoom Controls */}
-        <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 0.2, mr: 1 }}>
+        <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 0.5, mr: 1 }}>
           <Tooltip title="Zoom Out (-)">
-            <IconButton size="small" onClick={onZoomOut} sx={{ color: 'inherit' }}>
+            <IconButton
+              size="small"
+              onClick={onZoomOut}
+              className="neu-icon-btn"
+              sx={{ width: 30, height: 30 }}
+            >
               <ZoomOutOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -550,28 +498,39 @@ export const Header: React.FC<HeaderProps> = ({
             <Typography
               variant="caption"
               onClick={onZoomReset}
+              className="neu-inset"
               sx={{
                 cursor: 'pointer',
-                px: 0.8,
-                py: 0.2,
-                borderRadius: 1,
+                px: 1,
+                py: 0.3,
+                borderRadius: '8px',
                 fontWeight: 600,
                 fontSize: '0.72rem',
-                minWidth: 42,
+                minWidth: 44,
                 textAlign: 'center',
-                '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                color: 'var(--neu-text-primary)',
               }}
             >
               {Math.round(zoom * 100)}%
             </Typography>
           </Tooltip>
           <Tooltip title="Zoom In (+)">
-            <IconButton size="small" onClick={onZoomIn} sx={{ color: 'inherit' }}>
+            <IconButton
+              size="small"
+              onClick={onZoomIn}
+              className="neu-icon-btn"
+              sx={{ width: 30, height: 30 }}
+            >
               <ZoomInOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Zoom to Fit">
-            <IconButton size="small" onClick={onZoomToFit} sx={{ color: 'inherit' }}>
+            <IconButton
+              size="small"
+              onClick={onZoomToFit}
+              className="neu-icon-btn"
+              sx={{ width: 30, height: 30 }}
+            >
               <FitScreenOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -582,7 +541,8 @@ export const Header: React.FC<HeaderProps> = ({
           <IconButton
             size="small"
             onClick={(e) => setGridMenuAnchor(e.currentTarget)}
-            color={gridVisible ? 'primary' : 'inherit'}
+            className={`neu-icon-btn ${gridVisible ? 'active' : ''}`}
+            sx={{ width: 32, height: 32 }}
           >
             {gridType === 'dots' ? <GrainOutlined fontSize="small" /> : <GridOnOutlined fontSize="small" />}
           </IconButton>
@@ -594,9 +554,12 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setGridMenuAnchor(null)}
           slotProps={{
             paper: {
+              className: 'neu-floating',
               sx: {
-                bgcolor: isDark ? '#1e293b' : '#fff',
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                bgcolor: 'var(--neu-surface)',
+                border: 'var(--neu-border)',
+                boxShadow: 'var(--neu-shadow-floating)',
+                borderRadius: '14px',
               },
             },
           }}
@@ -631,7 +594,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ListItemIcon>{!gridVisible ? <CheckOutlined fontSize="small" /> : <CropFreeOutlined fontSize="small" />}</ListItemIcon>
             <ListItemText primary="Blank / No Grid" />
           </MenuItem>
-          <Divider />
+          <Divider sx={{ my: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
           <MenuItem
             onClick={() => {
               onGridSnapToggle();
@@ -646,7 +609,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Import JSON */}
         {!isViewer && (
           <Tooltip title="Import JSON / Excalidraw File">
-            <IconButton size="small" onClick={onImportClick} sx={{ color: 'inherit' }}>
+            <IconButton
+              size="small"
+              onClick={onImportClick}
+              className="neu-icon-btn"
+              sx={{ width: 32, height: 32 }}
+            >
               <UploadFileOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -654,19 +622,96 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Export Button */}
         <Tooltip title="Export Diagram (PNG, SVG, JSON)">
-          <IconButton size="small" onClick={onExportClick} sx={{ color: 'inherit' }}>
+          <IconButton
+            size="small"
+            onClick={onExportClick}
+            className="neu-icon-btn"
+            sx={{ width: 32, height: 32 }}
+          >
             <DownloadOutlined fontSize="small" />
           </IconButton>
         </Tooltip>
 
-        {/* Theme Toggle (Dark/Light) */}
-        <Tooltip title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-          <IconButton size="small" onClick={onThemeToggle} sx={{ color: 'inherit' }}>
-            {isDark ? <LightModeOutlined fontSize="small" /> : <DarkModeOutlined fontSize="small" />}
+        {/* Theme Mode Selector (Light / Dark / System) */}
+        <Tooltip title={`Theme: ${themePreference.charAt(0).toUpperCase() + themePreference.slice(1)} (Click to switch)`}>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              if (onThemeChange) {
+                setThemeMenuAnchor(e.currentTarget);
+              } else if (onThemeToggle) {
+                onThemeToggle();
+              }
+            }}
+            className="neu-icon-btn"
+            sx={{ width: 32, height: 32 }}
+          >
+            {themePreference === 'system' ? (
+              <SettingsBrightnessOutlined fontSize="small" />
+            ) : isDark ? (
+              <DarkModeOutlined fontSize="small" />
+            ) : (
+              <LightModeOutlined fontSize="small" />
+            )}
           </IconButton>
         </Tooltip>
 
-        <Divider orientation="vertical" flexItem sx={{ my: 1, mx: 0.5 }} />
+        <Menu
+          anchorEl={themeMenuAnchor}
+          open={Boolean(themeMenuAnchor)}
+          onClose={() => setThemeMenuAnchor(null)}
+          slotProps={{
+            paper: {
+              className: 'neu-floating',
+              sx: {
+                bgcolor: 'var(--neu-surface)',
+                border: 'var(--neu-border)',
+                boxShadow: 'var(--neu-shadow-floating)',
+                minWidth: 160,
+                borderRadius: '14px',
+              },
+            },
+          }}
+        >
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('light');
+              setThemeMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <LightModeOutlined fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Light Mode" />
+            {themePreference === 'light' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('dark');
+              setThemeMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <DarkModeOutlined fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Dark Mode" />
+            {themePreference === 'dark' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('system');
+              setThemeMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <SettingsBrightnessOutlined fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="System (Auto)" />
+            {themePreference === 'system' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+        </Menu>
+
+        <Divider orientation="vertical" flexItem sx={{ my: 1, mx: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
 
         {/* Share Project Button */}
         {isMobile ? (
@@ -674,14 +719,11 @@ export const Header: React.FC<HeaderProps> = ({
             <IconButton
               size="small"
               onClick={onOpenShare}
+              className="neu-btn-primary"
               sx={{
-                bgcolor: 'primary.main',
-                color: '#fff',
-                width: 32,
-                height: 32,
-                borderRadius: 2,
-                boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
-                '&:hover': { bgcolor: 'primary.dark' },
+                width: 34,
+                height: 34,
+                borderRadius: '10px',
               }}
             >
               <ShareOutlined fontSize="small" />
@@ -691,17 +733,16 @@ export const Header: React.FC<HeaderProps> = ({
           <Button
             size="small"
             variant="contained"
-            color="primary"
             startIcon={<ShareOutlined fontSize="small" />}
             onClick={onOpenShare}
+            className="neu-btn-primary"
             sx={{
-              px: 1.5,
-              py: 0.4,
+              px: 1.8,
+              py: 0.5,
               fontSize: '0.75rem',
               fontWeight: 700,
               textTransform: 'none',
-              borderRadius: 2,
-              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)',
+              borderRadius: '10px',
             }}
           >
             Share
@@ -710,10 +751,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Active Multiplayer Collaborators */}
         {remoteUsers.length > 0 && (
-          <AvatarGroup max={3} sx={{ ml: 0.5, '& .MuiAvatar-root': { width: 28, height: 28, fontSize: '0.75rem' } }}>
+          <AvatarGroup max={3} sx={{ ml: 0.5, '& .MuiAvatar-root': { width: 28, height: 28, fontSize: '0.75rem', boxShadow: 'var(--neu-shadow-raised-sm)', border: '2px solid var(--neu-surface)' } }}>
             {remoteUsers.map((u) => (
               <Tooltip key={u.userId} title={`${u.userName} (${u.role || 'editor'})`}>
-                <Avatar sx={{ bgcolor: u.color || '#3b82f6', border: '2px solid #fff' }}>
+                <Avatar sx={{ bgcolor: u.color || '#3b82f6' }}>
                   {u.userName.charAt(0).toUpperCase()}
                 </Avatar>
               </Tooltip>
@@ -726,16 +767,17 @@ export const Header: React.FC<HeaderProps> = ({
           <IconButton
             size="small"
             onClick={(e) => setUserMenuAnchor(e.currentTarget)}
-            sx={{ ml: 0.5 }}
+            sx={{ ml: 0.5, p: 0.3 }}
           >
             <Avatar
               sx={{
-                width: 30,
-                height: 30,
-                bgcolor: currentUser?.color || '#6366f1',
+                width: 32,
+                height: 32,
+                bgcolor: currentUser?.color || 'var(--neu-primary)',
                 fontSize: '0.75rem',
                 fontWeight: 700,
-                border: '2px solid rgba(99, 102, 241, 0.5)',
+                boxShadow: 'var(--neu-shadow-btn)',
+                border: 'var(--neu-border)',
               }}
             >
               {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
@@ -750,22 +792,24 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setUserMenuAnchor(null)}
           slotProps={{
             paper: {
+              className: 'neu-floating',
               sx: {
                 width: 240,
-                borderRadius: 2,
+                borderRadius: '14px',
                 p: 0.5,
-                bgcolor: isDark ? '#1e293b' : '#fff',
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                bgcolor: 'var(--neu-surface)',
+                border: 'var(--neu-border)',
+                boxShadow: 'var(--neu-shadow-floating)',
               },
             },
           }}
         >
           {currentUser && (
             <Box sx={{ px: 2, py: 1 }}>
-              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>
                 {currentUser.name}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              <Typography variant="caption" noWrap sx={{ display: 'block', color: 'var(--neu-text-secondary)' }}>
                 {currentUser.email}
               </Typography>
               <Chip
@@ -776,14 +820,14 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </Box>
           )}
-          <Divider sx={{ my: 0.5 }} />
+          <Divider sx={{ my: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
           {onNavigateHome && (
             <MenuItem
               onClick={() => {
                 setUserMenuAnchor(null);
                 onNavigateHome();
               }}
-              sx={{ fontSize: '0.85rem', fontWeight: 600 }}
+              sx={{ fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
             >
               <ListItemIcon>
                 <SpaceDashboardOutlined fontSize="small" />
@@ -797,7 +841,7 @@ export const Header: React.FC<HeaderProps> = ({
                 setUserMenuAnchor(null);
                 onLogout();
               }}
-              sx={{ color: 'error.main', fontSize: '0.85rem', fontWeight: 600 }}
+              sx={{ color: 'error.main', fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
             >
               Sign Out
             </MenuItem>
