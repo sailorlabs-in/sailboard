@@ -530,7 +530,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                           }
                           secondary={
                             <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'var(--neu-text-secondary)' }}>
-                              {`${f.elements?.length || 0} shapes`}
+                              {(() => {
+                                const activeCount = f.elements?.filter((el) => !el.isDeleted).length || 0;
+                                return `${activeCount} ${activeCount === 1 ? 'shape' : 'shapes'}`;
+                              })()}
                             </Typography>
                           }
                         />

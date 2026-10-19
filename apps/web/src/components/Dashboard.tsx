@@ -121,13 +121,14 @@ const FileThumbnail: React.FC<{
   themeMode: "light" | "dark";
 }> = ({ file, themeMode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const activeElements = file.elements?.filter((e) => !e.isDeleted) || [];
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     // Render scaled mini preview
-    renderScene(canvas, file.elements || [], {
+    renderScene(canvas, activeElements, {
       theme: themeMode,
       gridVisible: true,
       gridType: "dots",
@@ -167,7 +168,7 @@ const FileThumbnail: React.FC<{
           objectFit: "cover",
         }}
       />
-      {(!file.elements || file.elements.length === 0) && (
+      {activeElements.length === 0 && (
         <Box
           sx={{
             position: "absolute",
@@ -1570,7 +1571,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             color="text.secondary"
                             sx={{ fontSize: "0.7rem" }}
                           >
-                            {file.elements?.length || 0} objects
+                            {(() => {
+                              const activeCount = file.elements?.filter((e) => !e.isDeleted).length || 0;
+                              return `${activeCount} ${activeCount === 1 ? 'shape' : 'shapes'}`;
+                            })()}
                           </Typography>
 
                           <Chip
