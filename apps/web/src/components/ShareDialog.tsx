@@ -22,6 +22,7 @@ import {
   Divider,
   Tooltip,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import {
   CloseOutlined,
@@ -33,6 +34,7 @@ import {
   EditOutlined,
   VisibilityOutlined,
   FolderSpecialOutlined,
+  EmailOutlined,
 } from '@mui/icons-material';
 import { Project, ProjectMember, ProjectRole } from '@rea/shared-types';
 import { api } from '../services/api';
@@ -197,8 +199,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         {/* Invite Form (Only enabled for Owner) */}
         {isOwner ? (
           <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'var(--neu-text-primary)' }}>
-              Invite collaborator by email
+            <Typography className="neu-form-label">
+              Invite Collaborator by Email
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5, alignItems: { xs: 'stretch', sm: 'center' } }}>
               <TextField
@@ -208,6 +210,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 size="small"
                 fullWidth
                 sx={{ flex: 1 }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <EmailOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
               <Select
                 value={inviteRole}

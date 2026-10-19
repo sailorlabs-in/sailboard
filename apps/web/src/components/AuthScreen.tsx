@@ -246,7 +246,7 @@ export const AuthScreen: React.FC = () => {
           <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}>
             {tabIndex === 1 && (
               <Box>
-                <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
+                <Typography className="neu-form-label">
                   Full Name
                 </Typography>
                 <TextField
@@ -270,7 +270,7 @@ export const AuthScreen: React.FC = () => {
             )}
 
             <Box>
-              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
+              <Typography className="neu-form-label">
                 Work Email
               </Typography>
               <TextField
@@ -294,7 +294,7 @@ export const AuthScreen: React.FC = () => {
             </Box>
 
             <Box>
-              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
+              <Typography className="neu-form-label">
                 Password
               </Typography>
               <TextField
@@ -318,9 +318,10 @@ export const AuthScreen: React.FC = () => {
                           size="small"
                           onClick={() => setShowPassword((prev) => !prev)}
                           edge="end"
-                          sx={{ color: 'var(--neu-text-secondary)' }}
+                          disableRipple
+                          sx={{ color: 'var(--neu-text-secondary)', '&:hover': { color: 'var(--neu-text-primary)' } }}
                         >
-                          {showPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                          {showPassword ? <VisibilityOffOutlined sx={{ fontSize: 18 }} /> : <VisibilityOutlined sx={{ fontSize: 18 }} />}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -331,7 +332,7 @@ export const AuthScreen: React.FC = () => {
 
             {tabIndex === 1 && (
               <Box>
-                <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontWeight: 600, mb: 0.6, display: 'block' }}>
+                <Typography className="neu-form-label">
                   Confirm Password
                 </Typography>
                 <TextField
@@ -355,9 +356,10 @@ export const AuthScreen: React.FC = () => {
                             size="small"
                             onClick={() => setShowConfirmPassword((prev) => !prev)}
                             edge="end"
-                            sx={{ color: 'var(--neu-text-secondary)' }}
+                            disableRipple
+                            sx={{ color: 'var(--neu-text-secondary)', '&:hover': { color: 'var(--neu-text-primary)' } }}
                           >
-                            {showConfirmPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                            {showConfirmPassword ? <VisibilityOffOutlined sx={{ fontSize: 18 }} /> : <VisibilityOutlined sx={{ fontSize: 18 }} />}
                           </IconButton>
                         </InputAdornment>
                       ),

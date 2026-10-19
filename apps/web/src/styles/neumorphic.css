@@ -38,6 +38,7 @@
   --neu-primary: #4f46e5;
   --neu-primary-light: #6366f1;
   --neu-primary-glow: rgba(79, 70, 229, 0.3);
+  --neu-input-bg: #dce3ed;
 }
 
 [data-theme='dark'] {
@@ -74,6 +75,7 @@
   --neu-primary: #6366f1;
   --neu-primary-light: #818cf8;
   --neu-primary-glow: rgba(99, 102, 241, 0.4);
+  --neu-input-bg: #0f131f;
 }
 
 /* Base Body Styles */
@@ -287,3 +289,56 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--neu-surface-hover);
 }
+
+/* ===================================================================
+   GLOBAL NO-RIPPLE & TACTILE FORM INPUT SYSTEM
+   =================================================================== */
+
+/* Complete suppression of all Material-UI ripple effects platform-wide */
+.MuiTouchRipple-root,
+.MuiTouchRipple-ripple,
+.MuiTouchRipple-child {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  animation: none !important;
+  pointer-events: none !important;
+}
+
+/* External Form Label (Screenshot Style) */
+.neu-form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--neu-text-secondary);
+  margin-bottom: 7px;
+  letter-spacing: -0.1px;
+}
+
+/* Inset Input Well */
+.neu-input-well,
+.MuiOutlinedInput-root {
+  background-color: var(--neu-input-bg) !important;
+  box-shadow: var(--neu-shadow-inset) !important;
+  border-radius: 12px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.neu-input-well:focus-within,
+.MuiOutlinedInput-root.Mui-focused {
+  box-shadow: var(--neu-shadow-inset), 0 0 10px var(--neu-primary-glow) !important;
+}
+
+.neu-input-well input,
+.MuiOutlinedInput-root input {
+  color: var(--neu-text-primary) !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+}
+
+.neu-input-well input::placeholder,
+.MuiOutlinedInput-root input::placeholder {
+  color: var(--neu-text-muted) !important;
+  opacity: 1 !important;
+}
+

@@ -9,8 +9,9 @@ import {
   TextField,
   Box,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
-import { CreateNewFolderOutlined } from '@mui/icons-material';
+import { CreateNewFolderOutlined, FolderOutlined, NotesOutlined } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 
 export interface CreateProjectModalProps {
@@ -98,29 +99,46 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       </DialogTitle>
 
       <Box component="form" onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1.5 }}>
-          <TextField
-            autoFocus
-            label="Folder Name"
-            placeholder="e.g. Core System Architecture"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            fullWidth
-            size="small"
-            disabled={isSubmitting}
-          />
-          <TextField
-            label="Description (optional)"
-            placeholder="e.g. Microservices, DB schema & API blueprints"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            fullWidth
-            size="small"
-            multiline
-            rows={2}
-            disabled={isSubmitting}
-          />
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.2, pt: 1.5 }}>
+          <Box>
+            <Typography className="neu-form-label">
+              Project Folder Name
+            </Typography>
+            <TextField
+              autoFocus
+              placeholder="e.g. Core System Architecture"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              fullWidth
+              size="small"
+              disabled={isSubmitting}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <FolderOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Box>
+          <Box>
+            <Typography className="neu-form-label">
+              Description (optional)
+            </Typography>
+            <TextField
+              placeholder="e.g. Microservices, DB schema & API blueprints"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              fullWidth
+              size="small"
+              multiline
+              rows={2}
+              disabled={isSubmitting}
+            />
+          </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, gap: 1 }}>

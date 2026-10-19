@@ -194,81 +194,128 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
 
         <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {tabIndex === 1 && (
+            <Box>
+              <Typography className="neu-form-label">
+                Full Name
+              </Typography>
+              <TextField
+                placeholder="e.g. Alex Morgan"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                fullWidth
+                size="small"
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PersonOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+          )}
+
+          <Box>
+            <Typography className="neu-form-label">
+              Work Email
+            </Typography>
             <TextField
-              label="Full Name"
-              placeholder="e.g. Charlie Parker"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              type="email"
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               fullWidth
               size="small"
               slotProps={{
                 input: {
-                  startAdornment: <PersonOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
                 },
               }}
             />
-          )}
-          <TextField
-            label="Email Address"
-            type="email"
-            placeholder="name@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            fullWidth
-            size="small"
-            slotProps={{
-              input: {
-                startAdornment: <EmailOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
-              },
-            }}
-          />
-          <TextField
-            label="Password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            fullWidth
-            size="small"
-            slotProps={{
-              input: {
-                startAdornment: <LockOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setShowPassword((p) => !p)} edge="end">
-                      {showPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          {tabIndex === 1 && (
+          </Box>
+
+          <Box>
+            <Typography className="neu-form-label">
+              Password
+            </Typography>
             <TextField
-              label="Confirm Password"
-              type={showConfirmPassword ? 'text' : 'password'}
+              type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               fullWidth
               size="small"
               slotProps={{
                 input: {
-                  startAdornment: <LockOutlined sx={{ color: 'text.secondary', mr: 1 }} fontSize="small" />,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LockOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setShowConfirmPassword((p) => !p)} edge="end">
-                        {showConfirmPassword ? <VisibilityOffOutlined fontSize="small" /> : <VisibilityOutlined fontSize="small" />}
+                      <IconButton
+                        size="small"
+                        onClick={() => setShowPassword((p) => !p)}
+                        edge="end"
+                        disableRipple
+                        sx={{ color: 'var(--neu-text-secondary)', '&:hover': { color: 'var(--neu-text-primary)' } }}
+                      >
+                        {showPassword ? <VisibilityOffOutlined sx={{ fontSize: 18 }} /> : <VisibilityOutlined sx={{ fontSize: 18 }} />}
                       </IconButton>
                     </InputAdornment>
                   ),
                 },
               }}
             />
+          </Box>
+
+          {tabIndex === 1 && (
+            <Box>
+              <Typography className="neu-form-label">
+                Confirm Password
+              </Typography>
+              <TextField
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                fullWidth
+                size="small"
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setShowConfirmPassword((p) => !p)}
+                          edge="end"
+                          disableRipple
+                          sx={{ color: 'var(--neu-text-secondary)', '&:hover': { color: 'var(--neu-text-primary)' } }}
+                        >
+                          {showConfirmPassword ? <VisibilityOffOutlined sx={{ fontSize: 18 }} /> : <VisibilityOutlined sx={{ fontSize: 18 }} />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
           )}
           <Button
             type="submit"

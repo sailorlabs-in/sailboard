@@ -9,6 +9,7 @@ import {
   TextField,
   Box,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import { DescriptionOutlined, CreateNewFolderOutlined } from '@mui/icons-material';
 import { Project } from '@rea/shared-types';
@@ -119,25 +120,28 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
       </DialogTitle>
 
       <Box component="form" onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1.5 }}>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.2, pt: 1.5 }}>
           {projects.length > 0 ? (
-            <TextField
-              select
-              label="Target Folder"
-              value={selectedProjectId || projects[0]?.id || ''}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              size="small"
-              fullWidth
-              slotProps={{ select: { native: true } }}
-              helperText="Select which folder will house this canvas file"
-              disabled={isSubmitting}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  📁 {p.name}
-                </option>
-              ))}
-            </TextField>
+            <Box>
+              <Typography className="neu-form-label">
+                Target Folder
+              </Typography>
+              <TextField
+                select
+                value={selectedProjectId || projects[0]?.id || ''}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                size="small"
+                fullWidth
+                slotProps={{ select: { native: true } }}
+                disabled={isSubmitting}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    📁 {p.name}
+                  </option>
+                ))}
+              </TextField>
+            </Box>
           ) : (
             <Box
               sx={{
@@ -164,17 +168,30 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
             </Box>
           )}
 
-          <TextField
-            autoFocus
-            label="Canvas Title"
-            placeholder="e.g. Kubernetes Cluster Topology"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            fullWidth
-            size="small"
-            disabled={isSubmitting}
-          />
+          <Box>
+            <Typography className="neu-form-label">
+              Canvas File Title
+            </Typography>
+            <TextField
+              autoFocus
+              placeholder="e.g. Kubernetes Cluster Topology"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              fullWidth
+              size="small"
+              disabled={isSubmitting}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <DescriptionOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, gap: 1 }}>

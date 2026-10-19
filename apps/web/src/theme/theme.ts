@@ -154,23 +154,63 @@ export const getAppTheme = (mode: 'light' | 'dark') => {
           },
         },
       },
+      MuiButtonBase: {
+        defaultProps: {
+          disableRipple: true,
+          disableTouchRipple: true,
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            color: isDark ? '#94a3b8' : '#64748b',
+            marginBottom: 6,
+            '&.Mui-focused': {
+              color: isDark ? '#818cf8' : '#4f46e5',
+            },
+          },
+        },
+      },
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            backgroundColor: isDark ? '#121622' : '#e2e8f0',
+            backgroundColor: isDark ? '#0f131f' : '#dce3ed',
             boxShadow: isDark
-              ? 'inset 3px 3px 7px rgba(0, 0, 0, 0.7), inset -2px -2px 6px rgba(255, 255, 255, 0.035)'
-              : 'inset 3px 3px 6px rgba(163, 177, 198, 0.55), inset -3px -3px 6px rgba(255, 255, 255, 0.95)',
-            borderRadius: 10,
-            '& fieldset': {
-              borderColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(163, 177, 198, 0.4)',
+              ? 'inset 3px 3px 6px rgba(0, 0, 0, 0.75), inset -2px -2px 6px rgba(255, 255, 255, 0.035)'
+              : 'inset 3px 3px 6px rgba(163, 177, 198, 0.65), inset -3px -3px 6px rgba(255, 255, 255, 0.95)',
+            borderRadius: 12,
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(163, 177, 198, 0.4)',
+              borderWidth: '1px !important',
+              transition: 'all 0.2s ease',
             },
-            '&:hover fieldset': {
-              borderColor: isDark ? 'rgba(99, 102, 241, 0.5)' : 'rgba(79, 70, 229, 0.5)',
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(79, 70, 229, 0.45)',
             },
-            '&.Mui-focused fieldset': {
-              borderColor: isDark ? '#6366f1' : '#4f46e5',
-              borderWidth: 1.5,
+            '&.Mui-focused': {
+              boxShadow: isDark
+                ? 'inset 3px 3px 6px rgba(0, 0, 0, 0.85), 0 0 10px rgba(99, 102, 241, 0.35)'
+                : 'inset 3px 3px 6px rgba(163, 177, 198, 0.7), 0 0 10px rgba(79, 70, 229, 0.3)',
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: isDark ? '#6366f1 !important' : '#4f46e5 !important',
+                borderWidth: '1.5px !important',
+              },
+            },
+            '& .MuiOutlinedInput-input': {
+              padding: '12px 14px',
+              fontSize: '0.88rem',
+              fontWeight: 500,
+              color: isDark ? '#f8fafc' : '#1e293b',
+              '&::placeholder': {
+                color: isDark ? '#64748b' : '#94a3b8',
+                opacity: 1,
+              },
+            },
+            '& .MuiInputAdornment-root': {
+              color: isDark ? '#94a3b8' : '#64748b',
             },
           },
         },
