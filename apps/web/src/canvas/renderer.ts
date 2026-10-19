@@ -302,16 +302,34 @@ function renderElement(
     case 'draw': {
       if (el.points && el.points.length > 0) {
         ctx.beginPath();
-        ctx.strokeStyle = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
-        ctx.lineWidth = el.strokeWidth || 2;
+        const strokeColor = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
+        const strokeWidth = el.strokeWidth || 2;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
-        for (let i = 1; i < el.points.length; i++) {
-          ctx.lineTo(x + el.points[i].x, y + el.points[i].y);
+        if (el.points.length === 1) {
+          ctx.arc(x + el.points[0].x, y + el.points[0].y, strokeWidth / 2, 0, Math.PI * 2);
+          ctx.fillStyle = strokeColor;
+          ctx.fill();
+        } else if (el.points.length === 2) {
+          ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
+          ctx.lineTo(x + el.points[1].x, y + el.points[1].y);
+          ctx.stroke();
+        } else {
+          ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
+          for (let i = 1; i < el.points.length - 1; i++) {
+            const p1 = el.points[i];
+            const p2 = el.points[i + 1];
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+            ctx.quadraticCurveTo(x + p1.x, y + p1.y, x + midX, y + midY);
+          }
+          const last = el.points[el.points.length - 1];
+          ctx.lineTo(x + last.x, y + last.y);
+          ctx.stroke();
         }
-        ctx.stroke();
       }
       break;
     }

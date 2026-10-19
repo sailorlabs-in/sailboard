@@ -8,6 +8,7 @@ import {
   ResizeHandle,
   snapToGrid,
   BoundingBox,
+  distance,
 } from '../canvas/math';
 import { renderScene } from '../canvas/renderer';
 import { socketService } from '../services/socket';
@@ -600,8 +601,14 @@ export const Canvas: React.FC<CanvasProps> = ({
       };
     }
 
-    onElementsChange([...elements, newElement], false);
-    onSelectElements([newId]);
+    const nextElements = [...elements, newElement];
+    latestElementsRef.current = nextElements;
+    onElementsChange(nextElements, false);
+    if (activeTool !== 'draw') {
+      onSelectElements([newId]);
+    } else {
+      onSelectElements([]);
+    }
 
     setDragState({
       mode: 'drawing',
@@ -700,21 +707,39 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (dragState.mode === 'drawing' && dragState.createdElementId) {
-      const el = elements.find((e) => e.id === dragState.createdElementId);
+      const currentElements = latestElementsRef.current;
+      const el = currentElements.find((e) => e.id === dragState.createdElementId);
       if (!el) return;
 
-      let updated: CanvasElement[] = elements;
+      let updated: CanvasElement[] = currentElements;
 
       if (el.type === 'draw') {
         const localPoint = {
           x: worldPoint.x - el.x,
           y: worldPoint.y - el.y,
         };
-        const updatedPoints = [...(el.points || []), localPoint];
-        updated = elements.map((item) =>
+        const currentPoints = el.points || [];
+        const lastPoint = currentPoints[currentPoints.length - 1];
+
+        // Skip adding point if mouse movement is negligible (< 1.5px) to maintain smooth 60fps performance
+        if (lastPoint && distance(lastPoint, localPoint) < 1.5) {
+          return;
+        }
+
+        const updatedPoints = [...currentPoints, localPoint];
+        const xs = updatedPoints.map((p) => p.x);
+        const ys = updatedPoints.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+
+        updated = currentElements.map((item) =>
           item.id === el.id
             ? {
                 ...item,
+                width: Math.max(1, maxX - minX),
+                height: Math.max(1, maxY - minY),
                 points: updatedPoints,
                 updatedAt: Date.now(),
               }
@@ -725,7 +750,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         const targetY = gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
         const p2 = { x: targetX - el.x, y: targetY - el.y };
 
-        updated = elements.map((item) =>
+        updated = currentElements.map((item) =>
           item.id === el.id
             ? {
                 ...item,
@@ -745,7 +770,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         const posX = w < 0 ? dragState.startPos.x + w : dragState.startPos.x;
         const posY = h < 0 ? dragState.startPos.y + h : dragState.startPos.y;
 
-        updated = elements.map((item) =>
+        updated = currentElements.map((item) =>
           item.id === el.id
             ? {
                 ...item,
@@ -821,7 +846,9 @@ export const Canvas: React.FC<CanvasProps> = ({
       socketService.emitElementsChange(latestElementsRef.current, true);
 
       if (dragState.mode === 'drawing') {
-        onToolChange('selection');
+        if (activeTool !== 'draw') {
+          onToolChange('selection');
+        }
       }
     }
 

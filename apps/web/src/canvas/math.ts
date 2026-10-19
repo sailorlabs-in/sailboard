@@ -144,9 +144,14 @@ export function isPointInElement(point: Point, el: CanvasElement): boolean {
   }
 
   if (el.type === 'draw') {
-    if (el.points) {
-      for (const p of el.points) {
-        if (distance(point, { x: el.x + p.x, y: el.y + p.y }) <= padding + 5) {
+    if (el.points && el.points.length > 0) {
+      if (el.points.length === 1) {
+        return distance(point, { x: el.x + el.points[0].x, y: el.y + el.points[0].y }) <= padding + 6;
+      }
+      for (let i = 0; i < el.points.length - 1; i++) {
+        const p1 = { x: el.x + el.points[i].x, y: el.y + el.points[i].y };
+        const p2 = { x: el.x + el.points[i + 1].x, y: el.y + el.points[i + 1].y };
+        if (distanceToSegment(point, p1, p2) <= padding + 6) {
           return true;
         }
       }
