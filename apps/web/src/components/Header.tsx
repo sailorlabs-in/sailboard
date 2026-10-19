@@ -677,6 +677,7 @@ export const Header: React.FC<HeaderProps> = ({
           anchorEl={moreMenuAnchor}
           open={Boolean(moreMenuAnchor)}
           onClose={() => setMoreMenuAnchor(null)}
+          transitionDuration={250}
           slotProps={{
             paper: {
               className: 'neu-floating',

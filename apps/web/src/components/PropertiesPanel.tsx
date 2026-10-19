@@ -111,17 +111,133 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const muiTheme = useTheme();
   const isTablet = useMediaQuery(muiTheme.breakpoints.down('md'));
   const [isCollapsed, setIsCollapsed] = useState(isTablet);
+  const [isExiting, setIsExiting] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const pillRef = useRef<HTMLDivElement | null>(null);
+  const isAnimatingRef = useRef(false);
 
+  // Sync default collapse state when breakpoint changes
+  useEffect(() => {
+    setIsCollapsed(isTablet);
+  }, [isTablet]);
+
+  // Entrance animation when opening the Styles panel
   useEffect(() => {
     if (!isCollapsed && panelRef.current) {
+      gsap.killTweensOf(panelRef.current);
       gsap.fromTo(
         panelRef.current,
-        { opacity: 0, x: -16, scale: 0.95 },
-        { opacity: 1, x: 0, scale: 1, duration: 0.35, ease: 'power3.out' }
+        { opacity: 0, x: -28, scale: 0.94, filter: 'blur(4px)' },
+        {
+          opacity: 1,
+          x: 0,
+          scale: 1,
+          filter: 'blur(0px)',
+          duration: 0.35,
+          ease: 'power3.out',
+          clearProps: 'transform,filter',
+          onComplete: () => {
+            isAnimatingRef.current = false;
+          },
+        }
+      );
+
+      const children = panelRef.current.children;
+      if (children && children.length > 0) {
+        gsap.fromTo(
+          Array.from(children),
+          { opacity: 0, y: 8 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.25,
+            stagger: 0.02,
+            ease: 'power2.out',
+            delay: 0.05,
+            clearProps: 'opacity,transform',
+          }
+        );
+      }
+    }
+  }, [isCollapsed]);
+
+  // Entrance animation for the collapsed "Styles" pill
+  useEffect(() => {
+    if (isCollapsed && pillRef.current) {
+      gsap.killTweensOf(pillRef.current);
+      gsap.fromTo(
+        pillRef.current,
+        { opacity: 0, scale: 0.78, x: -16 },
+        {
+          opacity: 1,
+          scale: 1,
+          x: 0,
+          duration: 0.35,
+          ease: 'back.out(1.8)',
+          clearProps: 'transform',
+          onComplete: () => {
+            isAnimatingRef.current = false;
+          },
+        }
       );
     }
   }, [isCollapsed]);
+
+  const handleOpen = () => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    if (pillRef.current) {
+      gsap.to(pillRef.current, {
+        opacity: 0,
+        scale: 0.82,
+        x: -12,
+        duration: 0.18,
+        ease: 'power2.in',
+        onComplete: () => {
+          setIsCollapsed(false);
+        },
+      });
+    } else {
+      setIsCollapsed(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+    setIsExiting(true);
+
+    if (panelRef.current) {
+      const children = panelRef.current.children;
+      if (children && children.length > 0) {
+        gsap.to(Array.from(children), {
+          opacity: 0,
+          y: -4,
+          duration: 0.14,
+          stagger: 0.012,
+          ease: 'power2.in',
+        });
+      }
+
+      gsap.to(panelRef.current, {
+        opacity: 0,
+        x: -28,
+        scale: 0.94,
+        filter: 'blur(4px)',
+        duration: 0.22,
+        ease: 'power3.in',
+        onComplete: () => {
+          setIsExiting(false);
+          setIsCollapsed(true);
+        },
+      });
+    } else {
+      setIsExiting(false);
+      setIsCollapsed(true);
+      isAnimatingRef.current = false;
+    }
+  };
 
   // Active values (either from first selected element or default currentStyle)
   const activeStroke = hasSelection ? selectedElements[0].strokeColor : currentStyle.strokeColor;
@@ -261,13 +377,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     </Box>
   );
 
-  if (isCollapsed) {
+  if (isCollapsed && !isExiting) {
     return (
       <Tooltip title="Open Style Inspector" placement="right">
         <Paper
+          ref={pillRef}
           elevation={0}
           className="neu-floating"
-          onClick={() => setIsCollapsed(false)}
+          onClick={handleOpen}
           sx={{
             position: 'absolute',
             top: { xs: 68, sm: 80 },
@@ -283,15 +400,18 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             alignItems: 'center',
             gap: 0.8,
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
               bgcolor: 'var(--neu-surface-hover)',
-              transform: 'translateY(-1px)',
+              transform: 'translateX(2px) scale(1.03)',
               boxShadow: 'var(--neu-shadow-btn-hover)',
+              '& .tune-icon': {
+                transform: 'rotate(45deg)',
+              },
             },
           }}
         >
-          <TuneOutlined sx={{ fontSize: 18, color: 'var(--neu-primary-light)' }} />
+          <TuneOutlined className="tune-icon" sx={{ fontSize: 18, color: 'var(--neu-primary-light)', transition: 'transform 0.3s ease' }} />
           <Typography variant="caption" sx={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>
             Styles
           </Typography>
@@ -337,9 +457,17 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           <Tooltip title="Collapse Styles Inspector">
             <IconButton
               size="small"
-              onClick={() => setIsCollapsed(true)}
+              onClick={handleClose}
               className="neu-icon-btn"
-              sx={{ width: 22, height: 22, p: 0.2 }}
+              sx={{
+                width: 22,
+                height: 22,
+                p: 0.2,
+                transition: 'transform 0.2s ease',
+                '&:hover': {
+                  transform: 'scale(1.1) translateX(-2px)',
+                },
+              }}
             >
               <ChevronLeftOutlined sx={{ fontSize: 15 }} />
             </IconButton>
