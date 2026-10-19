@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Drawer,
   Box,
@@ -10,14 +10,12 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  ListItemSecondaryAction,
   Tooltip,
   Chip,
   Divider,
   Menu,
   MenuItem,
   Avatar,
-  Badge,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -31,18 +29,20 @@ import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
   CreateNewFolderOutlined,
-  AccountCircleOutlined,
-  LockOutlined,
+  ManageAccountsOutlined,
   EditOutlined,
-  VisibilityOutlined,
-  AdminPanelSettingsOutlined,
-  SyncOutlined,
   SpaceDashboardOutlined,
 } from '@mui/icons-material';
 import { Project, WhiteboardDocument, ProjectRole } from '@rea/shared-types';
-import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { ConfirmDeleteModal, CreateFileModal, CreateProjectModal } from './modals';
+import { animateStaggerIn } from '../utils/animations';
+import {
+  ConfirmDeleteModal,
+  CreateFileModal,
+  CreateProjectModal,
+  EditProjectModal,
+  RenameFileModal,
+} from './modals';
 
 interface ProjectSidebarProps {
   open: boolean;
@@ -55,8 +55,12 @@ interface ProjectSidebarProps {
   onCreateFile: (title: string) => Promise<void>;
   onDeleteFile: (fileId: string) => Promise<void>;
   onCreateProject: (name: string, description?: string) => Promise<void>;
+  onUpdateProject?: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void>;
+  onRenameFile?: (fileId: string, newTitle: string) => Promise<void>;
   onOpenShare: () => void;
   onOpenAuth: () => void;
+  onOpenAccountManage?: () => void;
   userRole: ProjectRole;
   onNavigateHome?: () => void;
 }
@@ -72,8 +76,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onCreateFile,
   onDeleteFile,
   onCreateProject,
+  onUpdateProject,
+  onDeleteProject,
+  onRenameFile,
   onOpenShare,
   onOpenAuth,
+  onOpenAccountManage,
   userRole = 'editor',
   onNavigateHome,
 }) => {
@@ -88,9 +96,26 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedFileToDelete, setSelectedFileToDelete] = useState<WhiteboardDocument | null>(null);
 
+  const [editProjectModalOpen, setEditProjectModalOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+  const [deleteProjectModalOpen, setDeleteProjectModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [fileToRename, setFileToRename] = useState<WhiteboardDocument | null>(null);
+
   const safeRole: ProjectRole = userRole || 'editor';
   const isViewer = safeRole === 'viewer';
   const isOwner = safeRole === 'owner';
+
+  const filesListRef = useRef<HTMLUListElement | null>(null);
+
+  // Stagger animate files list when drawer is opened or project files change
+  useEffect(() => {
+    if (open && filesListRef.current?.children.length) {
+      animateStaggerIn(filesListRef.current.children, { stagger: 0.04, y: 12, scale: 0.98 });
+    }
+  }, [open, currentProject?.id, currentProject?.files?.length]);
 
   return (
     <>
@@ -237,34 +262,86 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           <Typography variant="caption" sx={{ px: 2, py: 1, color: 'var(--neu-text-secondary)', display: 'block', fontWeight: 600 }}>
             PROJECT FOLDERS
           </Typography>
-          {projects.map((p) => (
-            <MenuItem
-              key={p.id}
-              selected={p.id === currentProject?.id}
-              onClick={() => {
-                onSelectProject(p.id);
-                setProjectMenuAnchor(null);
-              }}
-              sx={{ display: 'flex', justifyContent: 'space-between', py: 1, borderRadius: '8px', mx: 0.5 }}
-            >
-              <Box sx={{ overflow: 'hidden', mr: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--neu-text-primary)' }}>
-                  {p.name}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
-                  {p.files?.length || 0} files • Role: {p.userRole || 'member'}
-                </Typography>
-              </Box>
-              {p.id === currentProject?.id && <Chip label="Active" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />}
-            </MenuItem>
-          ))}
+          {projects.map((p) => {
+            const isProjOwner = p.userRole === 'owner';
+            const canEditProj = p.userRole === 'owner' || p.userRole === 'editor';
+            return (
+              <MenuItem
+                key={p.id}
+                selected={p.id === currentProject?.id}
+                onClick={() => {
+                  onSelectProject(p.id);
+                  setProjectMenuAnchor(null);
+                }}
+                sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderRadius: '8px', mx: 0.5 }}
+              >
+                <Box sx={{ overflow: 'hidden', mr: 1, flex: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--neu-text-primary)' }}>
+                    {p.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
+                    {p.files?.length || 0} files • Role: {p.userRole || 'member'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                  {p.id === currentProject?.id && <Chip label="Active" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />}
+                  {onUpdateProject && canEditProj && (
+                    <Tooltip title="Edit project folder">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectMenuAnchor(null);
+                          setProjectToEdit(p);
+                          setEditProjectModalOpen(true);
+                        }}
+                        className="neu-icon-btn"
+                        sx={{ width: 24, height: 24, p: 0.2 }}
+                      >
+                        <EditOutlined sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {onDeleteProject && isProjOwner && (
+                    <Tooltip title="Delete project folder">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectMenuAnchor(null);
+                          setProjectToDelete(p);
+                          setDeleteProjectModalOpen(true);
+                        }}
+                        className="neu-icon-btn"
+                        sx={{ width: 24, height: 24, p: 0.2, color: 'error.main' }}
+                      >
+                        <DeleteOutlined sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+              </MenuItem>
+            );
+          })}
           <Divider sx={{ my: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
+          {onNavigateHome && (
+            <MenuItem
+              onClick={() => {
+                setProjectMenuAnchor(null);
+                onNavigateHome();
+              }}
+              sx={{ fontWeight: 600, borderRadius: '8px', mx: 0.5, fontSize: '0.85rem' }}
+            >
+              <SpaceDashboardOutlined fontSize="small" sx={{ mr: 1, color: 'var(--neu-primary)' }} />
+              Projects & Files Dashboard
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               setProjectMenuAnchor(null);
               setNewProjectOpen(true);
             }}
-            sx={{ color: 'var(--neu-primary-light)', fontWeight: 600, borderRadius: '8px', mx: 0.5 }}
+            sx={{ color: 'var(--neu-primary-light)', fontWeight: 600, borderRadius: '8px', mx: 0.5, fontSize: '0.85rem' }}
           >
             <CreateNewFolderOutlined fontSize="small" sx={{ mr: 1 }} />
             + Create New Project
@@ -275,7 +352,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         {open ? (
           <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5 }}>
             {/* Share Project & Actions Bar */}
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 0.8, mb: 2, alignItems: 'center' }}>
               <Button
                 variant="outlined"
                 fullWidth
@@ -287,6 +364,36 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               >
                 Share & Roles
               </Button>
+              {onUpdateProject && currentProject && (safeRole === 'owner' || safeRole === 'editor') && (
+                <Tooltip title="Edit project folder">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setProjectToEdit(currentProject);
+                      setEditProjectModalOpen(true);
+                    }}
+                    className="neu-icon-btn"
+                    sx={{ width: 32, height: 32, flexShrink: 0 }}
+                  >
+                    <EditOutlined fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {onDeleteProject && currentProject && isOwner && (
+                <Tooltip title="Delete project folder">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setProjectToDelete(currentProject);
+                      setDeleteProjectModalOpen(true);
+                    }}
+                    className="neu-icon-btn"
+                    sx={{ width: 32, height: 32, flexShrink: 0, '&:hover': { color: 'error.main' } }}
+                  >
+                    <DeleteOutlined fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
 
             {/* Files Header with "+ Add File" */}
@@ -337,7 +444,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 )}
               </Box>
             ) : (
-              <List disablePadding>
+              <List ref={filesListRef} disablePadding>
                 {currentProject?.files?.map((f) => {
                   const isActive = f.id === currentFile?.id;
                   return (
@@ -347,19 +454,40 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                       sx={{ mb: 0.8 }}
                       secondaryAction={
                         !isViewer && (
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFileToDelete(f);
-                              setDeleteModalOpen(true);
-                            }}
-                            className="neu-icon-btn"
-                            sx={{ width: 26, height: 26, '&:hover': { color: 'error.main' } }}
-                          >
-                            <DeleteOutlined sx={{ fontSize: 14 }} />
-                          </IconButton>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                            {onRenameFile && (
+                              <Tooltip title="Rename canvas">
+                                <IconButton
+                                  edge="end"
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFileToRename(f);
+                                    setRenameModalOpen(true);
+                                  }}
+                                  className="neu-icon-btn"
+                                  sx={{ width: 24, height: 24 }}
+                                >
+                                  <EditOutlined sx={{ fontSize: 13 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            <Tooltip title="Delete canvas">
+                              <IconButton
+                                edge="end"
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedFileToDelete(f);
+                                  setDeleteModalOpen(true);
+                                }}
+                                className="neu-icon-btn"
+                                sx={{ width: 24, height: 24, '&:hover': { color: 'error.main' } }}
+                              >
+                                <DeleteOutlined sx={{ fontSize: 13 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         )
                       }
                     >
@@ -456,7 +584,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               }}
             >
               <Box
-                onClick={onOpenAuth}
+                onClick={() => (onOpenAccountManage ? onOpenAccountManage() : onOpenAuth())}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -484,20 +612,30 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     {user?.name || 'Guest User'}
                   </Typography>
                   <Typography variant="caption" noWrap sx={{ fontSize: '0.68rem', color: 'var(--neu-text-secondary)' }}>
-                    {user?.email || 'Click to switch/login'}
+                    {user?.email || 'Click to switch / manage'}
                   </Typography>
                 </Box>
               </Box>
 
-              <Tooltip title="Switch or manage account">
-                <Button size="small" variant="text" onClick={onOpenAuth} sx={{ minWidth: 'auto', p: 0.5, color: 'var(--neu-text-secondary)' }}>
-                  <AccountCircleOutlined fontSize="small" />
+              <Tooltip title="Manage Account & Switch Profiles">
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => (onOpenAccountManage ? onOpenAccountManage() : onOpenAuth())}
+                  sx={{ minWidth: 'auto', p: 0.5, color: 'var(--neu-text-secondary)' }}
+                >
+                  <ManageAccountsOutlined fontSize="small" />
                 </Button>
               </Tooltip>
             </Box>
           ) : (
-            <Tooltip title={user?.name || 'Switch Account'} placement="right">
-              <IconButton onClick={onOpenAuth} size="small" className="neu-icon-btn" sx={{ mx: 'auto', width: 34, height: 34 }}>
+            <Tooltip title={user ? `${user.name} (Manage/Switch)` : 'Manage Account'} placement="right">
+              <IconButton
+                onClick={() => (onOpenAccountManage ? onOpenAccountManage() : onOpenAuth())}
+                size="small"
+                className="neu-icon-btn"
+                sx={{ mx: 'auto', width: 34, height: 34 }}
+              >
                 <Avatar
                   sx={{
                     width: 28,
@@ -551,6 +689,56 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
         onCreateProject={onCreateProject}
+      />
+
+      {/* Edit Project Folder Modal */}
+      <EditProjectModal
+        open={editProjectModalOpen}
+        project={projectToEdit}
+        onClose={() => {
+          setEditProjectModalOpen(false);
+          setProjectToEdit(null);
+        }}
+        onUpdateProject={async (projectId, updates) => {
+          if (onUpdateProject) {
+            await onUpdateProject(projectId, updates);
+          }
+        }}
+      />
+
+      {/* Confirm Delete Project Folder Modal */}
+      <ConfirmDeleteModal
+        open={deleteProjectModalOpen}
+        title="Delete Project Folder"
+        itemType="project folder"
+        itemName={projectToDelete?.name}
+        warningText="Deleting this folder will permanently delete all whiteboard canvases and architecture notes contained inside it."
+        onClose={() => {
+          setDeleteProjectModalOpen(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={async () => {
+          if (projectToDelete && onDeleteProject) {
+            await onDeleteProject(projectToDelete.id);
+            setDeleteProjectModalOpen(false);
+            setProjectToDelete(null);
+          }
+        }}
+      />
+
+      {/* Rename Canvas File Modal */}
+      <RenameFileModal
+        open={renameModalOpen}
+        initialTitle={fileToRename?.title || ''}
+        onClose={() => {
+          setRenameModalOpen(false);
+          setFileToRename(null);
+        }}
+        onRename={async (newTitle) => {
+          if (fileToRename && onRenameFile) {
+            await onRenameFile(fileToRename.id, newTitle);
+          }
+        }}
       />
     </>
   );

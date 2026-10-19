@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tabs,
-  Tab,
   Box,
   Typography,
   TextField,
@@ -26,16 +24,27 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import { animateTabTransition } from '../utils/animations';
 
 interface AuthDialogProps {
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  title?: string;
+  subtitle?: string;
 }
 
-export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess }) => {
+export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess, title, subtitle }) => {
   const { login, register } = useAuth();
-  const [tabIndex, setTabIndex] = useState<number>(0); // 0 = Sign In, 1 = Create Account
+  const [tabIndex, setTabIndex] = useState<number>(0); // 0 = Sign In, 1 = Create Account, 2 = Reset Password
+  const formContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (formContainerRef.current) {
+      animateTabTransition(formContainerRef.current, 'right');
+    }
+  }, [tabIndex]);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -50,6 +59,43 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (tabIndex === 2) {
+      if (!email.trim() || !password) {
+        const msg = 'Email and new password are required';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password.length < 6) {
+        const msg = 'Password must be at least 6 characters';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password !== confirmPassword) {
+        const msg = 'Passwords do not match';
+        setErrorMsg(msg);
+        toast.error(msg);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await api.resetPassword(email.trim(), password);
+        toast.success(res.message || 'Password reset successfully! You can now sign in.');
+        setTabIndex(0);
+        setPassword('');
+        setConfirmPassword('');
+      } catch (err: any) {
+        const msg = err.message || 'Failed to reset password. Please check your email.';
+        setErrorMsg(msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (tabIndex === 1) {
       if (!email.trim() || !name.trim() || !password) {
@@ -146,10 +192,10 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
           </Box>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: 'var(--neu-text-primary)' }}>
-              Sailboard Account
+              {title || 'Sailboard Account'}
             </Typography>
             <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)' }}>
-              Production Collaborative Workspace
+              {subtitle || 'Production Collaborative Workspace'}
             </Typography>
           </Box>
         </Box>
@@ -182,10 +228,19 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
           >
             Create Account
           </button>
+          {tabIndex === 2 && (
+            <button
+              type="button"
+              className="neu-segmented-item active"
+              style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
+            >
+              Reset Password
+            </button>
+          )}
         </Box>
       </Box>
 
-      <DialogContent sx={{ pt: 2.5, pb: 2 }}>
+      <DialogContent ref={formContainerRef} sx={{ pt: 2.5, pb: 2 }}>
         {errorMsg && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
             {errorMsg}
@@ -244,7 +299,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
 
           <Box>
             <Typography className="neu-form-label">
-              Password
+              {tabIndex === 2 ? 'New Password' : 'Password'}
             </Typography>
             <TextField
               type={showPassword ? 'text' : 'password'}
@@ -279,10 +334,36 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
             />
           </Box>
 
-          {tabIndex === 1 && (
+          {tabIndex === 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  setTabIndex(2);
+                  setErrorMsg(null);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--neu-primary-light)',
+                  p: 0,
+                  minWidth: 'auto',
+                  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                }}
+              >
+                Forgot Password?
+              </Button>
+            </Box>
+          )}
+
+          {(tabIndex === 1 || tabIndex === 2) && (
             <Box>
               <Typography className="neu-form-label">
-                Confirm Password
+                {tabIndex === 2 ? 'Confirm New Password' : 'Confirm Password'}
               </Typography>
               <TextField
                 type={showConfirmPassword ? 'text' : 'password'}
@@ -317,6 +398,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
               />
             </Box>
           )}
+
           <Button
             type="submit"
             variant="contained"
@@ -329,10 +411,36 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
               <CircularProgress size={24} color="inherit" />
             ) : tabIndex === 0 ? (
               'Sign In to Sailboard'
-            ) : (
+            ) : tabIndex === 1 ? (
               'Create Account & Start'
+            ) : (
+              'Reset Password'
             )}
           </Button>
+
+          {tabIndex === 2 && (
+            <Box sx={{ textAlign: 'center', mt: 0.5 }}>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  setTabIndex(0);
+                  setErrorMsg(null);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--neu-text-secondary)',
+                  '&:hover': { color: 'var(--neu-text-primary)' },
+                }}
+              >
+                ← Back to Sign In
+              </Button>
+            </Box>
+          )}
         </Box>
       </DialogContent>
 

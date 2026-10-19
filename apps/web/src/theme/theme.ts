@@ -17,9 +17,8 @@ export const getNeumorphicStyles = (isDark: boolean) => ({
       : '6px 6px 14px rgba(163, 177, 198, 0.6), -6px -6px 14px rgba(255, 255, 255, 0.95)',
     border: isDark ? '1px solid rgba(255, 255, 255, 0.07)' : '1px solid rgba(255, 255, 255, 0.85)',
     borderRadius: '16px',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    transition: 'box-shadow 0.25s ease, background-color 0.2s ease',
     '&:hover': {
-      transform: 'translateY(-3px)',
       boxShadow: isDark
         ? '10px 10px 24px rgba(0, 0, 0, 0.75), -8px -8px 20px rgba(255, 255, 255, 0.05)'
         : '10px 10px 22px rgba(163, 177, 198, 0.7), -10px -10px 22px rgba(255, 255, 255, 1)',
@@ -71,7 +70,6 @@ export const getNeumorphicStyles = (isDark: boolean) => ({
 
 export const getAppTheme = (mode: 'light' | 'dark') => {
   const isDark = mode === 'dark';
-  const neu = getNeumorphicStyles(isDark);
 
   const themeOptions: ThemeOptions = {
     palette: {
@@ -199,14 +197,28 @@ export const getAppTheme = (mode: 'light' | 'dark') => {
                 borderWidth: '1.5px !important',
               },
             },
+            '&.MuiInputBase-multiline': {
+              padding: '10px 14px',
+            },
             '& .MuiOutlinedInput-input': {
               padding: '12px 14px',
               fontSize: '0.88rem',
               fontWeight: 500,
               color: isDark ? '#f8fafc' : '#1e293b',
+              '&.MuiOutlinedInput-inputMultiline': {
+                padding: '0 !important',
+              },
               '&::placeholder': {
                 color: isDark ? '#64748b' : '#94a3b8',
                 opacity: 1,
+              },
+              '&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus, &:-webkit-autofill:active': {
+                WebkitBoxShadow: `0 0 0 1000px ${isDark ? '#0f131f' : '#dce3ed'} inset !important`,
+                boxShadow: `0 0 0 1000px ${isDark ? '#0f131f' : '#dce3ed'} inset !important`,
+                WebkitTextFillColor: `${isDark ? '#f8fafc' : '#1e293b'} !important`,
+                caretColor: `${isDark ? '#f8fafc' : '#1e293b'} !important`,
+                borderRadius: '0 !important',
+                transition: 'background-color 5000s ease-in-out 0s !important',
               },
             },
             '& .MuiInputAdornment-root': {

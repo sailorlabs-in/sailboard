@@ -5,8 +5,6 @@ import {
   IconButton,
   Button,
   Tooltip,
-  Divider,
-  ButtonGroup,
 } from '@mui/material';
 import {
   FormatBoldOutlined,
@@ -19,7 +17,6 @@ import {
   VisibilityOutlined,
   EditOutlined,
 } from '@mui/icons-material';
-import { CanvasElement } from '@rea/shared-types';
 
 interface NotesEditorProps {
   notes: string;

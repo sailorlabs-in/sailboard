@@ -93,6 +93,9 @@ export function renderScene(
   ctx.restore();
 }
 
+const generator = rough.generator();
+const roughShapeCache = new Map<string, { key: string; drawable: any }>();
+
 function renderGrid(
   ctx: CanvasRenderingContext2D,
   viewWidth: number,
@@ -109,20 +112,21 @@ function renderGrid(
   const endY = startY + Math.ceil(viewHeight / zoom) + gridSize;
 
   ctx.save();
-  ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.14)';
-  ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
-  ctx.lineWidth = 1 / zoom;
 
   if (type === 'dots') {
-    const dotRadius = Math.max(1, 1.2 / zoom);
+    ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.14)';
+    const dotRadius = Math.max(0.75, 1.0 / zoom);
+    const size = dotRadius * 2;
+    ctx.beginPath();
     for (let x = startX; x <= endX; x += gridSize) {
       for (let y = startY; y <= endY; y += gridSize) {
-        ctx.beginPath();
-        ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.rect(x - dotRadius, y - dotRadius, size, size);
       }
     }
+    ctx.fill();
   } else {
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+    ctx.lineWidth = 1 / zoom;
     ctx.beginPath();
     for (let x = startX; x <= endX; x += gridSize) {
       ctx.moveTo(x, startY);
@@ -134,6 +138,7 @@ function renderGrid(
     }
     ctx.stroke();
   }
+
   ctx.restore();
 }
 
@@ -174,10 +179,20 @@ function renderElement(
     ctx.translate(-cx, -cy);
   }
 
+  const baseKey = `${el.id}_${x}_${y}_${w}_${h}_${roughOpts.stroke}_${roughOpts.fill}_${roughOpts.fillStyle}_${roughOpts.strokeWidth}_${roughOpts.roughness}_${roughOpts.seed}_${el.strokeStyle}`;
+
   switch (el.type) {
     case 'rectangle': {
       if (useRough) {
-        rc.rectangle(x, y, w, h, roughOpts);
+        let cached = roughShapeCache.get(el.id);
+        if (!cached || cached.key !== baseKey) {
+          cached = {
+            key: baseKey,
+            drawable: generator.rectangle(x, y, w, h, roughOpts),
+          };
+          roughShapeCache.set(el.id, cached);
+        }
+        rc.draw(cached.drawable);
       } else {
         renderCleanRect(ctx, x, y, w, h, el, isDark);
       }
@@ -186,13 +201,21 @@ function renderElement(
     }
 
     case 'diamond': {
-      const top = [x + w / 2, y];
-      const right = [x + w, y + h / 2];
-      const bottom = [x + w / 2, y + h];
-      const left = [x, y + h / 2];
+      const top: [number, number] = [x + w / 2, y];
+      const right: [number, number] = [x + w, y + h / 2];
+      const bottom: [number, number] = [x + w / 2, y + h];
+      const left: [number, number] = [x, y + h / 2];
 
       if (useRough) {
-        rc.polygon([top, right, bottom, left], roughOpts);
+        let cached = roughShapeCache.get(el.id);
+        if (!cached || cached.key !== baseKey) {
+          cached = {
+            key: baseKey,
+            drawable: generator.polygon([top, right, bottom, left], roughOpts),
+          };
+          roughShapeCache.set(el.id, cached);
+        }
+        rc.draw(cached.drawable);
       } else {
         ctx.beginPath();
         ctx.moveTo(top[0], top[1]);
@@ -210,7 +233,15 @@ function renderElement(
       const cx = x + w / 2;
       const cy = y + h / 2;
       if (useRough) {
-        rc.ellipse(cx, cy, Math.abs(w), Math.abs(h), roughOpts);
+        let cached = roughShapeCache.get(el.id);
+        if (!cached || cached.key !== baseKey) {
+          cached = {
+            key: baseKey,
+            drawable: generator.ellipse(cx, cy, Math.abs(w), Math.abs(h), roughOpts),
+          };
+          roughShapeCache.set(el.id, cached);
+        }
+        rc.draw(cached.drawable);
       } else {
         ctx.beginPath();
         ctx.ellipse(cx, cy, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, Math.PI * 2);

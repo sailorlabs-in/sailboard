@@ -84,6 +84,17 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface StoredAccount {
+  user: User;
+  token: string;
+  lastActive: number;
+}
+
+export interface UpdateProfileDto {
+  name?: string;
+  color?: string;
+}
+
 export interface ProjectMember {
   id: string;
   projectId: string;

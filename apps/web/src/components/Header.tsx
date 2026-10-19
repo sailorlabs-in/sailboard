@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   AppBar,
   Toolbar,
   Typography,
   IconButton,
   Button,
-  ButtonGroup,
   Box,
   Tooltip,
   Avatar,
@@ -16,7 +15,6 @@ import {
   ListItemText,
   Divider,
   Chip,
-  Badge,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -42,12 +40,14 @@ import {
   ShareOutlined,
   FolderOutlined,
   MenuOpenOutlined,
-  AccountCircleOutlined,
+  ManageAccountsOutlined,
   SailingOutlined,
   SettingsBrightnessOutlined,
+  EditOutlined,
 } from '@mui/icons-material';
 import { UserPresence, ProjectRole, User } from '@rea/shared-types';
 import { ThemePreference } from '../theme/theme';
+import { animateHeaderIn } from '../utils/animations';
 
 interface HeaderProps {
   projectName: string;
@@ -83,6 +83,7 @@ interface HeaderProps {
   saveStatus: 'saved' | 'saving' | 'synced';
   onOpenShare: () => void;
   onOpenAuth: () => void;
+  onOpenAccountManage?: () => void;
   onLogout?: () => void;
   currentUser: User | null;
   onToggleSidebar?: () => void;
@@ -123,6 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
   saveStatus,
   onOpenShare,
   onOpenAuth,
+  onOpenAccountManage,
   onLogout,
   currentUser,
   onToggleSidebar,
@@ -140,7 +142,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(muiTheme.breakpoints.down('md'));
 
   const handleFinishTitleEdit = () => {
     setIsEditingTitle(false);
@@ -151,8 +152,17 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const headerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (headerRef.current) {
+      animateHeaderIn(headerRef.current, { duration: 0.5, y: -20 });
+    }
+  }, []);
+
   return (
     <AppBar
+      ref={headerRef}
       position="static"
       elevation={0}
       sx={{
@@ -320,28 +330,55 @@ export const Header: React.FC<HeaderProps> = ({
             />
           ) : (
             <Box
-              onClick={() => {
-                if (!isViewer) {
-                  setTempTitle(title);
-                  setIsEditingTitle(true);
-                }
-              }}
               sx={{
-                cursor: isViewer ? 'default' : 'pointer',
-                px: 0.8,
-                py: 0.2,
-                borderRadius: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
                 overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  bgcolor: isViewer ? 'transparent' : 'rgba(255,255,255,0.06)',
-                },
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--neu-text-primary)' }} noWrap>
-                {title}
-              </Typography>
+              <Tooltip title={isViewer ? 'View only' : 'Click to rename canvas'}>
+                <Box
+                  onClick={() => {
+                    if (!isViewer) {
+                      setTempTitle(title);
+                      setIsEditingTitle(true);
+                    }
+                  }}
+                  sx={{
+                    cursor: isViewer ? 'default' : 'pointer',
+                    px: 0.8,
+                    py: 0.2,
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    '&:hover': {
+                      bgcolor: isViewer ? 'transparent' : 'rgba(255,255,255,0.06)',
+                    },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--neu-text-primary)' }} noWrap>
+                    {title}
+                  </Typography>
+                </Box>
+              </Tooltip>
+
+              {!isViewer && (
+                <Tooltip title="Rename Canvas">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setTempTitle(title);
+                      setIsEditingTitle(true);
+                    }}
+                    className="neu-icon-btn"
+                    sx={{ width: 22, height: 22, color: 'var(--neu-text-secondary)', p: 0.2 }}
+                  >
+                    <EditOutlined sx={{ fontSize: 13 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           )}
 
@@ -824,6 +861,20 @@ export const Header: React.FC<HeaderProps> = ({
             </Box>
           )}
           <Divider sx={{ my: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
+          {onOpenAccountManage && (
+            <MenuItem
+              onClick={() => {
+                setUserMenuAnchor(null);
+                onOpenAccountManage();
+              }}
+              sx={{ fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
+            >
+              <ListItemIcon>
+                <ManageAccountsOutlined fontSize="small" sx={{ color: 'var(--neu-primary)' }} />
+              </ListItemIcon>
+              <ListItemText primary="Manage & Switch Accounts" />
+            </MenuItem>
+          )}
           {onNavigateHome && (
             <MenuItem
               onClick={() => {

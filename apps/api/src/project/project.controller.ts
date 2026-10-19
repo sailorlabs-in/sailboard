@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -57,6 +58,16 @@ export class ProjectController {
   ): Promise<Project> {
     const user = await this.getAuthUser(authHeader);
     return this.projectService.getProjectById(id, user.id);
+  }
+
+  @Patch(':id')
+  async updateProject(
+    @Param('id') id: string,
+    @Body() body: { name?: string; description?: string },
+    @Headers('authorization') authHeader?: string
+  ): Promise<Project> {
+    const user = await this.getAuthUser(authHeader);
+    return this.projectService.updateProject(id, body, user.id);
   }
 
   @Delete(':id')

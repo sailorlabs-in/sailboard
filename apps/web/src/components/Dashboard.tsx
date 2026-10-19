@@ -10,14 +10,13 @@ import {
   CardActionArea,
   CardContent,
   Chip,
-  Avatar,
-  AvatarGroup,
   Menu,
   MenuItem,
   ListItemIcon,
   ListItemText,
   Divider,
   Tooltip,
+  Avatar,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -30,10 +29,6 @@ import {
   ShareOutlined,
   DeleteOutlined,
   CreateNewFolderOutlined,
-  GridViewOutlined,
-  ViewListOutlined,
-  AccessTimeOutlined,
-  GroupOutlined,
   LogoutOutlined,
   DarkModeOutlined,
   LightModeOutlined,
@@ -43,12 +38,47 @@ import {
   MenuOpenOutlined,
   SpaceDashboardOutlined,
   AutoAwesomeOutlined,
+  ManageAccountsOutlined,
+  EditOutlined,
 } from '@mui/icons-material';
-import { Project, WhiteboardDocument, ProjectRole, User } from '@rea/shared-types';
+import { Project, WhiteboardDocument, User } from '@rea/shared-types';
 import toast from 'react-hot-toast';
 import { renderScene } from '../canvas/renderer';
 import { ThemePreference } from '../theme/theme';
-import { ConfirmDeleteModal, CreateProjectModal, CreateFileModal } from './modals';
+import {
+  ConfirmDeleteModal,
+  CreateProjectModal,
+  CreateFileModal,
+  EditProjectModal,
+  RenameFileModal,
+} from './modals';
+import {
+  animateHeaderIn,
+  animateStaggerIn,
+  useCardHover,
+} from '../utils/animations';
+
+// 3D Magnetic Tactile Card with GSAP Spring Physics
+const DashboardCard: React.FC<React.ComponentProps<typeof Card>> = ({ children, sx, className, ...props }) => {
+  const cardRef = useCardHover<HTMLDivElement>();
+  return (
+    <Card
+      ref={cardRef}
+      className={`neu-card ${className || ''}`}
+      sx={{
+        borderRadius: '16px',
+        bgcolor: 'var(--neu-card)',
+        boxShadow: 'var(--neu-shadow-raised)',
+        border: 'var(--neu-border)',
+        transformStyle: 'preserve-3d',
+        ...sx,
+      }}
+      {...props}
+    >
+      {children}
+    </Card>
+  );
+};
 
 interface DashboardProps {
   user: User | null;
@@ -57,10 +87,16 @@ interface DashboardProps {
   onSelectProject: (projectId: string) => void;
   onOpenFile: (project: Project, file: WhiteboardDocument) => void;
   onCreateProject: (name: string, description?: string) => Promise<void>;
+  onUpdateProject?: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void>;
   onCreateFile: (projectId: string, title: string) => Promise<void>;
   onDeleteFile: (projectId: string, fileId: string) => Promise<void>;
+  onRenameFile?: (projectId: string, fileId: string, newTitle: string) => Promise<void>;
   onOpenShare: (project: Project) => void;
+  onOpenAccountManage?: () => void;
   onLogout: () => void;
+  initialFolderId?: string;
+  onFolderChange?: (folderId: string) => void;
   themePreference?: ThemePreference;
   onThemeChange?: (pref: ThemePreference) => void;
   themeMode: 'light' | 'dark';
@@ -148,10 +184,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectProject,
   onOpenFile,
   onCreateProject,
+  onUpdateProject,
+  onDeleteProject,
   onCreateFile,
   onDeleteFile,
+  onRenameFile,
   onOpenShare,
+  onOpenAccountManage,
   onLogout,
+  initialFolderId,
+  onFolderChange,
   themePreference = 'system',
   onThemeChange,
   themeMode,
@@ -162,15 +204,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const isDark = themeMode === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFolderId, setSelectedFolderId] = useState<string>('all'); // 'all' or specific projectId
+  const [selectedFolderId, setSelectedFolderId] = useState<string>(initialFolderId || 'all');
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [themeAnchorEl, setThemeAnchorEl] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (initialFolderId) {
+      setSelectedFolderId(initialFolderId);
+    }
+  }, [initialFolderId]);
 
   // Modal dialog states
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [targetProjectId, setTargetProjectId] = useState<string>('');
   const [deleteFileModalOpen, setDeleteFileModalOpen] = useState(false);
+
+  const [editProjectModalOpen, setEditProjectModalOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+  const [deleteProjectModalOpen, setDeleteProjectModalOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
+  const [renameFileModalOpen, setRenameFileModalOpen] = useState(false);
+  const [fileToRename, setFileToRename] = useState<{
+    project: Project;
+    file: WhiteboardDocument;
+  } | null>(null);
 
   // Context Menu state
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -199,6 +258,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     }
   }
+
+  // GSAP Animation Refs
+  const topNavbarRef = useRef<HTMLDivElement | null>(null);
+  const welcomeBannerRef = useRef<HTMLDivElement | null>(null);
+  const templatesGridRef = useRef<HTMLDivElement | null>(null);
+  const filesGridRef = useRef<HTMLDivElement | null>(null);
+  const sidebarProjectsRef = useRef<HTMLDivElement | null>(null);
+  const activeFolderBannerRef = useRef<HTMLDivElement | null>(null);
+
+  // Top navbar entrance animation
+  useEffect(() => {
+    if (topNavbarRef.current) {
+      animateHeaderIn(topNavbarRef.current, { duration: 0.55, y: -22 });
+    }
+  }, []);
+
+  // Welcome banner entrance animation
+  useEffect(() => {
+    if (welcomeBannerRef.current) {
+      animateStaggerIn(welcomeBannerRef.current, { duration: 0.6, y: 15 });
+    }
+  }, []);
+
+  // Quick templates staggered cascade
+  useEffect(() => {
+    if (templatesGridRef.current?.children.length) {
+      animateStaggerIn(templatesGridRef.current.children, { stagger: 0.05, y: 18, delay: 0.08 });
+    }
+  }, []);
+
+  // Recent/pinned files staggered entrance whenever folder, query or file count changes
+  useEffect(() => {
+    if (filesGridRef.current?.children.length) {
+      animateStaggerIn(filesGridRef.current.children, { stagger: 0.04, y: 22, scale: 0.96 });
+    }
+  }, [selectedFolderId, searchQuery, allFilesWithProject.length]);
+
+  // Sidebar project folders staggered entrance
+  useEffect(() => {
+    if (sidebarProjectsRef.current?.children.length) {
+      animateStaggerIn(sidebarProjectsRef.current.children, { stagger: 0.03, y: 12, scale: 0.98 });
+    }
+  }, [projects.length]);
+
+  // Active folder details banner entrance
+  useEffect(() => {
+    if (activeFolderBannerRef.current) {
+      animateStaggerIn(activeFolderBannerRef.current, { duration: 0.45, y: 12, scale: 0.98 });
+    }
+  }, [selectedFolderId]);
 
   return (
     <Box
@@ -294,40 +403,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* User Profile Card */}
         {user && (
-          <Box
-            className="neu-inset"
-            sx={{
-              p: 1.6,
-              m: 1.5,
-              borderRadius: '12px',
-              bgcolor: 'var(--neu-bg)',
-              boxShadow: 'var(--neu-shadow-inset)',
-              border: 'var(--neu-border-inset)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.2,
-            }}
-          >
-            <Avatar
+          <Tooltip title="Manage Account & Switch Profiles">
+            <Box
+              className="neu-inset"
+              onClick={onOpenAccountManage}
               sx={{
-                width: 36,
-                height: 36,
-                bgcolor: user.color || '#6366f1',
-                fontSize: '0.85rem',
-                fontWeight: 700,
+                p: 1.4,
+                m: 1.5,
+                borderRadius: '12px',
+                bgcolor: 'var(--neu-bg)',
+                boxShadow: 'var(--neu-shadow-inset)',
+                border: 'var(--neu-border-inset)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.2,
+                cursor: onOpenAccountManage ? 'pointer' : 'default',
+                transition: 'all 0.2s ease',
+                '&:hover': onOpenAccountManage
+                  ? {
+                      borderColor: 'var(--neu-primary)',
+                      boxShadow: 'var(--neu-shadow-pressed), 0 0 0 1px var(--neu-primary)',
+                    }
+                  : {},
               }}
             >
-              {user.name.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box sx={{ overflow: 'hidden', flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
-                {user.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.72rem' }} noWrap>
-                {user.email}
-              </Typography>
+              <Avatar
+                sx={{
+                  width: 36,
+                  height: 36,
+                  bgcolor: user.color || '#6366f1',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  boxShadow: 'var(--neu-shadow-btn)',
+                }}
+              >
+                {user.name.charAt(0).toUpperCase()}
+              </Avatar>
+              <Box sx={{ overflow: 'hidden', flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+                  {user.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontSize: '0.72rem' }} noWrap>
+                  {user.email}
+                </Typography>
+              </Box>
+              {onOpenAccountManage && (
+                <IconButton size="small" className="neu-icon-btn" sx={{ width: 28, height: 28, color: 'var(--neu-text-secondary)', flexShrink: 0 }}>
+                  <ManageAccountsOutlined sx={{ fontSize: 17 }} />
+                </IconButton>
+              )}
             </Box>
-          </Box>
+          </Tooltip>
         )}
 
         {/* Navigation Section */}
@@ -342,6 +468,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             startIcon={<SpaceDashboardOutlined fontSize="small" />}
             onClick={() => {
               setSelectedFolderId('all');
+              onFolderChange?.('all');
               if (isMobile) setSidebarOpen(false);
             }}
             sx={{
@@ -376,39 +503,102 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </Box>
 
           {/* Project Folders List */}
-          {projects.map((proj) => {
+          <Box ref={sidebarProjectsRef}>
+            {projects.map((proj) => {
             const isSelected = selectedFolderId === proj.id;
+            const isProjOwner = proj.userRole === 'owner';
+            const canEditProj = proj.userRole === 'owner' || proj.userRole === 'editor';
             return (
-              <Button
+              <Box
                 key={proj.id}
-                fullWidth
-                size="small"
-                startIcon={<FolderOutlined fontSize="small" sx={{ color: isSelected ? 'var(--neu-primary-light)' : 'text.secondary' }} />}
-                onClick={() => {
-                  setSelectedFolderId(proj.id);
-                  if (isMobile) setSidebarOpen(false);
-                }}
                 sx={{
-                  justifyContent: 'flex-start',
-                  px: 1.4,
-                  py: 0.8,
+                  display: 'flex',
+                  alignItems: 'center',
                   my: 0.3,
                   borderRadius: '10px',
-                  fontWeight: isSelected ? 700 : 500,
-                  fontSize: '0.825rem',
                   bgcolor: isSelected ? 'var(--neu-bg)' : 'transparent',
                   boxShadow: isSelected ? 'var(--neu-shadow-pressed)' : 'none',
                   border: isSelected ? 'var(--neu-border-inset)' : '1px solid transparent',
-                  color: isSelected ? 'var(--neu-primary-light)' : 'inherit',
-                  '&:hover': { bgcolor: isSelected ? 'var(--neu-bg)' : 'var(--neu-surface-hover)' },
+                  transition: 'all 0.15s ease',
+                  '&:hover': {
+                    bgcolor: isSelected ? 'var(--neu-bg)' : 'var(--neu-surface-hover)',
+                    '& .dash-folder-actions': { opacity: 1 },
+                  },
                 }}
               >
-                <Typography variant="body2" sx={{ fontSize: '0.825rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {proj.name}
-                </Typography>
-              </Button>
+                <Button
+                  fullWidth
+                  size="small"
+                  startIcon={<FolderOutlined fontSize="small" sx={{ color: isSelected ? 'var(--neu-primary-light)' : 'text.secondary' }} />}
+                  onClick={() => {
+                    setSelectedFolderId(proj.id);
+                    onFolderChange?.(proj.id);
+                    if (isMobile) setSidebarOpen(false);
+                  }}
+                  sx={{
+                    justifyContent: 'flex-start',
+                    px: 1.4,
+                    py: 0.8,
+                    fontWeight: isSelected ? 700 : 500,
+                    fontSize: '0.825rem',
+                    color: isSelected ? 'var(--neu-primary-light)' : 'inherit',
+                    textTransform: 'none',
+                    minWidth: 0,
+                    flex: 1,
+                    textAlign: 'left',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontSize: '0.825rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {proj.name}
+                  </Typography>
+                </Button>
+                <Box
+                  className="dash-folder-actions"
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    pr: 0.8,
+                    opacity: isSelected ? 1 : 0,
+                    transition: 'opacity 0.15s ease',
+                  }}
+                >
+                  {onUpdateProject && canEditProj && (
+                    <Tooltip title="Edit folder">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectToEdit(proj);
+                          setEditProjectModalOpen(true);
+                        }}
+                        className="neu-icon-btn"
+                        sx={{ width: 22, height: 22, p: 0.2 }}
+                      >
+                        <EditOutlined sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {onDeleteProject && isProjOwner && (
+                    <Tooltip title="Delete folder">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProjectToDelete(proj);
+                          setDeleteProjectModalOpen(true);
+                        }}
+                        className="neu-icon-btn"
+                        sx={{ width: 22, height: 22, p: 0.2, '&:hover': { color: 'error.main' } }}
+                      >
+                        <DeleteOutlined sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+              </Box>
             );
           })}
+          </Box>
         </Box>
 
         {/* Footer Actions: Theme Toggle & Sign Out */}
@@ -494,12 +684,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </MenuItem>
           </Menu>
 
+          {onOpenAccountManage && (
+            <Button
+              size="small"
+              startIcon={<ManageAccountsOutlined fontSize="small" />}
+              onClick={onOpenAccountManage}
+              className="neu-btn"
+              sx={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'none', borderRadius: '8px', px: 1 }}
+            >
+              Switch Account
+            </Button>
+          )}
+
           <Button
             size="small"
             startIcon={<LogoutOutlined fontSize="small" />}
             onClick={onLogout}
             color="error"
-            sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+            sx={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'none' }}
           >
             Sign Out
           </Button>
@@ -518,6 +720,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       >
         {/* Top Navbar */}
         <Box
+          ref={topNavbarRef}
           className="neu-dock"
           sx={{
             height: 60,
@@ -592,7 +795,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Dashboard Body */}
         <Box sx={{ flex: 1, overflowY: 'auto', p: { xs: 2, sm: 3.5 } }}>
           {/* Welcome Banner */}
-          <Box sx={{ mb: 3.5 }}>
+          <Box ref={welcomeBannerRef} sx={{ mb: 3.5 }}>
             <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: -0.5, mb: 0.5 }}>
               Welcome back{user?.name ? `, ${user.name}` : ''} 👋
             </Typography>
@@ -600,6 +803,115 @@ export const Dashboard: React.FC<DashboardProps> = ({
               Jump into your collaborative architecture diagrams, engineering canvases, and multi-file project folders.
             </Typography>
           </Box>
+
+          {/* Active Selected Project Folder Details Banner */}
+          {selectedFolderId !== 'all' && (() => {
+            const currentSelectedProj = projects.find((p) => p.id === selectedFolderId);
+            if (!currentSelectedProj) return null;
+            const isOwner = currentSelectedProj.userRole === 'owner';
+            const canEdit = isOwner || currentSelectedProj.userRole === 'editor';
+
+            return (
+              <Box
+                ref={activeFolderBannerRef}
+                className="neu-card"
+                sx={{
+                  p: { xs: 2, sm: 2.5 },
+                  mb: 3.5,
+                  borderRadius: '16px',
+                  bgcolor: 'var(--neu-card)',
+                  boxShadow: 'var(--neu-shadow-raised)',
+                  border: 'var(--neu-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 200, flex: 1 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, var(--neu-primary) 0%, var(--neu-primary-light) 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      boxShadow: '0 2px 8px var(--neu-primary-glow)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <FolderOutlined />
+                  </Box>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--neu-text-primary)' }}>
+                        {currentSelectedProj.name}
+                      </Typography>
+                      <Chip
+                        label={(currentSelectedProj.userRole || 'editor').toUpperCase()}
+                        size="small"
+                        color={isOwner ? 'primary' : currentSelectedProj.userRole === 'viewer' ? 'warning' : 'success'}
+                        sx={{ height: 18, fontSize: '0.62rem', fontWeight: 700 }}
+                      />
+                    </Box>
+                    <Typography variant="body2" sx={{ color: 'var(--neu-text-secondary)', fontSize: '0.8rem' }}>
+                      {currentSelectedProj.description || `${currentSelectedProj.files?.length || 0} canvases in this folder`}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<ShareOutlined fontSize="small" />}
+                    onClick={() => onOpenShare(currentSelectedProj)}
+                    className="neu-btn"
+                    sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', fontSize: '0.78rem' }}
+                  >
+                    Share & Roles
+                  </Button>
+
+                  {onUpdateProject && canEdit && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<EditOutlined fontSize="small" />}
+                      onClick={() => {
+                        setProjectToEdit(currentSelectedProj);
+                        setEditProjectModalOpen(true);
+                      }}
+                      className="neu-btn"
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', fontSize: '0.78rem' }}
+                    >
+                      Edit Folder
+                    </Button>
+                  )}
+
+                  {onDeleteProject && isOwner && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteOutlined fontSize="small" />}
+                      onClick={() => {
+                        setProjectToDelete(currentSelectedProj);
+                        setDeleteProjectModalOpen(true);
+                      }}
+                      className="neu-btn"
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', fontSize: '0.78rem' }}
+                    >
+                      Delete Folder
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            );
+          })()}
 
           {/* Zero Projects Onboarding Banner */}
           {projects.length === 0 && (
@@ -654,6 +966,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </Typography>
 
             <Box
+              ref={templatesGridRef}
               sx={{
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
@@ -661,15 +974,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               }}
             >
               {/* Blank Canvas */}
-              <Card
-                className="neu-card"
-                sx={{
-                  borderRadius: '16px',
-                  bgcolor: 'var(--neu-card)',
-                  boxShadow: 'var(--neu-shadow-raised)',
-                  border: 'var(--neu-border)',
-                }}
-              >
+              <DashboardCard>
                 <CardActionArea
                   onClick={() => {
                     if (projects.length === 0) {
@@ -708,18 +1013,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </Box>
                   </Box>
                 </CardActionArea>
-              </Card>
+              </DashboardCard>
 
               {/* System Architecture Template */}
-              <Card
-                className="neu-card"
-                sx={{
-                  borderRadius: '16px',
-                  bgcolor: 'var(--neu-card)',
-                  boxShadow: 'var(--neu-shadow-raised)',
-                  border: 'var(--neu-border)',
-                }}
-              >
+              <DashboardCard>
                 <CardActionArea
                   onClick={async () => {
                     if (projects.length === 0) {
@@ -765,18 +1062,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </Box>
                   </Box>
                 </CardActionArea>
-              </Card>
+              </DashboardCard>
 
               {/* New Folder */}
-              <Card
-                className="neu-card"
-                sx={{
-                  borderRadius: '16px',
-                  bgcolor: 'var(--neu-card)',
-                  boxShadow: 'var(--neu-shadow-raised)',
-                  border: 'var(--neu-border)',
-                }}
-              >
+              <DashboardCard>
                 <CardActionArea onClick={() => setNewProjectOpen(true)} sx={{ p: 2 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Box
@@ -804,18 +1093,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </Box>
                   </Box>
                 </CardActionArea>
-              </Card>
+              </DashboardCard>
 
               {/* Share & Roles */}
-              <Card
-                className="neu-card"
-                sx={{
-                  borderRadius: '16px',
-                  bgcolor: 'var(--neu-card)',
-                  boxShadow: 'var(--neu-shadow-raised)',
-                  border: 'var(--neu-border)',
-                }}
-              >
+              <DashboardCard>
                 <CardActionArea
                   onClick={() => {
                     if (projects.length === 0) {
@@ -854,7 +1135,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </Box>
                   </Box>
                 </CardActionArea>
-              </Card>
+              </DashboardCard>
             </Box>
           </Box>
 
@@ -902,6 +1183,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </Box>
             ) : (
               <Box
+                ref={filesGridRef}
                 sx={{
                   display: 'grid',
                   gridTemplateColumns: {
@@ -913,16 +1195,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }}
               >
                 {allFilesWithProject.map(({ project, file }) => (
-                  <Card
+                  <DashboardCard
                     key={file.id}
-                    className="neu-card"
                     sx={{
                       borderRadius: '16px',
-                      bgcolor: 'var(--neu-card)',
-                      boxShadow: 'var(--neu-shadow-raised)',
-                      border: 'var(--neu-border)',
                       overflow: 'hidden',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                   >
                     <CardActionArea onClick={() => onOpenFile(project, file)}>
@@ -969,7 +1246,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </Box>
                       </CardContent>
                     </CardActionArea>
-                  </Card>
+                  </DashboardCard>
                 ))}
               </Box>
             )}
@@ -1006,6 +1283,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </ListItemIcon>
           <ListItemText primary="Open in Canvas" />
         </MenuItem>
+
+        {onRenameFile && (
+          <MenuItem
+            onClick={() => {
+              if (selectedFileForMenu) {
+                setFileToRename(selectedFileForMenu);
+                setRenameFileModalOpen(true);
+              }
+              setMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>
+              <EditOutlined fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Rename Canvas" />
+          </MenuItem>
+        )}
 
         <MenuItem
           onClick={() => {
@@ -1048,6 +1342,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
           if (selectedFileForMenu) {
             await onDeleteFile(selectedFileForMenu.project.id, selectedFileForMenu.file.id);
             setDeleteFileModalOpen(false);
+          }
+        }}
+      />
+
+      {/* Edit Project Folder Modal */}
+      <EditProjectModal
+        open={editProjectModalOpen}
+        project={projectToEdit}
+        onClose={() => {
+          setEditProjectModalOpen(false);
+          setProjectToEdit(null);
+        }}
+        onUpdateProject={async (projectId, updates) => {
+          if (onUpdateProject) {
+            await onUpdateProject(projectId, updates);
+          }
+        }}
+      />
+
+      {/* Confirm Delete Project Folder Modal */}
+      <ConfirmDeleteModal
+        open={deleteProjectModalOpen}
+        title="Delete Project Folder"
+        itemType="project folder"
+        itemName={projectToDelete?.name}
+        warningText="Deleting this folder will permanently delete all whiteboard canvases and architecture notes contained inside it."
+        onClose={() => {
+          setDeleteProjectModalOpen(false);
+          setProjectToDelete(null);
+        }}
+        onConfirm={async () => {
+          if (projectToDelete && onDeleteProject) {
+            await onDeleteProject(projectToDelete.id);
+            setDeleteProjectModalOpen(false);
+            setProjectToDelete(null);
+          }
+        }}
+      />
+
+      {/* Rename Canvas File Modal */}
+      <RenameFileModal
+        open={renameFileModalOpen}
+        initialTitle={fileToRename?.file.title || ''}
+        onClose={() => {
+          setRenameFileModalOpen(false);
+          setFileToRename(null);
+        }}
+        onRename={async (newTitle) => {
+          if (fileToRename && onRenameFile) {
+            await onRenameFile(fileToRename.project.id, fileToRename.file.id, newTitle);
           }
         }}
       />

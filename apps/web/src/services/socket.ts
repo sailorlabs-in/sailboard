@@ -7,6 +7,17 @@ class SocketService {
   private currentUser: { id: string; name: string; color: string } | null = null;
   private currentRole: ProjectRole = 'editor';
 
+  // Throttling state for high-frequency events
+  private elementsThrottleTimer: any = null;
+  private pendingElements: CanvasElement[] | null = null;
+  private lastElementsEmitTime = 0;
+
+  private cursorThrottleTimer: any = null;
+  private pendingCursor: { cursor: { x: number; y: number }; selectedElementIds?: string[] } | null = null;
+  private lastCursorEmitTime = 0;
+
+  private noteDebounceTimer: any = null;
+
   connect(): Socket {
     if (!this.socket) {
       const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -41,6 +52,10 @@ class SocketService {
     return this.socket;
   }
 
+  isConnected(): boolean {
+    return !!this.socket?.connected;
+  }
+
   joinDocument(
     documentId: string,
     user: { id: string; name: string; color: string },
@@ -64,8 +79,35 @@ class SocketService {
   }
 
   emitCursorMove(cursor: { x: number; y: number }, selectedElementIds?: string[]) {
-    if (this.socket && this.currentDocId) {
-      this.socket.emit('cursor-move', { documentId: this.currentDocId, cursor, selectedElementIds });
+    if (!this.socket || !this.currentDocId) return;
+
+    const now = Date.now();
+    const elapsed = now - this.lastCursorEmitTime;
+    const THROTTLE_MS = 33; // 30fps throttle for cursor movements
+
+    this.pendingCursor = { cursor, selectedElementIds };
+
+    if (elapsed >= THROTTLE_MS) {
+      this.lastCursorEmitTime = now;
+      this.socket.emit('cursor-move', {
+        documentId: this.currentDocId,
+        cursor,
+        selectedElementIds,
+      });
+      this.pendingCursor = null;
+    } else if (!this.cursorThrottleTimer) {
+      this.cursorThrottleTimer = setTimeout(() => {
+        this.cursorThrottleTimer = null;
+        if (this.pendingCursor && this.socket && this.currentDocId) {
+          this.lastCursorEmitTime = Date.now();
+          this.socket.emit('cursor-move', {
+            documentId: this.currentDocId,
+            cursor: this.pendingCursor.cursor,
+            selectedElementIds: this.pendingCursor.selectedElementIds,
+          });
+          this.pendingCursor = null;
+        }
+      }, THROTTLE_MS - elapsed);
     }
   }
 
@@ -75,16 +117,57 @@ class SocketService {
     }
   }
 
-  emitElementsChange(elements: CanvasElement[]) {
-    if (this.socket && this.currentDocId) {
+  emitElementsChange(elements: CanvasElement[], immediate = false) {
+    if (!this.socket || !this.currentDocId) return;
+
+    if (immediate) {
+      if (this.elementsThrottleTimer) {
+        clearTimeout(this.elementsThrottleTimer);
+        this.elementsThrottleTimer = null;
+      }
+      this.pendingElements = null;
+      this.lastElementsEmitTime = Date.now();
       this.socket.emit('elements-change', { documentId: this.currentDocId, elements });
+      return;
+    }
+
+    const now = Date.now();
+    const elapsed = now - this.lastElementsEmitTime;
+    const THROTTLE_MS = 40; // 25fps during continuous drag/draw motion
+
+    this.pendingElements = elements;
+
+    if (elapsed >= THROTTLE_MS) {
+      this.lastElementsEmitTime = now;
+      this.socket.emit('elements-change', { documentId: this.currentDocId, elements });
+      this.pendingElements = null;
+    } else if (!this.elementsThrottleTimer) {
+      this.elementsThrottleTimer = setTimeout(() => {
+        this.elementsThrottleTimer = null;
+        if (this.pendingElements && this.socket && this.currentDocId) {
+          this.lastElementsEmitTime = Date.now();
+          this.socket.emit('elements-change', {
+            documentId: this.currentDocId,
+            elements: this.pendingElements,
+          });
+          this.pendingElements = null;
+        }
+      }, THROTTLE_MS - elapsed);
     }
   }
 
   emitNoteChange(notes: string) {
-    if (this.socket && this.currentDocId) {
-      this.socket.emit('note-change', { documentId: this.currentDocId, notes });
+    if (!this.socket || !this.currentDocId) return;
+
+    if (this.noteDebounceTimer) {
+      clearTimeout(this.noteDebounceTimer);
     }
+
+    this.noteDebounceTimer = setTimeout(() => {
+      if (this.socket && this.currentDocId) {
+        this.socket.emit('note-change', { documentId: this.currentDocId, notes });
+      }
+    }, 250);
   }
 
   onUsersUpdate(callback: (users: UserPresence[]) => void) {
@@ -124,6 +207,9 @@ class SocketService {
   }
 
   disconnect() {
+    if (this.elementsThrottleTimer) clearTimeout(this.elementsThrottleTimer);
+    if (this.cursorThrottleTimer) clearTimeout(this.cursorThrottleTimer);
+    if (this.noteDebounceTimer) clearTimeout(this.noteDebounceTimer);
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

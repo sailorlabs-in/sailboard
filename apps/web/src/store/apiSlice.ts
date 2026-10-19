@@ -1,7 +1,6 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import {
   WhiteboardDocument,
-  CreateDocumentDto,
   UpdateDocumentDto,
   CanvasElement,
   DocumentExportData,

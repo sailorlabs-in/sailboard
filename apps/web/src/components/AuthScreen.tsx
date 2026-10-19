@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -10,8 +10,6 @@ import {
   CircularProgress,
   InputAdornment,
   IconButton,
-  Chip,
-  Divider,
 } from '@mui/material';
 import {
   EmailOutlined,
@@ -24,10 +22,43 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import gsap, { animateHeaderIn, animateStaggerIn, animateTabTransition } from '../utils/animations';
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
-  const [tabIndex, setTabIndex] = useState<number>(0); // 0: Sign In, 1: Register
+  const [tabIndex, setTabIndex] = useState<number>(0); // 0: Sign In, 1: Register, 2: Reset Password
+  const prevTabRef = useRef<number>(0);
+
+  const brandRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  // Initial entrance animations
+  useEffect(() => {
+    if (brandRef.current) {
+      animateHeaderIn(brandRef.current, { duration: 0.6, y: -22 });
+    }
+    if (cardRef.current) {
+      gsap.fromTo(
+        cardRef.current,
+        { opacity: 0, scale: 0.94, y: 18 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.55, ease: 'power3.out' }
+      );
+    }
+    if (formRef.current?.children.length) {
+      animateStaggerIn(formRef.current.children, { stagger: 0.05, y: 14, delay: 0.15 });
+    }
+  }, []);
+
+  // Smooth slide transition when switching auth tabs
+  useEffect(() => {
+    if (formRef.current) {
+      const direction = tabIndex >= prevTabRef.current ? 'right' : 'left';
+      animateTabTransition(formRef.current, direction);
+      prevTabRef.current = tabIndex;
+    }
+  }, [tabIndex]);
 
   // Form Fields
   const [email, setEmail] = useState('');
@@ -42,6 +73,43 @@ export const AuthScreen: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    if (tabIndex === 2) {
+      if (!email.trim() || !password) {
+        const msg = 'Please enter both email and new password';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password.length < 6) {
+        const msg = 'Password must be at least 6 characters';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+      if (password !== confirmPassword) {
+        const msg = 'Passwords do not match';
+        setErrorMessage(msg);
+        toast.error(msg);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await api.resetPassword(email.trim(), password);
+        toast.success(res.message || 'Password reset successfully! You can now sign in.');
+        setTabIndex(0);
+        setPassword('');
+        setConfirmPassword('');
+      } catch (err: any) {
+        const msg = err.message || 'Failed to reset password. Please check your email.';
+        setErrorMessage(msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (tabIndex === 1) {
       if (!name.trim() || !email.trim() || !password) {
@@ -109,7 +177,7 @@ export const AuthScreen: React.FC = () => {
       }}
     >
       {/* Brand Header */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3.5, textAlign: 'center' }}>
+      <Box ref={brandRef} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3.5, textAlign: 'center' }}>
         <Box
           sx={{
             width: 52,
@@ -153,6 +221,7 @@ export const AuthScreen: React.FC = () => {
 
       {/* Main Neumorphic Card */}
       <Card
+        ref={cardRef}
         className="neu-floating"
         sx={{
           width: '100%',
@@ -222,6 +291,26 @@ export const AuthScreen: React.FC = () => {
             >
               Create Account
             </Button>
+            {tabIndex === 2 && (
+              <Button
+                fullWidth
+                size="small"
+                sx={{
+                  py: 0.9,
+                  borderRadius: '10px',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  textTransform: 'none',
+                  color: 'var(--neu-primary-light)',
+                  bgcolor: 'var(--neu-surface)',
+                  border: 'var(--neu-border)',
+                  boxShadow: 'var(--neu-shadow-btn)',
+                  transition: 'all 0.18s ease',
+                }}
+              >
+                Reset Password
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -243,7 +332,7 @@ export const AuthScreen: React.FC = () => {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}>
+          <Box ref={formRef} component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}>
             {tabIndex === 1 && (
               <Box>
                 <Typography className="neu-form-label">
@@ -295,7 +384,7 @@ export const AuthScreen: React.FC = () => {
 
             <Box>
               <Typography className="neu-form-label">
-                Password
+                {tabIndex === 2 ? 'New Password' : 'Password'}
               </Typography>
               <TextField
                 type={showPassword ? 'text' : 'password'}
@@ -330,10 +419,36 @@ export const AuthScreen: React.FC = () => {
               />
             </Box>
 
-            {tabIndex === 1 && (
+            {tabIndex === 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    setTabIndex(2);
+                    setErrorMessage(null);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: 'var(--neu-primary-light)',
+                    p: 0,
+                    minWidth: 'auto',
+                    '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                  }}
+                >
+                  Forgot Password?
+                </Button>
+              </Box>
+            )}
+
+            {(tabIndex === 1 || tabIndex === 2) && (
               <Box>
                 <Typography className="neu-form-label">
-                  Confirm Password
+                  {tabIndex === 2 ? 'Confirm New Password' : 'Confirm Password'}
                 </Typography>
                 <TextField
                   type={showConfirmPassword ? 'text' : 'password'}
@@ -389,10 +504,36 @@ export const AuthScreen: React.FC = () => {
                 <CircularProgress size={22} color="inherit" />
               ) : tabIndex === 0 ? (
                 'Sign In'
-              ) : (
+              ) : tabIndex === 1 ? (
                 'Create Account & Start'
+              ) : (
+                'Reset Password & Update'
               )}
             </Button>
+
+            {tabIndex === 2 && (
+              <Box sx={{ textAlign: 'center', mt: 0.5 }}>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    setTabIndex(0);
+                    setErrorMessage(null);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: 'var(--neu-text-secondary)',
+                    '&:hover': { color: 'var(--neu-text-primary)' },
+                  }}
+                >
+                  ← Back to Sign In
+                </Button>
+              </Box>
+            )}
           </Box>
         </CardContent>
       </Card>

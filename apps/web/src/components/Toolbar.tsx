@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Paper, IconButton, Tooltip, Divider, Box } from '@mui/material';
 import {
   NearMeOutlined,
@@ -14,6 +14,7 @@ import {
   PanToolOutlined,
 } from '@mui/icons-material';
 import { ElementType } from '@rea/shared-types';
+import { animateDockIn, animateTactileClick } from '../utils/animations';
 
 interface ToolbarProps {
   activeTool: ElementType | 'eraser' | 'pan';
@@ -29,8 +30,15 @@ interface ToolItem {
   icon: React.ReactNode;
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, theme, isViewer }) => {
-  const isDark = theme === 'dark';
+export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, isViewer }) => {
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+
+  // Floating dock entrance with back.out spring physics
+  useEffect(() => {
+    if (toolbarRef.current) {
+      animateDockIn(toolbarRef.current, { delay: 0.05, duration: 0.65 });
+    }
+  }, []);
 
   const tools: ToolItem[] = [
     { id: 'selection', label: 'Select / Move', shortcut: 'V', icon: <NearMeOutlined fontSize="small" /> },
@@ -48,6 +56,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
 
   return (
     <Paper
+      ref={toolbarRef}
       elevation={0}
       className="neu-dock"
       sx={{
@@ -97,7 +106,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                 <IconButton
                   size="small"
                   disabled={isDisabled}
-                  onClick={() => onToolSelect(item.id)}
+                  onClick={(e) => {
+                    animateTactileClick(e.currentTarget);
+                    onToolSelect(item.id);
+                  }}
                   sx={{
                     width: { xs: 34, sm: 38 },
                     height: { xs: 34, sm: 38 },

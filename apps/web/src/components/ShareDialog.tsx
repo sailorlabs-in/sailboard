@@ -37,6 +37,7 @@ import {
   EmailOutlined,
 } from '@mui/icons-material';
 import { Project, ProjectMember, ProjectRole } from '@rea/shared-types';
+import toast from 'react-hot-toast';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDeleteModal } from './modals';
@@ -58,8 +59,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<ProjectRole>('editor');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Modal state for removing members
@@ -75,23 +74,21 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     const targetRole = roleToAssign || inviteRole;
 
     if (!targetEmail) {
-      setErrorMsg('Please enter an email address');
+      toast.error('Please enter an email address');
       return;
     }
 
     setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
 
     try {
       await api.addProjectMember(project.id, targetEmail, targetRole);
       // Reload project details
       const refreshed = await api.getProject(project.id);
       onProjectUpdated(refreshed);
-      setSuccessMsg(`Successfully updated permission for ${targetEmail} as ${targetRole.toUpperCase()}`);
+      toast.success(`Successfully updated permission for ${targetEmail} as ${targetRole.toUpperCase()}`);
       setInviteEmail('');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to update member role');
+      toast.error(err.message || 'Failed to update member role');
     } finally {
       setLoading(false);
     }
@@ -106,16 +103,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     if (!memberToRemove) return;
 
     setLoading(true);
-    setErrorMsg(null);
     try {
       await api.removeProjectMember(project.id, memberToRemove.id);
       const refreshed = await api.getProject(project.id);
       onProjectUpdated(refreshed);
-      setSuccessMsg(`Removed ${memberToRemove.userEmail} from project`);
+      toast.success(`Removed ${memberToRemove.userEmail} from project`);
       setConfirmRemoveOpen(false);
       setMemberToRemove(null);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to remove member');
+      toast.error(err.message || 'Failed to remove member');
     } finally {
       setLoading(false);
     }
@@ -124,6 +120,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
+    toast.success('Share link copied to clipboard!');
     setTimeout(() => setCopied(false), 2500);
   };
 
@@ -185,16 +182,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       </DialogTitle>
 
       <DialogContent sx={{ pt: 2, pb: 2 }}>
-        {errorMsg && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setErrorMsg(null)}>
-            {errorMsg}
-          </Alert>
-        )}
-        {successMsg && (
-          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setSuccessMsg(null)}>
-            {successMsg}
-          </Alert>
-        )}
 
         {/* Invite Form (Only enabled for Owner) */}
         {isOwner ? (

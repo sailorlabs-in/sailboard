@@ -1,6 +1,5 @@
 import {
   WhiteboardDocument,
-  CreateDocumentDto,
   UpdateDocumentDto,
   CanvasElement,
   DocumentExportData,
@@ -44,6 +43,27 @@ class ApiService {
     return res.data;
   }
 
+  async updateProfile(updates: { name?: string; color?: string }): Promise<User> {
+    const res = await axiosClient.patch<User>('/auth/profile', updates);
+    return res.data;
+  }
+
+  async resetPassword(email: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const res = await axiosClient.post<{ success: boolean; message: string }>('/auth/reset-password', {
+      email,
+      newPassword,
+    });
+    return res.data;
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const res = await axiosClient.post<{ success: boolean; message: string }>('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    return res.data;
+  }
+
   // --- Project APIs ---
 
   async getProjects(): Promise<Project[]> {
@@ -58,6 +78,11 @@ class ApiService {
 
   async createProject(name: string, description?: string, createInitialFile = false): Promise<Project> {
     const res = await axiosClient.post<Project>('/projects', { name, description, createInitialFile });
+    return res.data;
+  }
+
+  async updateProject(id: string, updates: { name?: string; description?: string }): Promise<Project> {
+    const res = await axiosClient.patch<Project>(`/projects/${id}`, updates);
     return res.data;
   }
 

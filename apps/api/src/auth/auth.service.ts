@@ -2,7 +2,6 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
-  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -15,8 +14,6 @@ const getJwtSecret = () => process.env.JWT_SECRET || 'sailboard_super_secret_jwt
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>
@@ -90,8 +87,79 @@ export class AuthService {
     }
   }
 
+  async updateProfile(userId: string, updates: { name?: string; color?: string }): Promise<User> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (updates.name !== undefined && updates.name.trim()) {
+      user.name = updates.name.trim();
+    }
+    if (updates.color !== undefined && updates.color.trim()) {
+      user.color = updates.color.trim();
+    }
+    await this.userRepo.save(user);
+    return this.toUserDto(user);
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     const user = await this.userRepo.findOne({ where: { email: email.toLowerCase() } });
     return user ? this.toUserDto(user) : null;
   }
+
+  async resetPassword(email: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    if (!email || !email.trim()) {
+      throw new BadRequestException('Email is required');
+    }
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters long');
+    }
+
+    const user = await this.userRepo.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (!user) {
+      throw new BadRequestException('No account found with this email address');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await this.userRepo.save(user);
+
+    return {
+      success: true,
+      message: 'Password has been reset successfully. You can now sign in with your new password.',
+    };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    if (!currentPassword) {
+      throw new BadRequestException('Current password is required');
+    }
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters long');
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new BadRequestException('Current password does not match');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await this.userRepo.save(user);
+
+    return {
+      success: true,
+      message: 'Password changed successfully.',
+    };
+  }
 }
+

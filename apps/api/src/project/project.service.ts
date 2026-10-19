@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  Logger,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,8 +21,6 @@ import {
 
 @Injectable()
 export class ProjectService {
-  private readonly logger = new Logger(ProjectService.name);
-
   constructor(
     @InjectRepository(ProjectEntity)
     private readonly projectRepo: Repository<ProjectEntity>,
@@ -231,6 +228,30 @@ export class ProjectService {
     return this.getProjectById(id, user.id);
   }
 
+  async updateProject(
+    projectId: string,
+    updates: { name?: string; description?: string },
+    userId: string
+  ): Promise<Project> {
+    const role = await this.getUserRole(projectId, userId);
+    if (role !== 'owner' && role !== 'editor') {
+      throw new ForbiddenException('You do not have permission to edit this project folder');
+    }
+
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project folder not found');
+
+    if (updates.name !== undefined && updates.name.trim()) {
+      project.name = updates.name.trim();
+    }
+    if (updates.description !== undefined) {
+      project.description = updates.description.trim();
+    }
+
+    await this.projectRepo.save(project);
+    return this.getProjectById(projectId, userId);
+  }
+
   async deleteProject(projectId: string, userId: string): Promise<{ success: boolean }> {
     const role = await this.getUserRole(projectId, userId);
     if (role !== 'owner') {
@@ -341,12 +362,6 @@ export class ProjectService {
     const role = await this.getUserRole(projectId, userId);
     if (!role || role === 'viewer') {
       throw new ForbiddenException('Viewers cannot delete files');
-    }
-
-    // Ensure at least one file remains in project
-    const count = await this.docRepo.count({ where: { projectId } });
-    if (count <= 1) {
-      throw new BadRequestException('A project must have at least one file');
     }
 
     await this.docRepo.delete({ id: fileId, projectId });

@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CanvasElement, ElementType, Point, UserPresence } from '@rea/shared-types';
 import {
-  distance,
   getElementBounds,
   getGroupBounds,
   getHitResizeHandle,
@@ -11,6 +10,55 @@ import {
   BoundingBox,
 } from '../canvas/math';
 import { renderScene } from '../canvas/renderer';
+import { socketService } from '../services/socket';
+import gsap from 'gsap';
+
+// Animated spring pill indicator for Hand tool
+const HandToolPill: React.FC<{ isSpacePressed: boolean; theme: 'light' | 'dark' }> = ({ isSpacePressed, theme }) => {
+  const pillRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (pillRef.current) {
+      gsap.fromTo(
+        pillRef.current,
+        { y: 24, opacity: 0, scale: 0.88 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(1.6)' }
+      );
+    }
+  }, []);
+
+  return (
+    <div
+      ref={pillRef}
+      style={{
+        position: 'absolute',
+        bottom: 24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 18px',
+        borderRadius: '24px',
+        backgroundColor: theme === 'dark' ? '#1c2030' : '#e6ecf2',
+        boxShadow:
+          theme === 'dark'
+            ? '6px 6px 16px rgba(0,0,0,0.5), -4px -4px 10px rgba(255,255,255,0.05)'
+            : '6px 6px 16px #c2c9d1, -6px -6px 16px #ffffff',
+        border: theme === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.8)',
+        color: theme === 'dark' ? '#f1f5f9' : '#1e293b',
+        fontSize: '12px',
+        fontWeight: 600,
+        zIndex: 30,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <span style={{ fontSize: '15px' }}>✋</span>
+      <span>Hand Tool Active {isSpacePressed ? '(Space held)' : ''} • Drag to Pan</span>
+    </div>
+  );
+};
 
 interface CanvasProps {
   elements: CanvasElement[];
@@ -183,6 +231,17 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const renderRef = useRef(render);
   renderRef.current = render;
+
+  const isRenderPendingRef = useRef(false);
+  const requestRender = useCallback(() => {
+    if (!isRenderPendingRef.current) {
+      isRenderPendingRef.current = true;
+      requestAnimationFrame(() => {
+        isRenderPendingRef.current = false;
+        renderRef.current?.();
+      });
+    }
+  }, []);
 
   // High DPI Canvas Resizing & ResizeObserver
   useEffect(() => {
@@ -596,7 +655,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         })
         .map((el) => el.id);
 
-      onSelectElements(selected);
+      if (
+        selected.length !== selectedElementIds.length ||
+        selected.some((id, i) => id !== selectedElementIds[i])
+      ) {
+        onSelectElements(selected);
+      }
       return;
     }
 
@@ -623,7 +687,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       });
 
       latestElementsRef.current = updated;
-      onElementsChange(updated, false);
+      requestRender();
+      socketService.emitElementsChange(updated, false);
       return;
     }
 
@@ -631,42 +696,38 @@ export const Canvas: React.FC<CanvasProps> = ({
       const el = elements.find((e) => e.id === dragState.createdElementId);
       if (!el) return;
 
+      let updated: CanvasElement[] = elements;
+
       if (el.type === 'draw') {
         const localPoint = {
           x: worldPoint.x - el.x,
           y: worldPoint.y - el.y,
         };
         const updatedPoints = [...(el.points || []), localPoint];
-        onElementsChange(
-          elements.map((item) =>
-            item.id === el.id
-              ? {
-                  ...item,
-                  points: updatedPoints,
-                  updatedAt: Date.now(),
-                }
-              : item
-          ),
-          false
+        updated = elements.map((item) =>
+          item.id === el.id
+            ? {
+                ...item,
+                points: updatedPoints,
+                updatedAt: Date.now(),
+              }
+            : item
         );
       } else if (el.type === 'arrow' || el.type === 'line') {
         const targetX = gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
         const targetY = gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
         const p2 = { x: targetX - el.x, y: targetY - el.y };
 
-        onElementsChange(
-          elements.map((item) =>
-            item.id === el.id
-              ? {
-                  ...item,
-                  width: p2.x,
-                  height: p2.y,
-                  points: [{ x: 0, y: 0 }, p2],
-                  updatedAt: Date.now(),
-                }
-              : item
-          ),
-          false
+        updated = elements.map((item) =>
+          item.id === el.id
+            ? {
+                ...item,
+                width: p2.x,
+                height: p2.y,
+                points: [{ x: 0, y: 0 }, p2],
+                updatedAt: Date.now(),
+              }
+            : item
         );
       } else {
         const rawW = worldPoint.x - dragState.startPos.x;
@@ -677,22 +738,23 @@ export const Canvas: React.FC<CanvasProps> = ({
         const posX = w < 0 ? dragState.startPos.x + w : dragState.startPos.x;
         const posY = h < 0 ? dragState.startPos.y + h : dragState.startPos.y;
 
-        onElementsChange(
-          elements.map((item) =>
-            item.id === el.id
-              ? {
-                  ...item,
-                  x: posX,
-                  y: posY,
-                  width: Math.abs(w),
-                  height: Math.abs(h),
-                  updatedAt: Date.now(),
-                }
-              : item
-          ),
-          false
+        updated = elements.map((item) =>
+          item.id === el.id
+            ? {
+                ...item,
+                x: posX,
+                y: posY,
+                width: Math.abs(w),
+                height: Math.abs(h),
+                updatedAt: Date.now(),
+              }
+            : item
         );
       }
+
+      latestElementsRef.current = updated;
+      requestRender();
+      socketService.emitElementsChange(updated, false);
       return;
     }
 
@@ -737,15 +799,19 @@ export const Canvas: React.FC<CanvasProps> = ({
       });
 
       latestElementsRef.current = updated;
-      onElementsChange(updated, false);
+      requestRender();
+      socketService.emitElementsChange(updated, false);
     }
   };
 
   // Pointer Up
   const handlePointerUp = () => {
     if (dragState.mode === 'drawing' || dragState.mode === 'moving' || dragState.mode === 'resizing') {
-      // Record history on drag completion
+      // Commit once to React state & history on drag completion
       onElementsChange(latestElementsRef.current, true);
+
+      // Force immediate socket broadcast for final position
+      socketService.emitElementsChange(latestElementsRef.current, true);
 
       if (dragState.mode === 'drawing') {
         onToolChange('selection');
@@ -910,36 +976,9 @@ export const Canvas: React.FC<CanvasProps> = ({
         />
       )}
 
-      {/* Neumorphic Hand Tool Active Indicator */}
+      {/* Neumorphic Hand Tool Active Indicator with GSAP Spring Entrance */}
       {(isSpacePressed || activeTool === 'pan') && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 24,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 18px',
-            borderRadius: '24px',
-            backgroundColor: theme === 'dark' ? '#1c2030' : '#e6ecf2',
-            boxShadow:
-              theme === 'dark'
-                ? '6px 6px 16px rgba(0,0,0,0.5), -4px -4px 10px rgba(255,255,255,0.05)'
-                : '6px 6px 16px #c2c9d1, -6px -6px 16px #ffffff',
-            border: theme === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.8)',
-            color: theme === 'dark' ? '#f1f5f9' : '#1e293b',
-            fontSize: '12px',
-            fontWeight: 600,
-            zIndex: 30,
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{ fontSize: '15px' }}>✋</span>
-          <span>Hand Tool Active {isSpacePressed ? '(Space held)' : ''} • Drag to Pan</span>
-        </div>
+        <HandToolPill isSpacePressed={isSpacePressed} theme={theme} />
       )}
     </div>
   );

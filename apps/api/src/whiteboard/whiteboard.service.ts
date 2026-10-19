@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  Logger,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -19,8 +18,6 @@ import {
 
 @Injectable()
 export class WhiteboardService {
-  private readonly logger = new Logger(WhiteboardService.name);
-
   constructor(
     @InjectRepository(DocumentEntity)
     private readonly docRepo: Repository<DocumentEntity>,

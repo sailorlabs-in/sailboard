@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -10,9 +10,13 @@ import {
   Box,
   CircularProgress,
   InputAdornment,
-} from '@mui/material';
-import { CreateNewFolderOutlined, FolderOutlined, NotesOutlined } from '@mui/icons-material';
-import toast from 'react-hot-toast';
+} from "@mui/material";
+import {
+  CreateNewFolderOutlined,
+  FolderOutlined,
+  NotesOutlined,
+} from "@mui/icons-material";
+import toast from "react-hot-toast";
 
 export interface CreateProjectModalProps {
   open: boolean;
@@ -25,8 +29,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   onClose,
   onCreateProject,
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,11 +41,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     try {
       await onCreateProject(name.trim(), description.trim() || undefined);
       toast.success(`Project folder "${name.trim()}" created!`);
-      setName('');
-      setDescription('');
+      setName("");
+      setDescription("");
       onClose();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create project');
+      toast.error(err.message || "Failed to create project");
     } finally {
       setIsSubmitting(false);
     }
@@ -49,8 +53,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
   const handleClose = () => {
     if (!isSubmitting) {
-      setName('');
-      setDescription('');
+      setName("");
+      setDescription("");
       onClose();
     }
   };
@@ -64,42 +68,52 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       slotProps={{
         paper: {
           sx: {
-            borderRadius: '18px',
-            bgcolor: 'var(--neu-surface)',
-            border: 'var(--neu-border)',
-            boxShadow: 'var(--neu-shadow-floating)',
+            borderRadius: "18px",
+            bgcolor: "var(--neu-surface)",
+            border: "var(--neu-border)",
+            boxShadow: "var(--neu-shadow-floating)",
           },
         },
       }}
     >
-      <DialogTitle sx={{ pb: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <DialogTitle
+        sx={{ pb: 1, display: "flex", alignItems: "center", gap: 1.5 }}
+      >
         <Box
           sx={{
             width: 40,
             height: 40,
-            borderRadius: '10px',
-            bgcolor: 'rgba(99, 102, 241, 0.15)',
-            color: 'primary.main',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderRadius: "10px",
+            bgcolor: "rgba(99, 102, 241, 0.15)",
+            color: "primary.main",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             flexShrink: 0,
           }}
         >
           <CreateNewFolderOutlined />
         </Box>
         <Box>
-          <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2 }}
+          >
             Create Project Folder
           </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.72rem' }}>
+          <Typography
+            variant="caption"
+            sx={{ color: "text.secondary", fontSize: "0.72rem" }}
+          >
             Organize multi-file canvas architecture
           </Typography>
         </Box>
       </DialogTitle>
 
       <Box component="form" onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.2, pt: 1.5 }}>
+        <DialogContent
+          sx={{ display: "flex", flexDirection: "column", gap: 1.8, pt: 1.5 }}
+        >
           <Box>
             <Typography className="neu-form-label">
               Project Folder Name
@@ -117,7 +131,12 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <FolderOutlined sx={{ color: 'var(--neu-text-secondary)', fontSize: 18 }} />
+                      <FolderOutlined
+                        sx={{
+                          color: "var(--neu-text-secondary)",
+                          fontSize: 18,
+                        }}
+                      />
                     </InputAdornment>
                   ),
                 },
@@ -134,31 +153,52 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
               onChange={(e) => setDescription(e.target.value)}
               fullWidth
               size="small"
-              multiline
-              rows={2}
               disabled={isSubmitting}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <NotesOutlined
+                        sx={{
+                          color: "var(--neu-text-secondary)",
+                          fontSize: 18,
+                        }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
           </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, gap: 1 }}>
-          <Button onClick={handleClose} disabled={isSubmitting} color="inherit" sx={{ fontWeight: 600, textTransform: 'none' }}>
+          <Button
+            onClick={handleClose}
+            disabled={isSubmitting}
+            color="inherit"
+            sx={{ fontWeight: 600, textTransform: "none" }}
+          >
             Cancel
           </Button>
           <Button
             type="submit"
             variant="contained"
             disabled={isSubmitting || !name.trim()}
-            startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+            startIcon={
+              isSubmitting ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : null
+            }
             className="neu-btn-primary"
             sx={{
               fontWeight: 700,
-              textTransform: 'none',
-              borderRadius: '10px',
+              textTransform: "none",
+              borderRadius: "10px",
               px: 2.5,
             }}
           >
-            {isSubmitting ? 'Creating...' : 'Create Folder'}
+            {isSubmitting ? "Creating..." : "Create Folder"}
           </Button>
         </DialogActions>
       </Box>

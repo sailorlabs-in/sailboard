@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Paper } from '@mui/material';
 import { CanvasElement } from '@rea/shared-types';
 import { getElementBounds } from '../canvas/math';
+import gsap from 'gsap';
 
 interface MinimapProps {
   elements: CanvasElement[];
@@ -23,9 +24,20 @@ export const Minimap: React.FC<MinimapProps> = ({
   theme,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const paperRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === 'dark';
   const width = 160;
   const height = 110;
+
+  useEffect(() => {
+    if (paperRef.current) {
+      gsap.fromTo(
+        paperRef.current,
+        { opacity: 0, x: 20, y: 20, scale: 0.92 },
+        { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.5, delay: 0.2, ease: 'back.out(1.4)' }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -128,6 +140,7 @@ export const Minimap: React.FC<MinimapProps> = ({
 
   return (
     <Paper
+      ref={paperRef}
       elevation={0}
       className="neu-flat"
       sx={{

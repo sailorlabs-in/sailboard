@@ -1,17 +1,19 @@
 import React from 'react';
 import { Box, Typography, Button, Chip } from '@mui/material';
-import { VisibilityOutlined, SecurityOutlined } from '@mui/icons-material';
+import { VisibilityOutlined } from '@mui/icons-material';
 
 interface ViewerNoticeBannerProps {
   ownerName: string;
   onOpenShare: () => void;
   onOpenAuth: () => void;
+  onOpenAccountManage?: () => void;
 }
 
 export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
   ownerName,
   onOpenShare,
   onOpenAuth,
+  onOpenAccountManage,
 }) => {
   return (
     <Box
@@ -62,7 +64,7 @@ export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
         <Button
           size="small"
           variant="contained"
-          onClick={onOpenAuth}
+          onClick={onOpenAccountManage || onOpenAuth}
           className="neu-btn-primary"
           sx={{ height: 26, fontSize: '0.7rem', textTransform: 'none', px: 1.2, fontWeight: 700, borderRadius: '6px' }}
         >

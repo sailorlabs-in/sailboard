@@ -21,7 +21,7 @@ import {
   ContentCopyOutlined,
   DownloadOutlined,
 } from '@mui/icons-material';
-import { CanvasElement, WhiteboardDocument } from '@rea/shared-types';
+import { WhiteboardDocument } from '@rea/shared-types';
 import { getGroupBounds } from '../canvas/math';
 import { renderScene } from '../canvas/renderer';
 
