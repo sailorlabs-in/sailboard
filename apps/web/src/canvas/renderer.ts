@@ -443,11 +443,11 @@ function renderStickyNote(
   ctx.stroke();
   ctx.restore();
 
-  // Sticky Text
+  // Sticky Text using Lobster Two
   if (el.text) {
     ctx.save();
     ctx.fillStyle = el.textColor || (isDark ? '#fef3c7' : '#1e293b');
-    ctx.font = `500 ${el.fontSize || 14}px 'Caveat', 'Inter', cursive, sans-serif`;
+    ctx.font = `600 ${el.fontSize || 16}px 'Lobster Two', cursive, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
@@ -522,7 +522,7 @@ function renderElementText(
   if (!el.text) return;
   ctx.save();
   ctx.fillStyle = el.textColor || (isDark ? '#f8fafc' : '#0f172a');
-  ctx.font = `600 ${el.fontSize || 14}px 'Inter', sans-serif`;
+  ctx.font = `600 ${el.fontSize || 14}px 'Teachers', 'Inter', sans-serif`;
   ctx.textAlign = (el.textAlign as CanvasTextAlign) || 'center';
   ctx.textBaseline = 'middle';
 
@@ -552,7 +552,7 @@ function renderStandaloneText(
   if (!el.text) return;
   ctx.save();
   ctx.fillStyle = el.textColor || el.strokeColor || (isDark ? '#f8fafc' : '#0f172a');
-  ctx.font = `500 ${el.fontSize || 18}px 'Inter', sans-serif`;
+  ctx.font = `500 ${el.fontSize || 18}px 'Teachers', 'Inter', sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 

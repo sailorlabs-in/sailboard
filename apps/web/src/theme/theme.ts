@@ -93,7 +93,7 @@ export const getAppTheme = (mode: 'light' | 'dark') => {
       divider: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(163, 177, 198, 0.35)',
     },
     typography: {
-      fontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
+      fontFamily: `'Teachers', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
       button: {
         textTransform: 'none',
         fontWeight: 600,

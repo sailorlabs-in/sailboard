@@ -53,29 +53,67 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
     }, 0);
   };
 
-  // Simple clean markdown parser for preview
+  // Simple clean markdown parser for preview with Smooch Sans typography
   const renderMarkdownPreview = (text: string) => {
     const lines = text.split('\n');
     return (
-      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box
+        sx={{
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.2,
+          fontFamily: "'Smooch Sans', sans-serif",
+        }}
+      >
         {lines.map((line, idx) => {
           if (line.startsWith('# ')) {
             return (
-              <Typography key={idx} variant="h5" sx={{ fontWeight: 700, mt: 1, color: '#6366f1' }}>
+              <Typography
+                key={idx}
+                variant="h4"
+                sx={{
+                  fontFamily: "'Smooch Sans', sans-serif",
+                  fontWeight: 800,
+                  fontSize: '2rem',
+                  mt: 1,
+                  color: '#6366f1',
+                  letterSpacing: '0.01em',
+                }}
+              >
                 {line.slice(2)}
               </Typography>
             );
           }
           if (line.startsWith('## ')) {
             return (
-              <Typography key={idx} variant="h6" sx={{ fontWeight: 600, mt: 0.8 }}>
+              <Typography
+                key={idx}
+                variant="h5"
+                sx={{
+                  fontFamily: "'Smooch Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: '1.65rem',
+                  mt: 0.8,
+                  letterSpacing: '0.01em',
+                }}
+              >
                 {line.slice(3)}
               </Typography>
             );
           }
           if (line.startsWith('### ')) {
             return (
-              <Typography key={idx} variant="subtitle1" sx={{ fontWeight: 600, mt: 0.5 }}>
+              <Typography
+                key={idx}
+                variant="h6"
+                sx={{
+                  fontFamily: "'Smooch Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: '1.4rem',
+                  mt: 0.5,
+                }}
+              >
                 {line.slice(4)}
               </Typography>
             );
@@ -84,8 +122,15 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
             const checked = line.startsWith('- [x] ');
             return (
               <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CheckCircleOutlined sx={{ fontSize: 16, color: checked ? '#10b981' : '#94a3b8' }} />
-                <Typography variant="body2" sx={{ textDecoration: checked ? 'line-through' : 'none' }}>
+                <CheckCircleOutlined sx={{ fontSize: 18, color: checked ? '#10b981' : '#94a3b8' }} />
+                <Typography
+                  sx={{
+                    fontFamily: "'Smooch Sans', sans-serif",
+                    fontSize: '1.25rem',
+                    fontWeight: 500,
+                    textDecoration: checked ? 'line-through' : 'none',
+                  }}
+                >
                   {line.slice(6)}
                 </Typography>
               </Box>
@@ -94,8 +139,16 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
           if (line.startsWith('- ') || line.startsWith('* ')) {
             return (
               <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 1 }}>
-                <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: '#6366f1' }} />
-                <Typography variant="body2">{line.slice(2)}</Typography>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#6366f1', flexShrink: 0 }} />
+                <Typography
+                  sx={{
+                    fontFamily: "'Smooch Sans', sans-serif",
+                    fontSize: '1.25rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  {line.slice(2)}
+                </Typography>
               </Box>
             );
           }
@@ -105,10 +158,10 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
                 key={idx}
                 sx={{
                   bgcolor: isDark ? '#0f172a' : '#f1f5f9',
-                  p: 1,
+                  p: 1.2,
                   borderRadius: 1,
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '0.8rem',
+                  fontSize: '0.85rem',
                   color: '#ec4899',
                 }}
               >
@@ -120,7 +173,17 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
             return <Box key={idx} sx={{ height: 8 }} />;
           }
           return (
-            <Typography key={idx} variant="body2" sx={{ lineHeight: 1.6, color: isDark ? '#cbd5e1' : '#334155' }}>
+            <Typography
+              key={idx}
+              sx={{
+                fontFamily: "'Smooch Sans', sans-serif",
+                fontSize: '1.25rem',
+                fontWeight: 500,
+                lineHeight: 1.5,
+                color: isDark ? '#cbd5e1' : '#334155',
+                letterSpacing: '0.01em',
+              }}
+            >
               {line}
             </Typography>
           );
@@ -280,8 +343,8 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
               border: 'none',
               outline: 'none',
               resize: 'none',
-              fontFamily: "'Inter', sans-serif",
-              fontSize: '0.875rem',
+              fontFamily: "'Teachers', 'Inter', sans-serif",
+              fontSize: '0.925rem',
               lineHeight: 1.7,
               borderRadius: '12px',
               color: 'var(--neu-text-primary)',

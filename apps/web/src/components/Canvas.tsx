@@ -1003,7 +1003,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             border: '2px solid #6366f1',
             borderRadius: 6,
             padding: 8,
-            fontFamily: "'Inter', sans-serif",
+            fontFamily:
+              elements.find((e) => e.id === editingTextElement.elementId)?.type === 'sticky'
+                ? "'Lobster Two', cursive, sans-serif"
+                : "'Teachers', 'Inter', sans-serif",
             fontSize: `${(editingTextElement.fontSize || 14) * zoom}px`,
             resize: 'both',
             zIndex: 100,
