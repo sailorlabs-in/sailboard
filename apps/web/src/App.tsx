@@ -1557,6 +1557,8 @@ export const App: React.FC = () => {
             position: "relative",
             overflow: "hidden",
             bgcolor: "var(--neu-bg)",
+            width: "100%",
+            maxWidth: "100vw",
           }}
         >
           {/* Project & Multi-File Explorer Drawer */}
@@ -1587,7 +1589,10 @@ export const App: React.FC = () => {
           {(viewMode === "split" || viewMode === "notes") && (
             <Box
               sx={{
-                width: viewMode === "notes" ? "100%" : `${splitWidth}px`,
+                flexGrow: viewMode === "notes" ? 1 : 0,
+                flexShrink: viewMode === "notes" ? 1 : 0,
+                width: viewMode === "notes" ? "auto" : `${splitWidth}px`,
+                minWidth: 0,
                 height: "100%",
                 bgcolor: "var(--neu-bg)",
                 borderRight:
@@ -1595,7 +1600,7 @@ export const App: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 position: "relative",
-                flexShrink: 0,
+                overflow: "hidden",
               }}
             >
               <NotesEditor
@@ -1634,6 +1639,8 @@ export const App: React.FC = () => {
               ref={canvasContainerRef}
               sx={{
                 flexGrow: 1,
+                flexShrink: 1,
+                minWidth: 0,
                 height: "100%",
                 position: "relative",
                 overflow: "hidden",

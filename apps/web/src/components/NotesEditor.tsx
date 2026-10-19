@@ -137,7 +137,8 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'var(--neu-bg)',
-        borderRight: 'var(--neu-border)',
+        overflow: 'hidden',
+        minWidth: 0,
       }}
     >
       {/* Doc Header & Action Bar */}
@@ -149,13 +150,17 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
           justifyContent: 'space-between',
           borderBottom: 'var(--neu-border)',
           bgcolor: 'var(--neu-surface)',
+          flexShrink: 0,
+          gap: 1,
+          minWidth: 0,
+          overflow: 'hidden',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexShrink: 1, overflow: 'hidden' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }} noWrap>
             Engineering Spec
           </Typography>
-          <Box className="neu-segmented">
+          <Box className="neu-segmented" sx={{ flexShrink: 0 }}>
             <button
               type="button"
               className={`neu-segmented-item ${tab === 'edit' ? 'active' : ''}`}
@@ -194,6 +199,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
                 borderRadius: '8px',
                 textTransform: 'none',
                 whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Doc → Diagram</Box>
@@ -253,7 +259,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
       )}
 
       {/* Editor Body or Preview Body */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0, overflow: 'auto', p: 1, boxSizing: 'border-box' }}>
         {tab === 'edit' ? (
           <textarea
             id="eraser-notes-textarea"
