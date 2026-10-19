@@ -454,11 +454,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                       sx={{ mb: 0.8 }}
                       secondaryAction={
                         !isViewer && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', mr: 0.5 }}>
                             {onRenameFile && (
                               <Tooltip title="Rename canvas">
                                 <IconButton
-                                  edge="end"
                                   size="small"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -474,7 +473,6 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                             )}
                             <Tooltip title="Delete canvas">
                               <IconButton
-                                edge="end"
                                 size="small"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -501,7 +499,8 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                         sx={{
                           borderRadius: '10px',
                           py: 0.8,
-                          px: 1.2,
+                          pl: 1.2,
+                          pr: 8,
                           bgcolor: isActive ? 'var(--neu-bg)' : 'transparent',
                           boxShadow: isActive ? 'var(--neu-shadow-pressed)' : 'none',
                           border: isActive ? 'var(--neu-border-inset)' : '1px solid transparent',

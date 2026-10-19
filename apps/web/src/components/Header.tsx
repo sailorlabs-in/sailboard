@@ -40,7 +40,6 @@ import {
   ShareOutlined,
   FolderOutlined,
   MenuOpenOutlined,
-  ManageAccountsOutlined,
   SailingOutlined,
   SettingsBrightnessOutlined,
   EditOutlined,
@@ -133,7 +132,6 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<null | HTMLElement>(null);
-  const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -1063,7 +1061,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Tooltip title={currentUser ? `${currentUser.name} (${currentUser.email})` : 'Account'}>
           <IconButton
             size="small"
-            onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+            onClick={onOpenAccountManage ? () => onOpenAccountManage() : onOpenAuth ? () => onOpenAuth() : undefined}
             sx={{ ml: 0.5, p: 0.3 }}
           >
             <Avatar
@@ -1081,83 +1079,6 @@ export const Header: React.FC<HeaderProps> = ({
             </Avatar>
           </IconButton>
         </Tooltip>
-
-        {/* Profile Popover Menu */}
-        <Menu
-          anchorEl={userMenuAnchor}
-          open={Boolean(userMenuAnchor)}
-          onClose={() => setUserMenuAnchor(null)}
-          slotProps={{
-            paper: {
-              className: 'neu-floating',
-              sx: {
-                width: 240,
-                borderRadius: '14px',
-                p: 0.5,
-                bgcolor: 'var(--neu-surface)',
-                border: 'var(--neu-border)',
-                boxShadow: 'var(--neu-shadow-floating)',
-              },
-            },
-          }}
-        >
-          {currentUser && (
-            <Box sx={{ px: 2, py: 1 }}>
-              <Typography variant="body2" noWrap sx={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>
-                {currentUser.name}
-              </Typography>
-              <Typography variant="caption" noWrap sx={{ display: 'block', color: 'var(--neu-text-secondary)' }}>
-                {currentUser.email}
-              </Typography>
-              <Chip
-                label={`Role: ${safeRole.toUpperCase()}`}
-                size="small"
-                color={safeRole === 'owner' ? 'primary' : safeRole === 'editor' ? 'success' : 'warning'}
-                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, mt: 0.8 }}
-              />
-            </Box>
-          )}
-          <Divider sx={{ my: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
-          {onOpenAccountManage && (
-            <MenuItem
-              onClick={() => {
-                setUserMenuAnchor(null);
-                onOpenAccountManage();
-              }}
-              sx={{ fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
-            >
-              <ListItemIcon>
-                <ManageAccountsOutlined fontSize="small" sx={{ color: 'var(--neu-primary)' }} />
-              </ListItemIcon>
-              <ListItemText primary="Manage & Switch Accounts" />
-            </MenuItem>
-          )}
-          {onNavigateHome && (
-            <MenuItem
-              onClick={() => {
-                setUserMenuAnchor(null);
-                onNavigateHome();
-              }}
-              sx={{ fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
-            >
-              <ListItemIcon>
-                <SpaceDashboardOutlined fontSize="small" />
-              </ListItemIcon>
-              <ListItemText primary="Projects & Files" />
-            </MenuItem>
-          )}
-          {onLogout && (
-            <MenuItem
-              onClick={() => {
-                setUserMenuAnchor(null);
-                onLogout();
-              }}
-              sx={{ color: 'error.main', fontSize: '0.85rem', fontWeight: 600, borderRadius: '8px' }}
-            >
-              Sign Out
-            </MenuItem>
-          )}
-        </Menu>
       </Toolbar>
     </AppBar>
   );

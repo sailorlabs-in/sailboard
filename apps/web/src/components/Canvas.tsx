@@ -79,6 +79,7 @@ interface CanvasProps {
   currentStyle: {
     strokeColor: string;
     backgroundColor: string;
+    textColor?: string;
     fillStyle: 'none' | 'solid' | 'hachure' | 'cross-hatch';
     strokeWidth: number;
     strokeStyle: 'solid' | 'dashed' | 'dotted';
@@ -186,6 +187,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     height: number;
     text: string;
     textColor?: string;
+    fontSize?: number;
   } | null>(null);
 
   // Convert Client Window Coordinates to Canvas World Coordinates
@@ -510,7 +512,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         isDeleted: false,
         updatedAt: Date.now(),
         text: 'Sticky Note\n• Click to edit\n• Add sprint notes',
-        fontSize: 14,
+        textColor: currentStyle.textColor || (theme === 'dark' ? '#fde68a' : '#78350f'),
+        fontSize: currentStyle.fontSize || 14,
       };
 
       onElementsChange([...elements, newElement], true);
@@ -587,6 +590,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         roughness: currentStyle.roughness,
         opacity: currentStyle.opacity,
         fillOpacity: currentStyle.fillOpacity,
+        textColor: currentStyle.textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
+        fontSize: currentStyle.fontSize || 16,
         seed: Math.floor(Math.random() * 100000),
         version: 1,
         versionNonce: 1,
@@ -845,7 +850,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         width: hit.width,
         height: hit.height,
         text: hit.text || '',
-        textColor: hit.textColor,
+        textColor: hit.textColor || (currentStyle as any).textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
+        fontSize: hit.fontSize || currentStyle.fontSize || 14,
       });
     } else if (activeTool === 'selection' || activeTool === 'text') {
       const textColor = (currentStyle as any).textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a');
@@ -883,6 +889,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         height: newEl.height,
         text: '',
         textColor: textColor,
+        fontSize: newEl.fontSize,
       });
     }
   };
@@ -897,6 +904,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 ...el,
                 text: newText,
                 textColor: el.textColor || editingTextElement.textColor || (currentStyle as any).textColor,
+                fontSize: el.fontSize || editingTextElement.fontSize || currentStyle.fontSize || 14,
                 updatedAt: Date.now(),
               }
             : el
@@ -969,7 +977,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             borderRadius: 6,
             padding: 8,
             fontFamily: "'Inter', sans-serif",
-            fontSize: `${14 * zoom}px`,
+            fontSize: `${(editingTextElement.fontSize || 14) * zoom}px`,
             resize: 'both',
             zIndex: 100,
             outline: 'none',

@@ -319,8 +319,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     : selectedElements.some((el) => !['line', 'arrow', 'draw', 'text', 'sticky', 'image'].includes(el.type));
 
   const showText = !hasSelection
-    ? activeTool === 'text' || activeTool === 'sticky'
-    : selectedElements.some((el) => el.type === 'text' || el.type === 'sticky');
+    ? activeTool !== 'line' && activeTool !== 'draw' && activeTool !== 'eraser' && activeTool !== 'pan'
+    : selectedElements.some((el) => el.type !== 'image' && el.type !== 'draw' && el.type !== 'line');
 
   const showRoughness = !hasSelection
     ? activeTool !== 'text' && activeTool !== 'sticky'
@@ -347,7 +347,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       {colors.map((color) => {
         const isSelected = isFill
           ? isColorMatchingSwatch(activeVal, color)
-          : activeVal === color;
+          : activeVal?.toLowerCase() === color.toLowerCase();
         return (
           <Box
             key={color}
