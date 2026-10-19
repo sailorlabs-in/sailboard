@@ -94,7 +94,7 @@ interface CanvasProps {
   isViewer?: boolean;
 }
 
-export const Canvas: React.FC<CanvasProps> = ({
+export const Canvas: React.FC<CanvasProps> = React.memo(({
   elements,
   onElementsChange,
   selectedElementIds,
@@ -1022,4 +1022,4 @@ export const Canvas: React.FC<CanvasProps> = ({
       )}
     </div>
   );
-};
+});

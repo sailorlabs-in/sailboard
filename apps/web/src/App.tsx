@@ -727,44 +727,47 @@ export const App: React.FC = () => {
   // Notes update (Editor action) & Live Broadcast
   const notesDebounceTimerRef = useRef<any>(null);
 
-  const handleNotesChange = (newNotes: string) => {
-    if (isViewer) return;
-    setDoc((prev) => ({ ...prev, notes: newNotes }));
+  const handleNotesChange = useCallback(
+    (newNotes: string) => {
+      if (isViewer) return;
+      setDoc((prev) => ({ ...prev, notes: newNotes }));
 
-    setCurrentProject((prevProj) => {
-      if (!prevProj || !prevProj.files) return prevProj;
-      return {
-        ...prevProj,
-        files: prevProj.files.map((f) =>
-          f.id === doc.id ? { ...f, notes: newNotes } : f,
-        ),
-      };
-    });
-
-    setProjects((prevProjects) =>
-      prevProjects.map((p) => {
-        if (p.id !== doc.projectId) return p;
+      setCurrentProject((prevProj) => {
+        if (!prevProj || !prevProj.files) return prevProj;
         return {
-          ...p,
-          files: p.files?.map((f) =>
+          ...prevProj,
+          files: prevProj.files.map((f) =>
             f.id === doc.id ? { ...f, notes: newNotes } : f,
           ),
         };
-      }),
-    );
+      });
 
-    // Sync via socket (socket gateway broadcasts and persists to DB)
-    socketService.emitNoteChange(newNotes);
+      setProjects((prevProjects) =>
+        prevProjects.map((p) => {
+          if (p.id !== doc.projectId) return p;
+          return {
+            ...p,
+            files: p.files?.map((f) =>
+              f.id === doc.id ? { ...f, notes: newNotes } : f,
+            ),
+          };
+        }),
+      );
 
-    // Fall back to debounced HTTP API only if socket is disconnected
-    if (!socketService.isConnected()) {
-      if (notesDebounceTimerRef.current)
-        clearTimeout(notesDebounceTimerRef.current);
-      notesDebounceTimerRef.current = setTimeout(() => {
-        api.updateDocument(doc.id, { notes: newNotes }).catch(console.error);
-      }, 1000);
-    }
-  };
+      // Sync via socket (socket gateway broadcasts and persists to DB)
+      socketService.emitNoteChange(newNotes);
+
+      // Fall back to debounced HTTP API only if socket is disconnected
+      if (!socketService.isConnected()) {
+        if (notesDebounceTimerRef.current)
+          clearTimeout(notesDebounceTimerRef.current);
+        notesDebounceTimerRef.current = setTimeout(() => {
+          api.updateDocument(doc.id, { notes: newNotes }).catch(console.error);
+        }, 1000);
+      }
+    },
+    [doc.id, doc.projectId, isViewer],
+  );
 
   // Title update
   const handleTitleChange = (newTitle: string) => {
@@ -1046,130 +1049,133 @@ export const App: React.FC = () => {
   };
 
   // Convert Doc Notes to Architecture Flowchart Shapes
-  const handleGenerateDiagramFromNotes = (markdownText: string) => {
-    if (isViewer) return;
-    const lines = markdownText.split("\n");
-    const nodes: string[] = [];
+  const handleGenerateDiagramFromNotes = useCallback(
+    (markdownText: string) => {
+      if (isViewer) return;
+      const lines = markdownText.split("\n");
+      const nodes: string[] = [];
 
-    lines.forEach((line) => {
-      const clean = line.trim();
-      if (
-        clean.startsWith("#") ||
-        clean.startsWith("-") ||
-        clean.startsWith("*")
-      ) {
-        const text = clean
-          .replace(/^[#\-*\s]+/, "")
-          .replace(/\[[ xX]\]/, "")
-          .trim();
-        if (text && text.length > 1 && text.length < 50) {
-          nodes.push(text);
+      lines.forEach((line) => {
+        const clean = line.trim();
+        if (
+          clean.startsWith("#") ||
+          clean.startsWith("-") ||
+          clean.startsWith("*")
+        ) {
+          const text = clean
+            .replace(/^[#\-*\s]+/, "")
+            .replace(/\[[ xX]\]/, "")
+            .trim();
+          if (text && text.length > 1 && text.length < 50) {
+            nodes.push(text);
+          }
         }
-      }
-    });
-
-    if (nodes.length === 0) {
-      nodes.push(
-        "Architecture Step 1",
-        "API Processing",
-        "Redis Cache",
-        "Storage",
-      );
-    }
-
-    const generatedElements: CanvasElement[] = [];
-    const startX = 140;
-    const startY = 180;
-    const nodeWidth = 190;
-    const nodeHeight = 85;
-    const gapX = 90;
-
-    nodes.slice(0, 7).forEach((nodeText, i) => {
-      const x = startX + i * (nodeWidth + gapX);
-      const y = startY + (i % 2 === 1 ? 50 : 0);
-      const isDecision =
-        nodeText.toLowerCase().includes("gateway") ||
-        nodeText.toLowerCase().includes("decision");
-      const isCache =
-        nodeText.toLowerCase().includes("cache") ||
-        nodeText.toLowerCase().includes("redis");
-
-      const shapeType: ElementType = isDecision
-        ? "diamond"
-        : isCache
-          ? "ellipse"
-          : "rectangle";
-      const shapeId = `gen-${Date.now()}-${i}`;
-
-      generatedElements.push({
-        id: shapeId,
-        type: shapeType,
-        x,
-        y,
-        width: nodeWidth,
-        height: nodeHeight,
-        angle: 0,
-        strokeColor: isDecision ? "#10b981" : isCache ? "#f59e0b" : "#6366f1",
-        backgroundColor: isDecision
-          ? "rgba(16, 185, 129, 0.15)"
-          : isCache
-            ? "rgba(245, 158, 11, 0.15)"
-            : "rgba(99, 102, 241, 0.15)",
-        fillStyle: "solid",
-        strokeWidth: 2,
-        strokeStyle: "solid",
-        roughness: styleMode === "rough" ? 1.2 : 0,
-        opacity: 100,
-        seed: Math.floor(Math.random() * 100000),
-        version: 1,
-        versionNonce: 1,
-        isDeleted: false,
-        updatedAt: Date.now(),
-        text: nodeText,
-        fontSize: 14,
-        textAlign: "center",
       });
 
-      // Connector arrow to previous node
-      if (i > 0) {
-        const prevShape = generatedElements[generatedElements.length - 2];
-        const arrowId = `gen-arrow-${Date.now()}-${i}`;
-        const arrowStartX = prevShape.x + prevShape.width;
-        const arrowStartY = prevShape.y + prevShape.height / 2;
-        const arrowEndX = x;
-        const arrowEndY = y + nodeHeight / 2;
+      if (nodes.length === 0) {
+        nodes.push(
+          "Architecture Step 1",
+          "API Processing",
+          "Redis Cache",
+          "Storage",
+        );
+      }
+
+      const generatedElements: CanvasElement[] = [];
+      const startX = 140;
+      const startY = 180;
+      const nodeWidth = 190;
+      const nodeHeight = 85;
+      const gapX = 90;
+
+      nodes.slice(0, 7).forEach((nodeText, i) => {
+        const x = startX + i * (nodeWidth + gapX);
+        const y = startY + (i % 2 === 1 ? 50 : 0);
+        const isDecision =
+          nodeText.toLowerCase().includes("gateway") ||
+          nodeText.toLowerCase().includes("decision");
+        const isCache =
+          nodeText.toLowerCase().includes("cache") ||
+          nodeText.toLowerCase().includes("redis");
+
+        const shapeType: ElementType = isDecision
+          ? "diamond"
+          : isCache
+            ? "ellipse"
+            : "rectangle";
+        const shapeId = `gen-${Date.now()}-${i}`;
 
         generatedElements.push({
-          id: arrowId,
-          type: "arrow",
-          x: arrowStartX,
-          y: arrowStartY,
-          width: arrowEndX - arrowStartX,
-          height: arrowEndY - arrowStartY,
+          id: shapeId,
+          type: shapeType,
+          x,
+          y,
+          width: nodeWidth,
+          height: nodeHeight,
           angle: 0,
-          strokeColor: "#94a3b8",
-          backgroundColor: "transparent",
-          fillStyle: "none",
+          strokeColor: isDecision ? "#10b981" : isCache ? "#f59e0b" : "#6366f1",
+          backgroundColor: isDecision
+            ? "rgba(16, 185, 129, 0.15)"
+            : isCache
+              ? "rgba(245, 158, 11, 0.15)"
+              : "rgba(99, 102, 241, 0.15)",
+          fillStyle: "solid",
           strokeWidth: 2,
           strokeStyle: "solid",
-          roughness: styleMode === "rough" ? 1 : 0,
+          roughness: styleMode === "rough" ? 1.2 : 0,
           opacity: 100,
           seed: Math.floor(Math.random() * 100000),
           version: 1,
           versionNonce: 1,
           isDeleted: false,
           updatedAt: Date.now(),
-          points: [
-            { x: 0, y: 0 },
-            { x: arrowEndX - arrowStartX, y: arrowEndY - arrowStartY },
-          ],
-          endArrowhead: "arrow",
+          text: nodeText,
+          fontSize: 14,
+          textAlign: "center",
         });
-      }
-    });
 
-    handleElementsChange([...doc.elements, ...generatedElements]);
-  };
+        // Connector arrow to previous node
+        if (i > 0) {
+          const prevShape = generatedElements[generatedElements.length - 2];
+          const arrowId = `gen-arrow-${Date.now()}-${i}`;
+          const arrowStartX = prevShape.x + prevShape.width;
+          const arrowStartY = prevShape.y + prevShape.height / 2;
+          const arrowEndX = x;
+          const arrowEndY = y + nodeHeight / 2;
+
+          generatedElements.push({
+            id: arrowId,
+            type: "arrow",
+            x: arrowStartX,
+            y: arrowStartY,
+            width: arrowEndX - arrowStartX,
+            height: arrowEndY - arrowStartY,
+            angle: 0,
+            strokeColor: "#94a3b8",
+            backgroundColor: "transparent",
+            fillStyle: "none",
+            strokeWidth: 2,
+            strokeStyle: "solid",
+            roughness: styleMode === "rough" ? 1 : 0,
+            opacity: 100,
+            seed: Math.floor(Math.random() * 100000),
+            version: 1,
+            versionNonce: 1,
+            isDeleted: false,
+            updatedAt: Date.now(),
+            points: [
+              { x: 0, y: 0 },
+              { x: arrowEndX - arrowStartX, y: arrowEndY - arrowStartY },
+            ],
+            endArrowhead: "arrow",
+          });
+        }
+      });
+
+      handleElementsChange([...doc.elements, ...generatedElements]);
+    },
+    [doc.elements, isViewer, styleMode, handleElementsChange],
+  );
 
   // Import JSON File
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1604,6 +1610,7 @@ export const App: React.FC = () => {
               }}
             >
               <NotesEditor
+                key={doc.id}
                 notes={doc.notes}
                 onChange={handleNotesChange}
                 onGenerateDiagramFromNotes={handleGenerateDiagramFromNotes}

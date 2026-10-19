@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -26,7 +26,7 @@ interface NotesEditorProps {
   isViewer?: boolean;
 }
 
-export const NotesEditor: React.FC<NotesEditorProps> = ({
+export const NotesEditor: React.FC<NotesEditorProps> = React.memo(({
   notes,
   onChange,
   onGenerateDiagramFromNotes,
@@ -36,24 +36,100 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
   const isDark = theme === 'dark';
   const [tab, setTab] = useState<'edit' | 'preview'>(isViewer ? 'preview' : 'edit');
 
-  const insertText = (before: string, after = '') => {
-    const textarea = document.getElementById('sailboard-notes-textarea') as HTMLTextAreaElement | null;
+  // Fast local state for 120fps responsive typing
+  const [localNotes, setLocalNotes] = useState(notes);
+  const localNotesRef = useRef(notes);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const isFocusedRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Sync with incoming external notes (e.g. initial load, file switch or remote peer sync) when not actively editing
+  useEffect(() => {
+    if (!isFocusedRef.current && notes !== localNotesRef.current) {
+      localNotesRef.current = notes;
+      setLocalNotes(notes);
+    }
+  }, [notes]);
+
+  // Clean up and flush pending notes on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        onChangeRef.current(localNotesRef.current);
+      }
+    };
+  }, []);
+
+  const flushChanges = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    onChangeRef.current(localNotesRef.current);
+  }, []);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (isViewer) return;
+    const newText = e.target.value;
+    localNotesRef.current = newText;
+    setLocalNotes(newText);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      onChangeRef.current(newText);
+      debounceTimerRef.current = null;
+    }, 250);
+  }, [isViewer]);
+
+  const handleBlur = useCallback(() => {
+    isFocusedRef.current = false;
+    flushChanges();
+  }, [flushChanges]);
+
+  const handleFocus = useCallback(() => {
+    isFocusedRef.current = true;
+  }, []);
+
+  const insertText = useCallback((before: string, after = '') => {
+    const textarea = textareaRef.current;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selected = notes.substring(start, end);
+    const current = localNotesRef.current;
+    const selected = current.substring(start, end);
     const replacement = `${before}${selected || 'text'}${after}`;
-    const newNotes = notes.substring(0, start) + replacement + notes.substring(end);
+    const newNotes = current.substring(0, start) + replacement + current.substring(end);
 
-    onChange(newNotes);
+    localNotesRef.current = newNotes;
+    setLocalNotes(newNotes);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      onChangeRef.current(newNotes);
+      debounceTimerRef.current = null;
+    }, 250);
+
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + before.length, start + replacement.length - after.length);
     }, 0);
-  };
+  }, []);
 
-  // Simple clean markdown parser for preview with Smooch Sans typography
+  const handleGenerate = useCallback(() => {
+    flushChanges();
+    onGenerateDiagramFromNotes(localNotesRef.current);
+  }, [flushChanges, onGenerateDiagramFromNotes]);
+
+  // Clean markdown parser for preview with Smooch Sans typography
   const renderMarkdownPreview = (text: string) => {
     const lines = text.split('\n');
     return (
@@ -192,6 +268,11 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
     );
   };
 
+  const previewContent = useMemo(
+    () => renderMarkdownPreview(localNotes),
+    [localNotes, isDark],
+  );
+
   return (
     <Box
       sx={{
@@ -253,7 +334,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
               variant="contained"
               disabled={isViewer}
               startIcon={<AutoAwesomeOutlined />}
-              onClick={() => onGenerateDiagramFromNotes(notes)}
+              onClick={handleGenerate}
               className="neu-btn-primary"
               sx={{
                 fontSize: '0.72rem',
@@ -325,10 +406,13 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
       <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0, overflow: 'auto', p: 1, boxSizing: 'border-box' }}>
         {tab === 'edit' ? (
           <textarea
+            ref={textareaRef}
             id="sailboard-notes-textarea"
-            value={notes}
+            value={localNotes}
             readOnly={isViewer}
-            onChange={(e) => !isViewer && onChange(e.target.value)}
+            onChange={handleChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder={
               isViewer
                 ? 'Read-only notes preview...'
@@ -352,10 +436,10 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
           />
         ) : (
           <Box className="neu-inset" sx={{ p: 1.5, borderRadius: '12px', minHeight: '100%' }}>
-            {renderMarkdownPreview(notes)}
+            {previewContent}
           </Box>
         )}
       </Box>
     </Box>
   );
-};
+});
