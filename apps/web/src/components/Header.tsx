@@ -44,6 +44,7 @@ import {
   SailingOutlined,
   SettingsBrightnessOutlined,
   EditOutlined,
+  TuneOutlined,
 } from '@mui/icons-material';
 import { UserPresence, ProjectRole, User } from '@rea/shared-types';
 import { ThemePreference } from '../theme/theme';
@@ -133,6 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<null | HTMLElement>(null);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
 
@@ -141,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isViewer = safeRole === 'viewer';
 
   const muiTheme = useTheme();
-  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(muiTheme.breakpoints.down('md'));
 
   const handleFinishTitleEdit = () => {
     setIsEditingTitle(false);
@@ -173,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({
         zIndex: 50,
       }}
     >
-      <Toolbar variant="dense" sx={{ minHeight: 52, px: { xs: 1, sm: 1.5 }, display: 'flex', gap: 1 }}>
+      <Toolbar variant="dense" sx={{ minHeight: 52, px: { xs: 1, sm: 1.5 }, display: 'flex', gap: { xs: 0.5, md: 1 } }}>
         {/* Toggle Folder Sidebar */}
         {onToggleSidebar && (
           <Tooltip title="Toggle Project Folder Explorer">
@@ -188,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
                 boxShadow: 'var(--neu-shadow-btn)',
                 border: 'var(--neu-border)',
                 color: 'var(--neu-text-primary)',
-                mr: 0.5,
+                flexShrink: 0,
                 transition: 'all 0.15s ease',
                 '&:hover': {
                   boxShadow: 'var(--neu-shadow-btn-hover)',
@@ -208,10 +210,11 @@ export const Header: React.FC<HeaderProps> = ({
             sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 1.2,
-              mr: 1,
+              gap: 1.1,
+              mr: { xs: 0.2, sm: 0.8 },
               cursor: onNavigateHome ? 'pointer' : 'default',
               transition: 'opacity 0.15s ease',
+              flexShrink: 0,
               '&:hover': onNavigateHome ? { opacity: 0.85 } : {},
             }}
           >
@@ -226,11 +229,12 @@ export const Header: React.FC<HeaderProps> = ({
                 justifyContent: 'center',
                 boxShadow: 'var(--neu-shadow-btn), 0 0 12px var(--neu-primary-glow)',
                 border: 'var(--neu-border)',
+                flexShrink: 0,
               }}
             >
               <SailingOutlined sx={{ fontSize: 20, color: '#fff' }} />
             </Box>
-            <Box>
+            <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }}>
                 Sailboard
               </Typography>
@@ -239,7 +243,7 @@ export const Header: React.FC<HeaderProps> = ({
                 sx={{
                   color: 'var(--neu-text-secondary)',
                   fontSize: '0.65rem',
-                  display: { xs: 'none', sm: 'block' },
+                  display: { xs: 'none', lg: 'block' },
                 }}
               >
                 Collaborative Canvas
@@ -253,9 +257,9 @@ export const Header: React.FC<HeaderProps> = ({
           flexItem
           sx={{
             my: 1,
-            mx: 0.5,
+            mx: 0.2,
             borderColor: 'var(--neu-border-subtle)',
-            display: { xs: 'none', sm: 'block' },
+            display: { xs: 'none', md: 'block' },
           }}
         />
 
@@ -265,31 +269,34 @@ export const Header: React.FC<HeaderProps> = ({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
-            minWidth: { xs: 'auto', sm: 140 },
-            maxWidth: { xs: 150, sm: 380 },
+            gap: 0.8,
+            minWidth: 0,
+            maxWidth: { xs: 120, sm: 180, md: 240, lg: 340 },
             px: 1.2,
             py: 0.4,
             borderRadius: '10px',
+            flexShrink: 1,
+            overflow: 'hidden',
           }}
         >
           <Box
             onClick={onNavigateHome}
             sx={{
-              display: { xs: 'none', sm: 'flex' },
+              display: { xs: 'none', md: 'flex' },
               alignItems: 'center',
-              gap: 0.5,
+              gap: 0.4,
+              flexShrink: 0,
               cursor: onNavigateHome ? 'pointer' : 'default',
               '&:hover': onNavigateHome ? { color: 'var(--neu-primary)' } : {},
             }}
           >
-            <FolderOutlined sx={{ fontSize: 16, color: 'var(--neu-text-secondary)' }} />
+            <FolderOutlined sx={{ fontSize: 15, color: 'var(--neu-text-secondary)' }} />
             <Typography
               variant="caption"
               sx={{
                 fontWeight: 600,
                 color: 'var(--neu-text-secondary)',
-                maxWidth: 100,
+                maxWidth: { md: 70, lg: 110 },
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -325,6 +332,7 @@ export const Header: React.FC<HeaderProps> = ({
                 borderRadius: 6,
                 padding: '2px 8px',
                 outline: 'none',
+                maxWidth: 120,
                 boxShadow: 'var(--neu-shadow-inset)',
               }}
             />
@@ -333,7 +341,8 @@ export const Header: React.FC<HeaderProps> = ({
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.5,
+                gap: 0.4,
+                minWidth: 0,
                 overflow: 'hidden',
               }}
             >
@@ -347,12 +356,13 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                   sx={{
                     cursor: isViewer ? 'default' : 'pointer',
-                    px: 0.8,
+                    px: 0.5,
                     py: 0.2,
                     borderRadius: 1,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    minWidth: 0,
                     '&:hover': {
                       bgcolor: isViewer ? 'transparent' : 'rgba(255,255,255,0.06)',
                     },
@@ -373,7 +383,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsEditingTitle(true);
                     }}
                     className="neu-icon-btn"
-                    sx={{ width: 22, height: 22, color: 'var(--neu-text-secondary)', p: 0.2 }}
+                    sx={{ width: 20, height: 20, color: 'var(--neu-text-secondary)', p: 0.2, flexShrink: 0 }}
                   >
                     <EditOutlined sx={{ fontSize: 13 }} />
                   </IconButton>
@@ -392,11 +402,13 @@ export const Header: React.FC<HeaderProps> = ({
               height: 18,
               fontSize: '0.62rem',
               fontWeight: 700,
+              flexShrink: 0,
               boxShadow: 'var(--neu-shadow-btn)',
               '& .MuiChip-label': { px: 0.6 },
             }}
           />
 
+          {/* Synced Badge: shown on desktop lg */}
           <Chip
             size="small"
             label={saveStatus === 'saving' ? 'Saving...' : 'Synced'}
@@ -405,24 +417,27 @@ export const Header: React.FC<HeaderProps> = ({
             sx={{
               height: 18,
               fontSize: '0.62rem',
-              display: { xs: 'none', sm: 'inline-flex' },
+              display: { xs: 'none', lg: 'inline-flex' },
+              flexShrink: 0,
               '& .MuiChip-label': { px: 0.6 },
             }}
           />
         </Box>
 
-        <Box sx={{ flexGrow: 1 }} />
+        <Box sx={{ flexGrow: 1, minWidth: 6 }} />
 
         {/* View Mode Selector (Neumorphic Segmented Control) */}
         <Box
           className="neu-segmented"
           sx={{
             display: 'inline-flex',
-            mr: { xs: 0.5, sm: 1 },
+            mr: { xs: 0.3, sm: 0.8 },
+            flexShrink: 0,
           }}
         >
+          {/* Split View only on desktop >= 1200px */}
           <Tooltip title="Split View: Docs + Canvas (Desktop)">
-            <Box sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
+            <Box sx={{ display: { xs: 'none', lg: 'inline-flex' } }}>
               <button
                 type="button"
                 className={`neu-segmented-item ${viewMode === 'split' ? 'active' : ''}`}
@@ -434,6 +449,8 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </Box>
           </Tooltip>
+
+          {/* Canvas View */}
           <Tooltip title="Canvas Only (Whiteboard)">
             <button
               type="button"
@@ -445,6 +462,8 @@ export const Header: React.FC<HeaderProps> = ({
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Canvas</Box>
             </button>
           </Tooltip>
+
+          {/* Notes View */}
           <Tooltip title="Notes Only (Markdown Docs)">
             <button
               type="button"
@@ -458,12 +477,13 @@ export const Header: React.FC<HeaderProps> = ({
           </Tooltip>
         </Box>
 
-        {/* Style Mode (Neumorphic Segmented Control) */}
+        {/* Style Mode (Sketch / Clean): Visible as segmented control on desktop >= 1200px */}
         <Box
           className="neu-segmented"
           sx={{
-            display: { xs: 'none', md: 'inline-flex' },
-            mr: 1,
+            display: { xs: 'none', lg: 'inline-flex' },
+            mr: 0.8,
+            flexShrink: 0,
           }}
         >
           <Tooltip title="Hand-drawn Rough.js Style">
@@ -474,7 +494,7 @@ export const Header: React.FC<HeaderProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <BrushOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>Sketch</Box>
+              <span>Sketch</span>
             </button>
           </Tooltip>
           <Tooltip title="Clean Geometric Mode">
@@ -485,14 +505,14 @@ export const Header: React.FC<HeaderProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <ArchitectureOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>Clean</Box>
+              <span>Clean</span>
             </button>
           </Tooltip>
         </Box>
 
-        {/* Undo / Redo */}
+        {/* Undo / Redo: Visible on tablets and up (>= sm) */}
         {!isViewer && (
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.5, mr: 0.5 }}>
+          <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.5, mr: 0.5, flexShrink: 0 }}>
             <Tooltip title="Undo (Ctrl+Z)">
               <span>
                 <IconButton
@@ -522,15 +542,10 @@ export const Header: React.FC<HeaderProps> = ({
           </Box>
         )}
 
-        {/* Zoom Controls */}
-        <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 0.5, mr: 1 }}>
+        {/* Full Zoom Controls (Desktop >= 1350px) */}
+        <Box sx={{ display: { xs: 'none', xl: 'flex' }, alignItems: 'center', gap: 0.5, mr: 0.8, flexShrink: 0 }}>
           <Tooltip title="Zoom Out (-)">
-            <IconButton
-              size="small"
-              onClick={onZoomOut}
-              className="neu-icon-btn"
-              sx={{ width: 30, height: 30 }}
-            >
+            <IconButton size="small" onClick={onZoomOut} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
               <ZoomOutOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -555,39 +570,315 @@ export const Header: React.FC<HeaderProps> = ({
             </Typography>
           </Tooltip>
           <Tooltip title="Zoom In (+)">
-            <IconButton
-              size="small"
-              onClick={onZoomIn}
-              className="neu-icon-btn"
-              sx={{ width: 30, height: 30 }}
-            >
+            <IconButton size="small" onClick={onZoomIn} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
               <ZoomInOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Zoom to Fit">
-            <IconButton
-              size="small"
-              onClick={onZoomToFit}
-              className="neu-icon-btn"
-              sx={{ width: 30, height: 30 }}
-            >
+            <IconButton size="small" onClick={onZoomToFit} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
               <FitScreenOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
 
-        {/* Grid Settings */}
-        <Tooltip title="Grid & Snapping Settings">
-          <IconButton
-            size="small"
-            onClick={(e) => setGridMenuAnchor(e.currentTarget)}
-            className={`neu-icon-btn ${gridVisible ? 'active' : ''}`}
-            sx={{ width: 32, height: 32 }}
-          >
-            {gridType === 'dots' ? <GrainOutlined fontSize="small" /> : <GridOnOutlined fontSize="small" />}
-          </IconButton>
-        </Tooltip>
+        {/* Compact Zoom Pill (iPad landscape & medium screens md to xl) */}
+        <Box sx={{ display: { xs: 'none', md: 'flex', xl: 'none' }, alignItems: 'center', mr: 0.5, flexShrink: 0 }}>
+          <Tooltip title={`Zoom: ${Math.round(zoom * 100)}% (Click to reset 100%)`}>
+            <Typography
+              variant="caption"
+              onClick={onZoomReset}
+              className="neu-inset"
+              sx={{
+                cursor: 'pointer',
+                px: 1,
+                py: 0.4,
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                textAlign: 'center',
+                color: 'var(--neu-primary-light)',
+                bgcolor: 'var(--neu-bg)',
+                '&:hover': { color: 'var(--neu-primary)' },
+              }}
+            >
+              {Math.round(zoom * 100)}%
+            </Typography>
+          </Tooltip>
+        </Box>
 
+        {/* Desktop-only individual utility buttons (>= 1200px) */}
+        <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+          {/* Grid Settings */}
+          <Tooltip title="Grid & Snapping Settings">
+            <IconButton
+              size="small"
+              onClick={(e) => setGridMenuAnchor(e.currentTarget)}
+              className={`neu-icon-btn ${gridVisible ? 'active' : ''}`}
+              sx={{ width: 32, height: 32 }}
+            >
+              {gridType === 'dots' ? <GrainOutlined fontSize="small" /> : <GridOnOutlined fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Import JSON */}
+          {!isViewer && (
+            <Tooltip title="Import JSON / Excalidraw File">
+              <IconButton size="small" onClick={onImportClick} className="neu-icon-btn" sx={{ width: 32, height: 32 }}>
+                <UploadFileOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Export Button */}
+          <Tooltip title="Export Diagram (PNG, SVG, JSON)">
+            <IconButton size="small" onClick={onExportClick} className="neu-icon-btn" sx={{ width: 32, height: 32 }}>
+              <DownloadOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          {/* Theme Selector */}
+          <Tooltip title={`Theme: ${themePreference.charAt(0).toUpperCase() + themePreference.slice(1)}`}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                if (onThemeChange) setThemeMenuAnchor(e.currentTarget);
+                else if (onThemeToggle) onThemeToggle();
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 32, height: 32 }}
+            >
+              {themePreference === 'system' ? (
+                <SettingsBrightnessOutlined fontSize="small" />
+              ) : isDark ? (
+                <DarkModeOutlined fontSize="small" />
+              ) : (
+                <LightModeOutlined fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Tablet / iPad / Mobile Consolidated "Canvas Tools & Settings" Menu (< 1200px) */}
+        <Box sx={{ display: { xs: 'flex', lg: 'none' }, alignItems: 'center', flexShrink: 0 }}>
+          <Tooltip title="Canvas Tools, Grid, Zoom & Settings">
+            <IconButton
+              size="small"
+              onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+              className="neu-icon-btn"
+              sx={{ width: 32, height: 32 }}
+            >
+              <TuneOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* More Tools Dropdown Menu for Tablet / iPad / Mobile */}
+        <Menu
+          anchorEl={moreMenuAnchor}
+          open={Boolean(moreMenuAnchor)}
+          onClose={() => setMoreMenuAnchor(null)}
+          slotProps={{
+            paper: {
+              className: 'neu-floating',
+              sx: {
+                bgcolor: 'var(--neu-surface)',
+                border: 'var(--neu-border)',
+                boxShadow: 'var(--neu-shadow-floating)',
+                minWidth: 220,
+                borderRadius: '14px',
+                py: 0.5,
+              },
+            },
+          }}
+        >
+          {/* Style Mode Heading */}
+          <Box sx={{ px: 2, pt: 1, pb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: 'var(--neu-text-secondary)', letterSpacing: 0.5 }}>
+              CANVAS RENDERING STYLE
+            </Typography>
+          </Box>
+          <MenuItem
+            onClick={() => {
+              onStyleModeChange('rough');
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><BrushOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Sketch (Hand-drawn)" />
+            {styleMode === 'rough' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onStyleModeChange('clean');
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><ArchitectureOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Clean (Geometric)" />
+            {styleMode === 'clean' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+
+          <Divider sx={{ my: 0.8, borderColor: 'var(--neu-border-subtle)' }} />
+
+          {/* Zoom Section */}
+          <Box sx={{ px: 2, pt: 0.5, pb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: 'var(--neu-text-secondary)', letterSpacing: 0.5 }}>
+              ZOOM & VIEWPORT ({Math.round(zoom * 100)}%)
+            </Typography>
+          </Box>
+          <MenuItem
+            onClick={() => {
+              onZoomIn();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><ZoomInOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Zoom In (+)" />
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onZoomOut();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><ZoomOutOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Zoom Out (-)" />
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onZoomReset();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><FitScreenOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Reset Zoom to 100%" />
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onZoomToFit();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><FitScreenOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Zoom to Fit Elements" />
+          </MenuItem>
+
+          <Divider sx={{ my: 0.8, borderColor: 'var(--neu-border-subtle)' }} />
+
+          {/* Grid Settings */}
+          <Box sx={{ px: 2, pt: 0.5, pb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: 'var(--neu-text-secondary)', letterSpacing: 0.5 }}>
+              GRID & SNAPPING
+            </Typography>
+          </Box>
+          <MenuItem
+            onClick={() => {
+              onGridTypeChange('dots');
+              if (!gridVisible) onGridVisibleToggle();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><GrainOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Dot Grid" />
+            {gridType === 'dots' && gridVisible && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onGridTypeChange('grid');
+              if (!gridVisible) onGridVisibleToggle();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><GridOnOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Square Grid" />
+            {gridType === 'grid' && gridVisible && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onGridTypeChange('blank');
+              onGridVisibleToggle();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><CropFreeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Blank Canvas" />
+            {!gridVisible && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onGridSnapToggle();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon>{gridSnap && <CheckOutlined fontSize="small" />}</ListItemIcon>
+            <ListItemText primary="Snap to Grid" />
+          </MenuItem>
+
+          <Divider sx={{ my: 0.8, borderColor: 'var(--neu-border-subtle)' }} />
+
+          {/* Import / Export */}
+          <MenuItem
+            onClick={() => {
+              onExportClick();
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><DownloadOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Export Diagram (PNG, SVG, JSON)" />
+          </MenuItem>
+          {!isViewer && (
+            <MenuItem
+              onClick={() => {
+                onImportClick();
+                setMoreMenuAnchor(null);
+              }}
+            >
+              <ListItemIcon><UploadFileOutlined fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Import JSON / Excalidraw" />
+            </MenuItem>
+          )}
+
+          <Divider sx={{ my: 0.8, borderColor: 'var(--neu-border-subtle)' }} />
+
+          {/* Theme Selector */}
+          <Box sx={{ px: 2, pt: 0.5, pb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: 'var(--neu-text-secondary)', letterSpacing: 0.5 }}>
+              WORKSPACE THEME
+            </Typography>
+          </Box>
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('light');
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><LightModeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Light Mode" />
+            {themePreference === 'light' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('dark');
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><DarkModeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="Dark Mode" />
+            {themePreference === 'dark' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              onThemeChange?.('system');
+              setMoreMenuAnchor(null);
+            }}
+          >
+            <ListItemIcon><SettingsBrightnessOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText primary="System (Auto)" />
+            {themePreference === 'system' && <CheckOutlined fontSize="small" color="primary" />}
+          </MenuItem>
+        </Menu>
+
+        {/* Desktop Grid Menu (>= 1200px) */}
         <Menu
           anchorEl={gridMenuAnchor}
           open={Boolean(gridMenuAnchor)}
@@ -646,56 +937,7 @@ export const Header: React.FC<HeaderProps> = ({
           </MenuItem>
         </Menu>
 
-        {/* Import JSON */}
-        {!isViewer && (
-          <Tooltip title="Import JSON / Excalidraw File">
-            <IconButton
-              size="small"
-              onClick={onImportClick}
-              className="neu-icon-btn"
-              sx={{ width: 32, height: 32 }}
-            >
-              <UploadFileOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-
-        {/* Export Button */}
-        <Tooltip title="Export Diagram (PNG, SVG, JSON)">
-          <IconButton
-            size="small"
-            onClick={onExportClick}
-            className="neu-icon-btn"
-            sx={{ width: 32, height: 32 }}
-          >
-            <DownloadOutlined fontSize="small" />
-          </IconButton>
-        </Tooltip>
-
-        {/* Theme Mode Selector (Light / Dark / System) */}
-        <Tooltip title={`Theme: ${themePreference.charAt(0).toUpperCase() + themePreference.slice(1)} (Click to switch)`}>
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              if (onThemeChange) {
-                setThemeMenuAnchor(e.currentTarget);
-              } else if (onThemeToggle) {
-                onThemeToggle();
-              }
-            }}
-            className="neu-icon-btn"
-            sx={{ width: 32, height: 32 }}
-          >
-            {themePreference === 'system' ? (
-              <SettingsBrightnessOutlined fontSize="small" />
-            ) : isDark ? (
-              <DarkModeOutlined fontSize="small" />
-            ) : (
-              <LightModeOutlined fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
-
+        {/* Desktop Theme Menu (>= 1200px) */}
         <Menu
           anchorEl={themeMenuAnchor}
           open={Boolean(themeMenuAnchor)}
@@ -751,19 +993,20 @@ export const Header: React.FC<HeaderProps> = ({
           </MenuItem>
         </Menu>
 
-        <Divider orientation="vertical" flexItem sx={{ my: 1, mx: 0.5, borderColor: 'var(--neu-border-subtle)' }} />
+        <Divider orientation="vertical" flexItem sx={{ my: 1, mx: 0.3, borderColor: 'var(--neu-border-subtle)' }} />
 
-        {/* Share Project Button */}
-        {isMobile ? (
+        {/* Share Project Button: Compact Icon button on iPad portrait & mobile, full button on landscape */}
+        {isTablet ? (
           <Tooltip title="Share Project & Permissions">
             <IconButton
               size="small"
               onClick={onOpenShare}
               className="neu-btn-primary"
               sx={{
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 borderRadius: '10px',
+                flexShrink: 0,
               }}
             >
               <ShareOutlined fontSize="small" />
@@ -783,6 +1026,7 @@ export const Header: React.FC<HeaderProps> = ({
               fontWeight: 700,
               textTransform: 'none',
               borderRadius: '10px',
+              flexShrink: 0,
             }}
           >
             Share
@@ -791,7 +1035,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Active Multiplayer Collaborators */}
         {remoteUsers.length > 0 && (
-          <AvatarGroup max={3} sx={{ ml: 0.5, '& .MuiAvatar-root': { width: 28, height: 28, fontSize: '0.75rem', boxShadow: 'var(--neu-shadow-raised-sm)', border: '2px solid var(--neu-surface)' } }}>
+          <AvatarGroup
+            max={isTablet ? 2 : 3}
+            sx={{
+              ml: 0.3,
+              '& .MuiAvatar-root': {
+                width: 28,
+                height: 28,
+                fontSize: '0.75rem',
+                boxShadow: 'var(--neu-shadow-raised-sm)',
+                border: '2px solid var(--neu-surface)',
+              },
+            }}
+          >
             {remoteUsers.map((u) => (
               <Tooltip key={u.userId} title={`${u.userName} (${u.role || 'editor'})`}>
                 <Avatar sx={{ bgcolor: u.color || '#3b82f6' }}>

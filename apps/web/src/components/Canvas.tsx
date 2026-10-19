@@ -85,6 +85,7 @@ interface CanvasProps {
     roughness: number;
     opacity: number;
     fontSize: number;
+    fillOpacity?: number;
   };
   remoteUsers: UserPresence[];
   onCursorMove: (point: Point) => void;
@@ -585,6 +586,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         strokeStyle: currentStyle.strokeStyle,
         roughness: currentStyle.roughness,
         opacity: currentStyle.opacity,
+        fillOpacity: currentStyle.fillOpacity,
         seed: Math.floor(Math.random() * 100000),
         version: 1,
         versionNonce: 1,

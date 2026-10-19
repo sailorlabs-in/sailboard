@@ -27,6 +27,11 @@ import {
   ChevronLeftOutlined,
 } from '@mui/icons-material';
 import { CanvasElement, ElementType, FillStyle, StrokeStyle } from '@rea/shared-types';
+import {
+  parseColor,
+  applyFillOpacity,
+  isColorMatchingSwatch,
+} from '../utils/colorUtils';
 
 interface PropertiesPanelProps {
   selectedElements: CanvasElement[];
@@ -40,6 +45,7 @@ interface PropertiesPanelProps {
     roughness: number;
     opacity: number;
     fontSize: number;
+    fillOpacity?: number;
   };
   onUpdateStyle: (updates: Partial<CanvasElement>) => void;
   onDuplicate: () => void;
@@ -103,8 +109,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const isDark = theme === 'dark';
   const hasSelection = selectedElements.length > 0;
   const muiTheme = useTheme();
-  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
-  const [isCollapsed, setIsCollapsed] = useState(isMobile);
+  const isTablet = useMediaQuery(muiTheme.breakpoints.down('md'));
+  const [isCollapsed, setIsCollapsed] = useState(isTablet);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -120,6 +126,57 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   // Active values (either from first selected element or default currentStyle)
   const activeStroke = hasSelection ? selectedElements[0].strokeColor : currentStyle.strokeColor;
   const activeBg = hasSelection ? selectedElements[0].backgroundColor : currentStyle.backgroundColor;
+  const parsedBg = parseColor(activeBg);
+  const activeFillOpacity = hasSelection
+    ? (selectedElements[0].fillOpacity ?? parsedBg.opacityPercent)
+    : (currentStyle.fillOpacity ?? parsedBg.opacityPercent);
+
+  // Remember last non-transparent fill color to revive it when adjusting opacity from 0%
+  const lastNonTransparentBgRef = useRef<string>(
+    !parsedBg.isTransparent && parsedBg.baseHex !== 'transparent'
+      ? parsedBg.baseHex
+      : '#6366f1'
+  );
+
+  useEffect(() => {
+    if (!parsedBg.isTransparent && parsedBg.baseHex !== 'transparent') {
+      lastNonTransparentBgRef.current = parsedBg.baseHex;
+    }
+  }, [parsedBg]);
+
+  const handleSelectFillColor = (color: string) => {
+    if (color === 'transparent') {
+      if (!parsedBg.isTransparent && parsedBg.baseHex !== 'transparent') {
+        lastNonTransparentBgRef.current = parsedBg.baseHex;
+      }
+      onUpdateStyle({ backgroundColor: 'transparent', fillOpacity: 0 });
+      return;
+    }
+
+    lastNonTransparentBgRef.current = color;
+    const targetOpacity = activeFillOpacity <= 0 ? 100 : activeFillOpacity;
+    const newBg = applyFillOpacity(color, targetOpacity);
+    onUpdateStyle({ backgroundColor: newBg, fillOpacity: targetOpacity });
+  };
+
+  const handleFillOpacityChange = (newOpacity: number) => {
+    const clamped = Math.min(100, Math.max(0, Math.round(newOpacity)));
+    if (clamped === 0) {
+      if (!parsedBg.isTransparent && parsedBg.baseHex !== 'transparent') {
+        lastNonTransparentBgRef.current = parsedBg.baseHex;
+      }
+      onUpdateStyle({ backgroundColor: 'transparent', fillOpacity: 0 });
+      return;
+    }
+
+    const baseColor =
+      !parsedBg.isTransparent && parsedBg.baseHex !== 'transparent'
+        ? parsedBg.baseHex
+        : (lastNonTransparentBgRef.current || '#6366f1');
+
+    const newBg = applyFillOpacity(baseColor, clamped);
+    onUpdateStyle({ backgroundColor: newBg, fillOpacity: clamped });
+  };
   const activeTextColor = hasSelection
     ? selectedElements[0].textColor || (isDark ? '#f8fafc' : '#0f172a')
     : currentStyle.textColor || (isDark ? '#f8fafc' : '#0f172a');
@@ -172,7 +229,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   ) => (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
       {colors.map((color) => {
-        const isSelected = activeVal === color;
+        const isSelected = isFill
+          ? isColorMatchingSwatch(activeVal, color)
+          : activeVal === color;
         return (
           <Box
             key={color}
@@ -336,24 +395,76 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         </Box>
       )}
 
-      {/* Background Fill Color */}
+      {/* Background Fill Color & Fill Opacity */}
       {showFill && (
-        <Box>
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.5,
-              mb: 0.4,
-              fontWeight: 600,
-              fontSize: '0.68rem',
-              color: 'var(--neu-text-primary)',
-            }}
-          >
-            <FormatColorFillOutlined sx={{ fontSize: 12 }} /> Fill Color
-          </Typography>
-          {renderColorGrid(FILL_COLORS, activeBg, (c) => onUpdateStyle({ backgroundColor: c }), true)}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                mb: 0.4,
+                fontWeight: 600,
+                fontSize: '0.68rem',
+                color: 'var(--neu-text-primary)',
+              }}
+            >
+              <FormatColorFillOutlined sx={{ fontSize: 12 }} /> Fill Color
+            </Typography>
+            {renderColorGrid(FILL_COLORS, activeBg, handleSelectFillColor, true)}
+          </Box>
+
+          {/* Fill Opacity Slider & Quick Presets */}
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.2 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.4,
+                  fontWeight: 600,
+                  fontSize: '0.68rem',
+                  color: 'var(--neu-text-primary)',
+                }}
+              >
+                <OpacityOutlined sx={{ fontSize: 12 }} /> Fill Opacity
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontSize: '0.65rem' }}>
+                {activeFillOpacity}%
+              </Typography>
+            </Box>
+            <Slider
+              size="small"
+              min={0}
+              max={100}
+              step={5}
+              value={activeFillOpacity}
+              onChange={(_, val) => handleFillOpacityChange(val as number)}
+              sx={{
+                py: 0.2,
+                color: 'var(--neu-primary)',
+                '& .MuiSlider-thumb': { width: 12, height: 12 },
+                '& .MuiSlider-track': { height: 3 },
+                '& .MuiSlider-rail': { height: 3 },
+              }}
+            />
+            <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25, mt: 0.2 }}>
+              {[0, 25, 50, 75, 100].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  className={`neu-segmented-item ${activeFillOpacity === pct ? 'active' : ''}`}
+                  onClick={() => handleFillOpacityChange(pct)}
+                  style={{ flex: 1, padding: '2px 0', fontSize: '0.6rem', textAlign: 'center' }}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </Box>
+          </Box>
         </Box>
       )}
 
@@ -525,7 +636,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         </Box>
       )}
 
-      {/* Opacity */}
+      {/* Layer Opacity */}
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography
@@ -539,7 +650,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               color: 'var(--neu-text-primary)',
             }}
           >
-            <OpacityOutlined sx={{ fontSize: 12 }} /> Opacity
+            <OpacityOutlined sx={{ fontSize: 12 }} /> Layer Opacity
           </Typography>
           <Typography variant="caption" sx={{ color: 'var(--neu-text-secondary)', fontSize: '0.65rem' }}>
             {activeOpacity}%

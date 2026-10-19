@@ -174,6 +174,7 @@ export const App: React.FC = () => {
     roughness: 1.2,
     opacity: 100,
     fontSize: 16,
+    fillOpacity: 15,
   });
 
   // Undo / Redo History

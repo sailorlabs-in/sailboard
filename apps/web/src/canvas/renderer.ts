@@ -1,6 +1,20 @@
 import rough from 'roughjs';
 import { CanvasElement, UserPresence } from '@rea/shared-types';
 import { BoundingBox, getElementBounds, getResizeHandles } from './math';
+import { applyFillOpacity } from '../utils/colorUtils';
+
+function getEffectiveFill(backgroundColor?: string, fillOpacity?: number): string | undefined {
+  if (!backgroundColor || backgroundColor === 'transparent' || backgroundColor === 'none') {
+    return undefined;
+  }
+  if (fillOpacity !== undefined && fillOpacity <= 0) {
+    return undefined;
+  }
+  if (fillOpacity !== undefined && fillOpacity < 100 && !backgroundColor.startsWith('rgba')) {
+    return applyFillOpacity(backgroundColor, fillOpacity);
+  }
+  return backgroundColor;
+}
 
 export interface RenderOptions {
   theme: 'light' | 'dark';
@@ -159,7 +173,7 @@ function renderElement(
     stroke: el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b'),
     strokeWidth: el.strokeWidth || 2,
     roughness: el.roughness ?? (useRough ? 1.2 : 0),
-    fill: el.backgroundColor !== 'transparent' ? el.backgroundColor : undefined,
+    fill: getEffectiveFill(el.backgroundColor, el.fillOpacity),
     fillStyle: el.fillStyle === 'none' ? undefined : el.fillStyle,
     strokeLineDash:
       el.strokeStyle === 'dashed' ? [8, 6] : el.strokeStyle === 'dotted' ? [3, 4] : undefined,
@@ -331,8 +345,9 @@ function applyCleanFillAndStroke(
   el: CanvasElement,
   isDark: boolean
 ) {
-  if (el.backgroundColor && el.backgroundColor !== 'transparent') {
-    ctx.fillStyle = el.backgroundColor;
+  const fill = getEffectiveFill(el.backgroundColor, el.fillOpacity);
+  if (fill) {
+    ctx.fillStyle = fill;
     ctx.fill();
   }
   ctx.strokeStyle = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
@@ -365,7 +380,8 @@ function renderStickyNote(
 ) {
   const { x, y, width: w, height: h } = el;
   const foldSize = 16;
-  const bgColor = el.backgroundColor || (isDark ? '#3b3218' : '#fef08a');
+  const rawBg = el.backgroundColor || (isDark ? '#3b3218' : '#fef08a');
+  const bgColor = getEffectiveFill(rawBg, el.fillOpacity) || 'transparent';
   const borderColor = el.strokeColor || (isDark ? '#eab308' : '#ca8a04');
 
   // Sticky body polygon with folded corner

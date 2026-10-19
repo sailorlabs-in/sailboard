@@ -46,6 +46,7 @@ export interface CanvasElement {
   strokeStyle: StrokeStyle;
   roughness: number;
   opacity: number;
+  fillOpacity?: number;
   seed: number;
   version: number;
   versionNonce: number;
