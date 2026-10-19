@@ -104,6 +104,12 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           flexShrink: 0,
           transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           '& .MuiDrawer-paper': {
+            position: isMobile ? 'fixed' : 'relative',
+            height: '100%',
+            top: isMobile ? 0 : 'auto',
+            bottom: isMobile ? 0 : 'auto',
+            left: isMobile ? 0 : 'auto',
+            zIndex: isMobile ? 1300 : 'auto',
             width: open ? 280 : isMobile ? 0 : 56,
             transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             overflowX: 'hidden',
@@ -359,7 +365,10 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     >
                       <ListItemButton
                         selected={isActive}
-                        onClick={() => onSelectFile(f)}
+                        onClick={() => {
+                          onSelectFile(f);
+                          if (isMobile) onToggle();
+                        }}
                         className={isActive ? 'neu-pressed' : ''}
                         sx={{
                           borderRadius: '10px',

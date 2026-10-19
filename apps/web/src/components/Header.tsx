@@ -368,6 +368,7 @@ export const Header: React.FC<HeaderProps> = ({
             sx={{
               height: 18,
               fontSize: '0.62rem',
+              display: { xs: 'none', sm: 'inline-flex' },
               '& .MuiChip-label': { px: 0.6 },
             }}
           />
@@ -379,20 +380,22 @@ export const Header: React.FC<HeaderProps> = ({
         <Box
           className="neu-segmented"
           sx={{
-            display: { xs: 'none', sm: 'inline-flex' },
-            mr: 1,
+            display: 'inline-flex',
+            mr: { xs: 0.5, sm: 1 },
           }}
         >
-          <Tooltip title="Split View: Docs + Canvas">
-            <button
-              type="button"
-              className={`neu-segmented-item ${viewMode === 'split' ? 'active' : ''}`}
-              onClick={() => onViewModeChange('split')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              <ViewSidebarOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Split</Box>
-            </button>
+          <Tooltip title="Split View: Docs + Canvas (Desktop)">
+            <Box sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
+              <button
+                type="button"
+                className={`neu-segmented-item ${viewMode === 'split' ? 'active' : ''}`}
+                onClick={() => onViewModeChange('split')}
+                style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <ViewSidebarOutlined sx={{ fontSize: 15 }} />
+                <span>Split</span>
+              </button>
+            </Box>
           </Tooltip>
           <Tooltip title="Canvas Only (Whiteboard)">
             <button
@@ -402,7 +405,7 @@ export const Header: React.FC<HeaderProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <SpaceDashboardOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Canvas</Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Canvas</Box>
             </button>
           </Tooltip>
           <Tooltip title="Notes Only (Markdown Docs)">
@@ -413,7 +416,7 @@ export const Header: React.FC<HeaderProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               <DescriptionOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Notes</Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Notes</Box>
             </button>
           </Tooltip>
         </Box>

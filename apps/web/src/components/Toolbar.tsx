@@ -52,17 +52,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
       className="neu-dock"
       sx={{
         position: 'absolute',
-        top: 16,
+        top: { xs: 10, sm: 16 },
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 40,
         display: 'flex',
         alignItems: 'center',
-        gap: 0.8,
-        p: 0.8,
+        gap: { xs: 0.4, sm: 0.8 },
+        p: { xs: 0.5, sm: 0.8 },
         borderRadius: '16px',
-        maxWidth: 'calc(100vw - 32px)',
+        maxWidth: 'calc(100% - 24px)',
         overflowX: 'auto',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
       }}
     >
       {tools.map((item, index) => {
@@ -76,8 +78,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                 flexItem
                 sx={{
                   my: 0.8,
-                  mx: 0.4,
+                  mx: { xs: 0.2, sm: 0.4 },
                   borderColor: 'var(--neu-border-subtle)',
+                  flexShrink: 0,
                 }}
               />
             ) : null}
@@ -90,14 +93,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
               arrow
               placement="bottom"
             >
-              <Box sx={{ position: 'relative' }}>
+              <Box sx={{ position: 'relative', flexShrink: 0 }}>
                 <IconButton
                   size="small"
                   disabled={isDisabled}
                   onClick={() => onToolSelect(item.id)}
                   sx={{
-                    width: 38,
-                    height: 38,
+                    width: { xs: 34, sm: 38 },
+                    height: { xs: 34, sm: 38 },
                     borderRadius: '10px',
                     color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
                     bgcolor: isActive ? 'var(--neu-bg)' : 'var(--neu-surface)',
@@ -124,6 +127,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ activeTool, onToolSelect, them
                     fontSize: '0.52rem',
                     fontWeight: 700,
                     pointerEvents: 'none',
+                    display: { xs: 'none', sm: 'block' },
                     color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-muted)',
                   }}
                 >

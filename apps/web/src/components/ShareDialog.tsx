@@ -200,7 +200,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: 'var(--neu-text-primary)' }}>
               Invite collaborator by email
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5, alignItems: { xs: 'stretch', sm: 'center' } }}>
               <TextField
                 placeholder="colleague@sailboard.io"
                 value={inviteEmail}
@@ -213,7 +213,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as ProjectRole)}
                 size="small"
-                sx={{ minWidth: 120 }}
+                sx={{ minWidth: { xs: '100%', sm: 120 } }}
               >
                 <MenuItem value="editor">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -234,7 +234,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 disabled={loading || !inviteEmail.trim()}
                 startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <PersonAddOutlined />}
                 className="neu-btn-primary"
-                sx={{ textTransform: 'none', px: 2, whiteSpace: 'nowrap', borderRadius: '10px' }}
+                sx={{ textTransform: 'none', px: 2, whiteSpace: 'nowrap', borderRadius: '10px', width: { xs: '100%', sm: 'auto' } }}
               >
                 Invite
               </Button>

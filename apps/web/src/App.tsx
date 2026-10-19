@@ -963,6 +963,14 @@ export const App: React.FC = () => {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const handleViewModeChange = (mode: 'canvas' | 'split' | 'notes') => {
+    if (isMobile && mode === 'split') {
+      setViewMode('canvas');
+    } else {
+      setViewMode(mode);
+    }
+  };
+
   const appToaster = (
     <Toaster
       position="bottom-right"
@@ -1113,7 +1121,7 @@ export const App: React.FC = () => {
           title={doc.title}
           onTitleChange={handleTitleChange}
           viewMode={viewMode}
-          onViewModeChange={setViewMode}
+          onViewModeChange={handleViewModeChange}
           styleMode={styleMode}
           onStyleModeChange={setStyleMode}
           theme={effectiveThemeMode}

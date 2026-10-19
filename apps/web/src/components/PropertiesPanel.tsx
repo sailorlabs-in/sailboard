@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Box,
@@ -9,6 +9,8 @@ import {
   ButtonGroup,
   Button,
   Divider,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   DeleteOutlined,
@@ -21,6 +23,8 @@ import {
   OpacityOutlined,
   AutoAwesomeOutlined,
   TextFieldsOutlined,
+  TuneOutlined,
+  ChevronLeftOutlined,
 } from '@mui/icons-material';
 import { CanvasElement, FillStyle, StrokeStyle } from '@rea/shared-types';
 
@@ -96,6 +100,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 }) => {
   const isDark = theme === 'dark';
   const hasSelection = selectedElements.length > 0;
+  const muiTheme = useTheme();
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down('sm'));
+  const [isCollapsed, setIsCollapsed] = useState(isMobile);
 
   // Active values (either from first selected element or default currentStyle)
   const activeStroke = hasSelection ? selectedElements[0].strokeColor : currentStyle.strokeColor;
@@ -112,17 +119,58 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const activeRoughness = hasSelection ? selectedElements[0].roughness : currentStyle.roughness;
   const activeOpacity = hasSelection ? selectedElements[0].opacity : currentStyle.opacity;
 
+  if (isCollapsed) {
+    return (
+      <Tooltip title="Open Style Inspector" placement="right">
+        <Paper
+          elevation={0}
+          className="neu-floating"
+          onClick={() => setIsCollapsed(false)}
+          sx={{
+            position: 'absolute',
+            top: { xs: 68, sm: 80 },
+            left: { xs: 12, sm: 20 },
+            zIndex: 35,
+            px: 1.4,
+            py: 0.8,
+            borderRadius: '12px',
+            bgcolor: 'var(--neu-surface)',
+            border: 'var(--neu-border)',
+            boxShadow: 'var(--neu-shadow-floating)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.8,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              bgcolor: 'var(--neu-surface-hover)',
+              transform: 'translateY(-1px)',
+              boxShadow: 'var(--neu-shadow-btn-hover)',
+            },
+          }}
+        >
+          <TuneOutlined sx={{ fontSize: 18, color: 'var(--neu-primary-light)' }} />
+          <Typography variant="caption" sx={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>
+            Styles
+          </Typography>
+        </Paper>
+      </Tooltip>
+    );
+  }
+
   return (
     <Paper
       elevation={0}
       className="neu-floating"
       sx={{
         position: 'absolute',
-        top: 80,
-        left: 20,
-        width: 236,
+        top: { xs: 68, sm: 80 },
+        left: { xs: 12, sm: 20 },
+        width: { xs: 220, sm: 236 },
+        maxHeight: { xs: 'calc(100% - 85px)', sm: 'calc(100% - 105px)' },
+        overflowY: 'auto',
         zIndex: 35,
-        p: 2,
+        p: { xs: 1.5, sm: 2 },
         borderRadius: '16px',
         bgcolor: 'var(--neu-surface)',
         border: 'var(--neu-border)',
@@ -133,9 +181,21 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--neu-text-secondary)' }}>
-          {hasSelection ? `${selectedElements.length} Selected` : 'Default Styles'}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+          <Tooltip title="Collapse Styles Inspector">
+            <IconButton
+              size="small"
+              onClick={() => setIsCollapsed(true)}
+              className="neu-icon-btn"
+              sx={{ width: 24, height: 24, p: 0.3 }}
+            >
+              <ChevronLeftOutlined sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--neu-text-secondary)' }}>
+            {hasSelection ? `${selectedElements.length} Selected` : 'Default Styles'}
+          </Typography>
+        </Box>
         {hasSelection && (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title="Duplicate (Ctrl+D)">

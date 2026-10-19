@@ -193,12 +193,14 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
               sx={{
                 fontSize: '0.72rem',
                 py: 0.4,
-                px: 1.4,
+                px: { xs: 1, sm: 1.4 },
                 borderRadius: '8px',
                 textTransform: 'none',
+                whiteSpace: 'nowrap',
               }}
             >
-              Doc → Diagram
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Doc → Diagram</Box>
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Diagram</Box>
             </Button>
           </span>
         </Tooltip>
@@ -215,6 +217,9 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
             py: 0.8,
             borderBottom: 'var(--neu-border-subtle)',
             bgcolor: 'var(--neu-surface)',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
           }}
         >
           <Tooltip title="Heading 1 (#)">

@@ -143,6 +143,7 @@ export const Minimap: React.FC<MinimapProps> = ({
         border: 'var(--neu-border)',
         boxShadow: 'var(--neu-shadow-raised)',
         cursor: 'crosshair',
+        display: { xs: 'none', sm: 'block' },
       }}
     >
       <canvas ref={canvasRef} width={width} height={height} onClick={handleClick} />

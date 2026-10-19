@@ -212,21 +212,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
         transition: 'all 0.25s ease',
       }}
     >
+      {/* Mobile Backdrop */}
+      {isMobile && sidebarOpen && (
+        <Box
+          onClick={() => setSidebarOpen(false)}
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 1100,
+          }}
+        />
+      )}
+
       {/* Figma-Style Left Sidebar */}
       <Box
         className="neu-flat"
         sx={{
-          width: { xs: sidebarOpen ? 260 : 0, md: 260 },
+          position: { xs: 'fixed', md: 'relative' },
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: 260,
+          transform: {
+            xs: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            md: 'none',
+          },
           height: '100%',
           bgcolor: 'var(--neu-surface)',
           borderRight: 'var(--neu-border)',
           boxShadow: 'var(--neu-shadow-raised)',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
           overflow: 'hidden',
           flexShrink: 0,
-          zIndex: 30,
+          zIndex: { xs: 1200, md: 30 },
         }}
       >
         {/* Brand Header */}
@@ -263,6 +285,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </Typography>
             </Box>
           </Box>
+          {isMobile && (
+            <IconButton size="small" onClick={() => setSidebarOpen(false)} className="neu-icon-btn">
+              <MenuOpenOutlined fontSize="small" sx={{ transform: 'rotate(180deg)' }} />
+            </IconButton>
+          )}
         </Box>
 
         {/* User Profile Card */}
@@ -313,7 +340,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             fullWidth
             size="small"
             startIcon={<SpaceDashboardOutlined fontSize="small" />}
-            onClick={() => setSelectedFolderId('all')}
+            onClick={() => {
+              setSelectedFolderId('all');
+              if (isMobile) setSidebarOpen(false);
+            }}
             sx={{
               justifyContent: 'flex-start',
               px: 1.4,
@@ -354,7 +384,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 fullWidth
                 size="small"
                 startIcon={<FolderOutlined fontSize="small" sx={{ color: isSelected ? 'var(--neu-primary-light)' : 'text.secondary' }} />}
-                onClick={() => setSelectedFolderId(proj.id)}
+                onClick={() => {
+                  setSelectedFolderId(proj.id);
+                  if (isMobile) setSidebarOpen(false);
+                }}
                 sx={{
                   justifyContent: 'flex-start',
                   px: 1.4,
@@ -519,7 +552,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 },
               }}
               sx={{
-                width: { xs: 200, sm: 300, md: 360 },
+                width: { xs: 150, sm: 260, md: 360 },
               }}
             />
           </Box>
@@ -541,15 +574,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
               }}
               className="neu-btn-primary"
               sx={{
-                py: 0.9,
-                px: 2.2,
+                py: { xs: 0.6, sm: 0.9 },
+                px: { xs: 1.2, sm: 2.2 },
                 borderRadius: '10px',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: { xs: '0.75rem', sm: '0.85rem' },
                 textTransform: 'none',
+                whiteSpace: 'nowrap',
               }}
             >
-              New Canvas
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>New Canvas</Box>
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>New</Box>
             </Button>
           </Box>
         </Box>
