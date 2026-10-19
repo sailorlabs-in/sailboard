@@ -37,7 +37,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
   const [tab, setTab] = useState<'edit' | 'preview'>(isViewer ? 'preview' : 'edit');
 
   const insertText = (before: string, after = '') => {
-    const textarea = document.getElementById('eraser-notes-textarea') as HTMLTextAreaElement | null;
+    const textarea = document.getElementById('sailboard-notes-textarea') as HTMLTextAreaElement | null;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
@@ -325,7 +325,7 @@ export const NotesEditor: React.FC<NotesEditorProps> = ({
       <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0, overflow: 'auto', p: 1, boxSizing: 'border-box' }}>
         {tab === 'edit' ? (
           <textarea
-            id="eraser-notes-textarea"
+            id="sailboard-notes-textarea"
             value={notes}
             readOnly={isViewer}
             onChange={(e) => !isViewer && onChange(e.target.value)}

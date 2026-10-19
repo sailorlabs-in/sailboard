@@ -25,7 +25,7 @@ export interface RenderOptions {
   selectedElementIds: string[];
   selectionBox: BoundingBox | null;
   remoteUsers: UserPresence[];
-  activeStyleMode: 'rough' | 'clean'; // Excalidraw vs Eraser
+  activeStyleMode: 'rough' | 'clean'; // Sketchy hand-drawn vs Clean geometry
 }
 
 export function renderScene(
@@ -85,7 +85,7 @@ export function renderScene(
     ctx.restore();
   }
 
-  // Render Remote Collaborators' Selections (Figma Style)
+  // Render Remote Collaborators' Selections
   for (const user of remoteUsers) {
     if (user.selectedElementIds && user.selectedElementIds.length > 0) {
       const userElements = elements.filter(

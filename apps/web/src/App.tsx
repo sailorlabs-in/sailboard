@@ -1490,7 +1490,7 @@ export const App: React.FC = () => {
           type="file"
           ref={fileInputRef}
           style={{ display: "none" }}
-          accept=".json,.excalidraw"
+          accept=".json,.sailboard"
           onChange={handleImportFile}
         />
 
@@ -1585,7 +1585,7 @@ export const App: React.FC = () => {
             onNavigateHome={handleNavigateHome}
           />
 
-          {/* Left Split: Eraser-Style Markdown Documentation */}
+          {/* Left Split: Markdown Documentation */}
           {(viewMode === "split" || viewMode === "notes") && (
             <Box
               sx={{
@@ -1633,7 +1633,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* Right Split: Excalidraw-Style Infinite Canvas */}
+          {/* Right Split: Infinite Vector Canvas */}
           {(viewMode === "split" || viewMode === "canvas") && (
             <Box
               ref={canvasContainerRef}

@@ -1,12 +1,12 @@
 # ⛵ Sailboard — Collaborative Engineering Whiteboard & Architecture Canvas
 
-Sailboard is a production-grade collaborative engineering canvas combining **Eraser**-style Markdown documentation with **Excalidraw**-style infinite whiteboarding, live multiplayer collaboration, folder-based project hierarchies, and granular role-based permissions (`Owner`, `Editor`, `Viewer`).
+Sailboard is a production-grade collaborative engineering canvas combining rich Markdown documentation with an infinite vector whiteboard, live multiplayer collaboration, folder-based project hierarchies, and granular role-based permissions (`Owner`, `Editor`, `Viewer`).
 
 ---
 
 ## 🚀 Key Features
 
-1. **Eraser + Excalidraw Synergy**:
+1. **Integrated Canvas & Documentation Synergy**:
    - Dual split-view with synchronized Markdown notes and infinite vector canvas.
    - Hand-drawn sketchy style powered by **Rough.js** or crisp architectural rendering.
    - Diagram-from-doc generation, shape drawing, sticky notes, connecting arrows, and 8-point resize handles.

@@ -620,7 +620,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Import JSON */}
           {!isViewer && (
-            <Tooltip title="Import JSON / Excalidraw File">
+            <Tooltip title="Import Canvas Document (JSON)">
               <IconButton size="small" onClick={onImportClick} className="neu-icon-btn" sx={{ width: 32, height: 32 }}>
                 <UploadFileOutlined fontSize="small" />
               </IconButton>
@@ -833,7 +833,7 @@ export const Header: React.FC<HeaderProps> = ({
               }}
             >
               <ListItemIcon><UploadFileOutlined fontSize="small" /></ListItemIcon>
-              <ListItemText primary="Import JSON / Excalidraw" />
+              <ListItemText primary="Import Document (JSON)" />
             </MenuItem>
           )}
 

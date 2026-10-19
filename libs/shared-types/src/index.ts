@@ -1,19 +1,19 @@
 export type ElementType =
-  | 'selection'
-  | 'rectangle'
-  | 'diamond'
-  | 'ellipse'
-  | 'arrow'
-  | 'line'
-  | 'draw'
-  | 'text'
-  | 'sticky'
-  | 'image';
+  | "selection"
+  | "rectangle"
+  | "diamond"
+  | "ellipse"
+  | "arrow"
+  | "line"
+  | "draw"
+  | "text"
+  | "sticky"
+  | "image";
 
-export type FillStyle = 'none' | 'solid' | 'hachure' | 'cross-hatch' | 'zigzag';
-export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
-export type TextAlign = 'left' | 'center' | 'right';
-export type ArrowHead = 'none' | 'arrow' | 'triangle' | 'circle';
+export type FillStyle = "none" | "solid" | "hachure" | "cross-hatch" | "zigzag";
+export type StrokeStyle = "solid" | "dashed" | "dotted";
+export type TextAlign = "left" | "center" | "right";
+export type ArrowHead = "none" | "arrow" | "triangle" | "circle";
 
 export interface Point {
   x: number;
@@ -22,7 +22,7 @@ export interface Point {
 
 export interface BoundElement {
   id: string;
-  type: 'arrow' | 'text';
+  type: "arrow" | "text";
 }
 
 export interface ArrowBinding {
@@ -70,7 +70,7 @@ export interface CanvasElement {
   customData?: Record<string, any>;
 }
 
-export type ProjectRole = 'owner' | 'editor' | 'viewer';
+export type ProjectRole = "owner" | "editor" | "viewer";
 
 export interface User {
   id: string;
@@ -126,8 +126,8 @@ export interface WhiteboardDocument {
   description?: string;
   notes: string;
   elements: CanvasElement[];
-  viewMode: 'canvas' | 'split' | 'notes';
-  canvasTheme: 'light' | 'dark';
+  viewMode: "canvas" | "split" | "notes";
+  canvasTheme: "light" | "dark";
   gridVisible: boolean;
   gridSnap: boolean;
   version: number;
@@ -142,7 +142,7 @@ export interface UserPresence {
   role?: ProjectRole;
   cursor: Point | null;
   selectedElementIds: string[];
-  activeView?: 'canvas' | 'notes';
+  activeView?: "canvas" | "notes";
   lastActive: number;
 }
 
@@ -169,15 +169,15 @@ export interface UpdateDocumentDto {
   description?: string;
   notes?: string;
   elements?: CanvasElement[];
-  viewMode?: 'canvas' | 'split' | 'notes';
-  canvasTheme?: 'light' | 'dark';
+  viewMode?: "canvas" | "split" | "notes";
+  canvasTheme?: "light" | "dark";
   gridVisible?: boolean;
   gridSnap?: boolean;
 }
 
 export interface DocumentExportData {
   version: number;
-  source: 'sailboard' | 'eraser-excalidraw-clone';
+  source: 'sailboard' | string;
   timestamp: number;
   document: WhiteboardDocument;
 }
