@@ -17,6 +17,7 @@ import {
   Chip,
   useTheme,
   useMediaQuery,
+  Badge,
 } from '@mui/material';
 import {
   BrushOutlined,
@@ -44,6 +45,8 @@ import {
   SettingsBrightnessOutlined,
   EditOutlined,
   TuneOutlined,
+  SearchOutlined,
+  ChatBubbleOutlined,
 } from '@mui/icons-material';
 import { UserPresence, ProjectRole, User } from '@rea/shared-types';
 import { ThemePreference } from '../theme/theme';
@@ -88,6 +91,10 @@ interface HeaderProps {
   currentUser: User | null;
   onToggleSidebar?: () => void;
   onNavigateHome?: () => void;
+  onOpenCommandPalette?: () => void;
+  commentsCount?: number;
+  showComments?: boolean;
+  onToggleComments?: () => void;
 }
 
 export function Header({
@@ -129,6 +136,10 @@ export function Header({
   currentUser,
   onToggleSidebar,
   onNavigateHome,
+  onOpenCommandPalette,
+  commentsCount = 0,
+  showComments = true,
+  onToggleComments,
 }: HeaderProps) {
   const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<null | HTMLElement>(null);
@@ -424,6 +435,46 @@ export function Header({
 
         <Box sx={{ flexGrow: 1, minWidth: 6 }} />
 
+        {/* Command Palette Trigger (Cmd+K) */}
+        {onOpenCommandPalette && (
+          <Button
+            size="small"
+            onClick={onOpenCommandPalette}
+            className="neu-btn"
+            startIcon={<SearchOutlined sx={{ fontSize: '15px !important', color: 'var(--neu-primary)' }} />}
+            endIcon={
+              <Box
+                sx={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  bgcolor: 'var(--neu-surface)',
+                  border: 'var(--neu-border)',
+                  borderRadius: '4px',
+                  px: 0.6,
+                  py: 0.1,
+                  color: 'var(--neu-text-secondary)',
+                  display: { xs: 'none', md: 'block' },
+                }}
+              >
+                ⌘K
+              </Box>
+            }
+            sx={{
+              height: 28,
+              textTransform: 'none',
+              px: 1.2,
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'var(--neu-text-secondary)',
+              mr: { xs: 0.5, sm: 1 },
+              display: { xs: 'none', sm: 'inline-flex' },
+            }}
+          >
+            Commands
+          </Button>
+        )}
+
         {/* View Mode Selector (Neumorphic Segmented Control) */}
         <Box
           className="neu-segmented"
@@ -623,6 +674,34 @@ export function Header({
             <Tooltip title="Import Canvas Document (JSON)">
               <IconButton size="small" onClick={onImportClick} className="neu-icon-btn" sx={{ width: 32, height: 32 }}>
                 <UploadFileOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Comments Toggle Button */}
+          {onToggleComments && (
+            <Tooltip title={showComments ? 'Hide Comment Pins' : 'Show Comment Pins'}>
+              <IconButton
+                size="small"
+                onClick={onToggleComments}
+                className={`neu-icon-btn ${showComments ? 'active' : ''}`}
+                sx={{ width: 32, height: 32 }}
+              >
+                <Badge
+                  badgeContent={commentsCount}
+                  color="primary"
+                  invisible={!commentsCount || commentsCount <= 0}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '0.58rem',
+                      height: 15,
+                      minWidth: 15,
+                      bgcolor: '#10b981',
+                    },
+                  }}
+                >
+                  <ChatBubbleOutlined sx={{ fontSize: 17, color: showComments ? '#6366f1' : 'inherit' }} />
+                </Badge>
               </IconButton>
             </Tooltip>
           )}

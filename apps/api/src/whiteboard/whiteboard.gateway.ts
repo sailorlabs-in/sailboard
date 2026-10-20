@@ -249,4 +249,31 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     // Persist to PostgreSQL via TypeORM
     await this.whiteboardService.update(documentId, { notes });
   }
+
+  @SubscribeMessage('comment-create')
+  async handleCommentCreate(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { documentId: string; comment: any }
+  ) {
+    const { documentId, comment } = payload;
+    client.to(documentId).emit('comment-created', comment);
+  }
+
+  @SubscribeMessage('comment-update')
+  async handleCommentUpdate(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { documentId: string; comment: any }
+  ) {
+    const { documentId, comment } = payload;
+    client.to(documentId).emit('comment-updated', comment);
+  }
+
+  @SubscribeMessage('comment-delete')
+  async handleCommentDelete(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { documentId: string; commentId: string }
+  ) {
+    const { documentId, commentId } = payload;
+    client.to(documentId).emit('comment-deleted', { commentId });
+  }
 }

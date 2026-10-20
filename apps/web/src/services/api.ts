@@ -8,6 +8,7 @@ import {
   ProjectRole,
   AuthResponse,
   User,
+  CanvasComment,
 } from '@rea/shared-types';
 import { axiosClient } from './axiosClient';
 
@@ -154,6 +155,38 @@ class ApiService {
   async importDocument(data: any): Promise<WhiteboardDocument> {
     const res = await axiosClient.post<WhiteboardDocument>('/documents/import', data);
     return res.data;
+  }
+
+  // --- Comments APIs ---
+
+  async getComments(documentId: string): Promise<CanvasComment[]> {
+    const res = await axiosClient.get<CanvasComment[]>(`/documents/${documentId}/comments`);
+    return res.data;
+  }
+
+  async createComment(documentId: string, x: number, y: number, content: string): Promise<CanvasComment> {
+    const res = await axiosClient.post<CanvasComment>(`/documents/${documentId}/comments`, {
+      documentId,
+      x,
+      y,
+      content,
+    });
+    return res.data;
+  }
+
+  async replyComment(commentId: string, content: string): Promise<CanvasComment> {
+    const res = await axiosClient.post<CanvasComment>(`/documents/comments/${commentId}/reply`, { content });
+    return res.data;
+  }
+
+  async resolveComment(commentId: string): Promise<CanvasComment> {
+    const res = await axiosClient.put<CanvasComment>(`/documents/comments/${commentId}/resolve`);
+    return res.data;
+  }
+
+  async deleteComment(commentId: string): Promise<boolean> {
+    const res = await axiosClient.delete<{ success: boolean }>(`/documents/comments/${commentId}`);
+    return res.data?.success ?? true;
   }
 }
 

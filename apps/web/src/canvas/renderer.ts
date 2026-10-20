@@ -1,6 +1,6 @@
 import rough from 'roughjs';
 import { CanvasElement, UserPresence } from '@rea/shared-types';
-import { BoundingBox, getElementBounds, getResizeHandles } from './math';
+import { BoundingBox, getElementBounds, getResizeHandles, ShapeAnchor } from './math';
 import { applyFillOpacity } from '../utils/colorUtils';
 
 function getEffectiveFill(backgroundColor?: string, fillOpacity?: number): string | undefined {
@@ -26,6 +26,8 @@ export interface RenderOptions {
   selectionBox: BoundingBox | null;
   remoteUsers: UserPresence[];
   activeStyleMode: 'rough' | 'clean'; // Sketchy hand-drawn vs Clean geometry
+  activeSnapAnchor?: ShapeAnchor | null;
+  candidateAnchors?: ShapeAnchor[];
 }
 
 export function renderScene(
@@ -104,6 +106,68 @@ export function renderScene(
     }
   }
 
+  // Render Connector Shape Anchors (Snapping Dots)
+  if (options.candidateAnchors && options.candidateAnchors.length > 0) {
+    renderShapeAnchors(ctx, options.candidateAnchors, options.activeSnapAnchor, zoom, isDark);
+  }
+
+  ctx.restore();
+}
+
+function renderShapeAnchors(
+  ctx: CanvasRenderingContext2D,
+  anchors: ShapeAnchor[],
+  activeAnchor: ShapeAnchor | null | undefined,
+  zoom: number,
+  isDark: boolean
+) {
+  ctx.save();
+  for (const anchor of anchors) {
+    const isActive =
+      activeAnchor &&
+      activeAnchor.elementId === anchor.elementId &&
+      activeAnchor.position === anchor.position;
+
+    const radius = (isActive ? 7 : 5) / zoom;
+
+    if (isActive) {
+      // Outer aura ring
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, radius + 4 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
+      ctx.fill();
+
+      // Middle glowing ring
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#06b6d4';
+      ctx.fill();
+      ctx.lineWidth = 2 / zoom;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Center dot
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, 2.5 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    } else {
+      // Normal anchor candidate
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = isDark ? '#334155' : '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.strokeStyle = '#6366f1';
+      ctx.stroke();
+
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(anchor.x, anchor.y, 2 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = '#6366f1';
+      ctx.fill();
+    }
+  }
   ctx.restore();
 }
 

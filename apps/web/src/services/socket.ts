@@ -206,6 +206,44 @@ class SocketService {
     return () => s.off('note-update', callback);
   }
 
+  // --- Comments Real-time Events ---
+
+  emitCommentCreate(comment: any, documentId?: string) {
+    const docId = documentId || this.currentDocId || comment?.documentId;
+    const s = this.connect();
+    s.emit('comment-create', { documentId: docId, comment });
+  }
+
+  emitCommentUpdate(comment: any, documentId?: string) {
+    const docId = documentId || this.currentDocId || comment?.documentId;
+    const s = this.connect();
+    s.emit('comment-update', { documentId: docId, comment });
+  }
+
+  emitCommentDelete(commentId: string, documentId?: string) {
+    const docId = documentId || this.currentDocId;
+    const s = this.connect();
+    s.emit('comment-delete', { documentId: docId, commentId });
+  }
+
+  onCommentCreated(callback: (comment: any) => void) {
+    const s = this.connect();
+    s.on('comment-created', callback);
+    return () => s.off('comment-created', callback);
+  }
+
+  onCommentUpdated(callback: (comment: any) => void) {
+    const s = this.connect();
+    s.on('comment-updated', callback);
+    return () => s.off('comment-updated', callback);
+  }
+
+  onCommentDeleted(callback: (data: { commentId: string }) => void) {
+    const s = this.connect();
+    s.on('comment-deleted', callback);
+    return () => s.off('comment-deleted', callback);
+  }
+
   disconnect() {
     if (this.elementsThrottleTimer) clearTimeout(this.elementsThrottleTimer);
     if (this.cursorThrottleTimer) clearTimeout(this.cursorThrottleTimer);

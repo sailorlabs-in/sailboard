@@ -15,6 +15,8 @@ import {
   WhiteboardDocument,
   Project,
   ProjectRole,
+  CanvasComment,
+  Point,
 } from "@rea/shared-types";
 import toast, { Toaster } from "react-hot-toast";
 import { SailingOutlined } from "@mui/icons-material";
@@ -33,6 +35,8 @@ import { AuthScreen } from "./components/AuthScreen";
 import { AuthDialog } from "./components/AuthDialog";
 import { AccountManageDialog } from "./components/AccountManageDialog";
 import { Dashboard } from "./components/Dashboard";
+import { CommandPalette } from "./components/CommandPalette";
+import { CanvasComments } from "./components/CanvasComments";
 import { api } from "./services/api";
 import { socketService } from "./services/socket";
 import { useAuth } from "./context/AuthContext";
@@ -158,10 +162,19 @@ export function App() {
   const [gridType, setGridType] = useState<"dots" | "grid" | "blank">("dots");
 
   // Tools & Selection
-  const [activeTool, setActiveTool] = useState<ElementType | "eraser" | "pan">(
-    "selection",
-  );
+  const [activeTool, setActiveTool] = useState<
+    ElementType | "eraser" | "pan" | "comment"
+  >("selection");
   const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
+
+  // Figma-Style Canvas Comment Pins State
+  const [comments, setComments] = useState<CanvasComment[]>([]);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [showComments, setShowComments] = useState<boolean>(true);
+  const [pendingPinPos, setPendingPinPos] = useState<Point | null>(null);
+
+  // Fast Command Palette State (⌘K / Ctrl+K)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
 
   // Style Defaults for new elements
   const [currentStyle, setCurrentStyle] = useState({
@@ -431,6 +444,28 @@ export function App() {
       setDoc((prev) => ({ ...prev, notes: remoteNotes }));
     });
 
+    // Real-time live comments sync: new pin created
+    const cleanupCommentCreate = socketService.onCommentCreated((comment) => {
+      setComments((prev) => {
+        if (prev.some((c) => c.id === comment.id)) return prev;
+        return [...prev, comment];
+      });
+    });
+
+    // Real-time live comments sync: reply or resolve status updated
+    const cleanupCommentUpdate = socketService.onCommentUpdated((comment) => {
+      setComments((prev) =>
+        prev.map((c) => (c.id === comment.id ? comment : c)),
+      );
+    });
+
+    // Real-time live comments sync: comment pin deleted
+    const cleanupCommentDelete = socketService.onCommentDeleted(
+      ({ commentId }) => {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      },
+    );
+
     return () => {
       cleanupUsers();
       cleanupUserLeft();
@@ -438,9 +473,39 @@ export function App() {
       cleanupSelection();
       cleanupElements();
       cleanupNote();
+      cleanupCommentCreate();
+      cleanupCommentUpdate();
+      cleanupCommentDelete();
       socketService.disconnect();
     };
   }, [isAuthenticated, user]);
+
+  // Fetch comments whenever the active canvas document changes
+  useEffect(() => {
+    if (!doc.id || !isAuthenticated) {
+      setComments([]);
+      setActiveCommentId(null);
+      setPendingPinPos(null);
+      return;
+    }
+
+    let isCancelled = false;
+    async function loadComments() {
+      try {
+        const list = await api.getComments(doc.id);
+        if (!isCancelled) {
+          setComments(list);
+        }
+      } catch (err) {
+        console.warn("Could not load comments for canvas:", err);
+      }
+    }
+
+    loadComments();
+    return () => {
+      isCancelled = true;
+    };
+  }, [doc.id, isAuthenticated]);
 
   // Switch Active File inside current Project Folder
   const handleSelectFile = useCallback(
@@ -476,6 +541,77 @@ export function App() {
       handleSelectFile(file);
     },
     [computeRoleForProject, handleSelectFile],
+  );
+
+  // Canvas Comments Handlers (Figma-Style Canvas Comments)
+  const handleCreateComment = useCallback(
+    async (x: number, y: number, content: string) => {
+      if (!doc.id) return;
+      try {
+        const newComment = await api.createComment(doc.id, x, y, content);
+        setComments((prev) => [...prev, newComment]);
+        setActiveCommentId(newComment.id);
+        setPendingPinPos(null);
+        if (activeTool === "comment") {
+          setActiveTool("selection");
+        }
+        socketService.emitCommentCreate(newComment);
+        toast.success("Comment added");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to post comment");
+      }
+    },
+    [doc.id, activeTool],
+  );
+
+  const handleReplyComment = useCallback(
+    async (commentId: string, content: string) => {
+      try {
+        const updated = await api.replyComment(commentId, content);
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? updated : c)),
+        );
+        socketService.emitCommentUpdate(updated);
+      } catch (err: any) {
+        toast.error(err.message || "Failed to post reply");
+      }
+    },
+    [],
+  );
+
+  const handleResolveComment = useCallback(
+    async (commentId: string) => {
+      try {
+        const updated = await api.resolveComment(commentId);
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? updated : c)),
+        );
+        socketService.emitCommentUpdate(updated);
+        toast.success(
+          updated.resolved ? "Comment resolved" : "Comment re-opened",
+        );
+      } catch (err: any) {
+        toast.error(err.message || "Failed to update comment status");
+      }
+    },
+    [],
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      try {
+        await api.deleteComment(commentId);
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        if (activeCommentId === commentId) {
+          setActiveCommentId(null);
+        }
+        socketService.emitCommentDelete(commentId);
+        toast.success("Comment deleted");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to delete comment");
+      }
+    },
+    [activeCommentId],
   );
 
   // Switch Active Project Folder
@@ -854,8 +990,14 @@ export function App() {
       )
         return;
 
-      // Ctrl + / Ctrl - / Ctrl 0 zoom shortcuts
+      // Ctrl + / Ctrl - / Ctrl 0 zoom shortcuts & Command Palette
       if (e.ctrlKey || e.metaKey) {
+        if (e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          setCommandPaletteOpen((prev) => !prev);
+          return;
+        }
+
         if (e.key === "=" || e.key === "+") {
           e.preventDefault();
           handleZoomIn();
@@ -908,6 +1050,9 @@ export function App() {
         case "V":
         case "1":
           setActiveTool("selection");
+          break;
+        case "C":
+          setActiveTool("comment");
           break;
         case "H":
           setActiveTool("pan");
@@ -1469,6 +1614,41 @@ export function App() {
               : "Production Collaborative Workspace"
           }
         />
+        {/* Fast Command Palette (⌘K / Ctrl+K) */}
+        <CommandPalette
+          open={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          projects={projects}
+          currentProject={currentProject}
+          currentFile={doc}
+          onSelectProject={handleSelectProject}
+          onOpenFile={handleOpenFile}
+          onSelectFile={handleSelectFile}
+          onCreateFile={handleCreateFile}
+          onCreateProject={handleCreateProject}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          theme={effectiveThemeMode}
+          themePreference={themePreference}
+          onThemeChange={setThemePreference}
+          gridVisible={gridVisible}
+          onToggleGrid={() => setGridVisible((v) => !v)}
+          gridSnap={gridSnap}
+          onToggleSnap={() => setGridSnap((s) => !s)}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          styleMode={styleMode}
+          onStyleModeChange={setStyleMode}
+          onOpenShare={() => setShareOpen(true)}
+          onOpenExport={() => setExportOpen(true)}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onZoomReset={handleZoomReset}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={historyIndex > 0}
+          canRedo={historyIndex < history.length - 1}
+        />
       </ThemeProvider>
     );
   }
@@ -1542,6 +1722,10 @@ export function App() {
           currentUser={user}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           onNavigateHome={handleNavigateHome}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          commentsCount={comments.filter((c) => !c.resolved).length}
+          showComments={showComments}
+          onToggleComments={() => setShowComments((v) => !v)}
         />
 
         {/* Viewer Mode Alert Banner */}
@@ -1684,6 +1868,11 @@ export function App() {
                 onSelectElements={handleSelectElements}
                 activeTool={activeTool}
                 onToolChange={setActiveTool}
+                onDropCommentPin={(worldPt) => {
+                  setPendingPinPos(worldPt);
+                  setActiveCommentId(null);
+                  setShowComments(true);
+                }}
                 theme={effectiveThemeMode}
                 styleMode={styleMode}
                 gridVisible={gridVisible}
@@ -1699,6 +1888,28 @@ export function App() {
                   socketService.emitCursorMove(cursor, selectedElementIds)
                 }
                 isViewer={isViewer}
+              />
+
+              {/* Figma-Style Canvas Comment Pins */}
+              <CanvasComments
+                comments={comments}
+                activeCommentId={activeCommentId}
+                onSelectComment={setActiveCommentId}
+                onCreateComment={handleCreateComment}
+                onReplyComment={handleReplyComment}
+                onResolveComment={handleResolveComment}
+                onDeleteComment={handleDeleteComment}
+                zoom={zoom}
+                pan={pan}
+                theme={effectiveThemeMode}
+                currentUser={user}
+                isViewer={isViewer}
+                pendingPinPos={pendingPinPos}
+                onCancelPendingPin={() => {
+                  setPendingPinPos(null);
+                  if (activeTool === "comment") setActiveTool("selection");
+                }}
+                visible={showComments}
               />
 
               {/* Bottom Right Minimap */}
@@ -1763,6 +1974,41 @@ export function App() {
               ? "Connect another profile to switch anytime on this device"
               : "Production Collaborative Workspace"
           }
+        />
+        {/* Fast Command Palette (⌘K / Ctrl+K) */}
+        <CommandPalette
+          open={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          projects={projects}
+          currentProject={currentProject}
+          currentFile={doc}
+          onSelectProject={handleSelectProject}
+          onOpenFile={handleOpenFile}
+          onSelectFile={handleSelectFile}
+          onCreateFile={handleCreateFile}
+          onCreateProject={handleCreateProject}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          theme={effectiveThemeMode}
+          themePreference={themePreference}
+          onThemeChange={setThemePreference}
+          gridVisible={gridVisible}
+          onToggleGrid={() => setGridVisible((v) => !v)}
+          gridSnap={gridSnap}
+          onToggleSnap={() => setGridSnap((s) => !s)}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          styleMode={styleMode}
+          onStyleModeChange={setStyleMode}
+          onOpenShare={() => setShareOpen(true)}
+          onOpenExport={() => setExportOpen(true)}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onZoomReset={handleZoomReset}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={historyIndex > 0}
+          canRedo={historyIndex < history.length - 1}
         />
       </Box>
     </ThemeProvider>

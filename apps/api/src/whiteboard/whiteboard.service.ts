@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DocumentEntity } from '../database/entities/document.entity';
 import { CanvasElementEntity } from '../database/entities/canvas-element.entity';
+import { CommentEntity } from '../database/entities/comment.entity';
 import { RedisService } from '../redis/redis.service';
 import {
   WhiteboardDocument,
@@ -14,6 +15,10 @@ import {
   UpdateDocumentDto,
   CanvasElement,
   DocumentExportData,
+  CanvasComment,
+  CreateCommentDto,
+  ReplyCommentDto,
+  CommentReply,
 } from '@rea/shared-types';
 
 @Injectable()
@@ -23,6 +28,8 @@ export class WhiteboardService {
     private readonly docRepo: Repository<DocumentEntity>,
     @InjectRepository(CanvasElementEntity)
     private readonly elementRepo: Repository<CanvasElementEntity>,
+    @InjectRepository(CommentEntity)
+    private readonly commentRepo: Repository<CommentEntity>,
     @Inject(RedisService)
     private readonly redisService: RedisService
   ) {}
@@ -67,6 +74,9 @@ export class WhiteboardService {
         textColor: el.textColor,
         points: el.points,
         boundElements: el.boundElements,
+        startBinding: el.startBinding,
+        endBinding: el.endBinding,
+        startArrowhead: el.startArrowhead as any,
         endArrowhead: el.endArrowhead as any,
         zIndex: el.zIndex,
         updatedAt: Number(el.updatedAt) || Date.now(),
@@ -195,6 +205,9 @@ export class WhiteboardService {
           textColor: el.textColor,
           points: el.points,
           boundElements: el.boundElements,
+          startBinding: el.startBinding,
+          endBinding: el.endBinding,
+          startArrowhead: el.startArrowhead,
           endArrowhead: el.endArrowhead,
           zIndex: el.zIndex,
           updatedAt: el.updatedAt || Date.now(),
@@ -276,5 +289,97 @@ export class WhiteboardService {
       notes,
       elements,
     });
+  }
+
+  // --- Comment Pin Operations ---
+
+  private toCommentModel(entity: CommentEntity): CanvasComment {
+    return {
+      id: entity.id,
+      documentId: entity.documentId,
+      x: entity.x,
+      y: entity.y,
+      author: entity.author,
+      content: entity.content,
+      resolved: entity.resolved,
+      replies: entity.replies || [],
+      createdAt: entity.createdAt ? entity.createdAt.toISOString() : new Date().toISOString(),
+      updatedAt: entity.updatedAt ? entity.updatedAt.toISOString() : new Date().toISOString(),
+    };
+  }
+
+  async getComments(documentId: string): Promise<CanvasComment[]> {
+    const comments = await this.commentRepo.find({
+      where: { documentId },
+      order: { createdAt: 'ASC' },
+    });
+    return comments.map((c) => this.toCommentModel(c));
+  }
+
+  async createComment(dto: CreateCommentDto, user?: any): Promise<CanvasComment> {
+    const id = `cmt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const author = dto.author || {
+      id: user?.id || 'anonymous',
+      name: user?.name || 'Anonymous Peer',
+      color: user?.color || '#6366f1',
+      email: user?.email,
+    };
+
+    const entity = this.commentRepo.create({
+      id,
+      documentId: dto.documentId,
+      x: dto.x,
+      y: dto.y,
+      author,
+      content: dto.content,
+      resolved: false,
+      replies: [],
+    });
+
+    const saved = await this.commentRepo.save(entity);
+    return this.toCommentModel(saved);
+  }
+
+  async replyComment(commentId: string, dto: ReplyCommentDto, user?: any): Promise<CanvasComment> {
+    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    if (!comment) {
+      throw new NotFoundException(`Comment with ID ${commentId} not found`);
+    }
+
+    const replyId = `rep-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const author = dto.author || {
+      id: user?.id || 'anonymous',
+      name: user?.name || 'Anonymous Peer',
+      color: user?.color || '#6366f1',
+      email: user?.email,
+    };
+
+    const newReply: CommentReply = {
+      id: replyId,
+      commentId,
+      author,
+      content: dto.content,
+      createdAt: new Date().toISOString(),
+    };
+
+    comment.replies = [...(comment.replies || []), newReply];
+    const saved = await this.commentRepo.save(comment);
+    return this.toCommentModel(saved);
+  }
+
+  async resolveComment(commentId: string): Promise<CanvasComment> {
+    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    if (!comment) {
+      throw new NotFoundException(`Comment with ID ${commentId} not found`);
+    }
+
+    comment.resolved = !comment.resolved;
+    const saved = await this.commentRepo.save(comment);
+    return this.toCommentModel(saved);
+  }
+
+  async deleteComment(commentId: string): Promise<boolean> {
+    const res = await this.commentRepo.delete({ id: commentId });
+    return (res.affected || 0) > 0;
   }
 }

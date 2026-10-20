@@ -53,7 +53,7 @@ interface PropertiesPanelProps {
   onBringToFront: () => void;
   onSendToBack: () => void;
   theme: 'light' | 'dark';
-  activeTool?: ElementType | 'eraser' | 'pan';
+  activeTool?: ElementType | 'eraser' | 'pan' | 'comment';
 }
 
 const STROKE_COLORS = [

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { CanvasElement, ElementType, Point, UserPresence } from '@rea/shared-types';
+import { CanvasElement, ElementType, Point, UserPresence, ArrowBinding } from '@rea/shared-types';
 import {
   getElementBounds,
   getGroupBounds,
@@ -9,6 +9,10 @@ import {
   snapToGrid,
   BoundingBox,
   distance,
+  ShapeAnchor,
+  getShapeAnchors,
+  findNearestShapeAnchor,
+  updateBoundArrows,
 } from '../canvas/math';
 import { renderScene } from '../canvas/renderer';
 import { socketService } from '../services/socket';
@@ -72,8 +76,9 @@ interface CanvasProps {
   onElementsChange: (elements: CanvasElement[], recordHistory?: boolean) => void;
   selectedElementIds: string[];
   onSelectElements: (ids: string[]) => void;
-  activeTool: ElementType | 'eraser' | 'pan';
-  onToolChange: (tool: ElementType | 'eraser' | 'pan') => void;
+  activeTool: ElementType | 'eraser' | 'pan' | 'comment';
+  onToolChange: (tool: ElementType | 'eraser' | 'pan' | 'comment') => void;
+  onDropCommentPin?: (point: Point) => void;
   theme: 'light' | 'dark';
   styleMode: 'rough' | 'clean';
   gridVisible: boolean;
@@ -107,6 +112,7 @@ export function Canvas({
   onSelectElements,
   activeTool,
   onToolChange,
+  onDropCommentPin,
   theme,
   styleMode,
   gridVisible,
@@ -143,7 +149,13 @@ export function Canvas({
 
   const [selectionBox, setSelectionBox] = useState<BoundingBox | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const previousToolRef = useRef<ElementType | 'eraser' | 'pan'>('selection');
+  const previousToolRef = useRef<ElementType | 'eraser' | 'pan' | 'comment'>('selection');
+
+  // Dynamic Anchor Connector State
+  const [candidateAnchors, setCandidateAnchors] = useState<ShapeAnchor[]>([]);
+  const [activeSnapAnchor, setActiveSnapAnchor] = useState<ShapeAnchor | null>(null);
+  const startBindingRef = useRef<ArrowBinding | undefined>(undefined);
+  const endBindingRef = useRef<ArrowBinding | undefined>(undefined);
 
   const latestElementsRef = useRef(elements);
   latestElementsRef.current = elements;
@@ -236,8 +248,22 @@ export function Canvas({
       selectionBox,
       remoteUsers,
       activeStyleMode: styleMode,
+      activeSnapAnchor,
+      candidateAnchors,
     });
-  }, [theme, gridVisible, gridType, zoom, pan, selectedElementIds, selectionBox, remoteUsers, styleMode]);
+  }, [
+    theme,
+    gridVisible,
+    gridType,
+    zoom,
+    pan,
+    selectedElementIds,
+    selectionBox,
+    remoteUsers,
+    styleMode,
+    activeSnapAnchor,
+    candidateAnchors,
+  ]);
 
   const renderRef = useRef(render);
   renderRef.current = render;
@@ -351,6 +377,12 @@ export function Canvas({
 
     if (e.button !== 0) return; // Only primary button
 
+    // 1. Comment Tool: Drop a pin on canvas coordinates
+    if (activeTool === 'comment') {
+      onDropCommentPin?.(worldPoint);
+      return;
+    }
+
     // Enforce read-only inspection for Viewers
     if (isViewer) {
       const hit = [...elements].reverse().find((el) => !el.isDeleted && isPointInElement(worldPoint, el));
@@ -450,9 +482,27 @@ export function Canvas({
 
     // 4. Create new element (Shape, Arrow, Pen, Sticky, Text)
     const newId = `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const initialPos = gridSnap
+
+    const isConnector = activeTool === 'arrow' || activeTool === 'line';
+    const nearestStartAnchor = isConnector ? findNearestShapeAnchor(worldPoint, elements, 28) : null;
+
+    const initialPos = nearestStartAnchor
+      ? { x: nearestStartAnchor.x, y: nearestStartAnchor.y }
+      : gridSnap
       ? { x: snapToGrid(worldPoint.x), y: snapToGrid(worldPoint.y) }
       : worldPoint;
+
+    const startBinding: ArrowBinding | undefined = nearestStartAnchor
+      ? {
+          elementId: nearestStartAnchor.elementId,
+          focus: 0,
+          anchorPosition: nearestStartAnchor.position,
+        }
+      : undefined;
+
+    startBindingRef.current = startBinding;
+    endBindingRef.current = undefined;
+    setActiveSnapAnchor(nearestStartAnchor);
 
     let newElement: CanvasElement;
 
@@ -578,6 +628,7 @@ export function Canvas({
           { x: 0, y: 0 },
         ],
         endArrowhead: activeTool === 'arrow' ? 'arrow' : 'none',
+        startBinding: startBinding,
       };
     } else {
       // rectangle, diamond, ellipse
@@ -636,7 +687,36 @@ export function Canvas({
       lastCursorEmitRef.current = now;
     }
 
-    if (dragState.mode === 'none') return;
+    if (dragState.mode === 'none') {
+      if (activeTool === 'arrow' || activeTool === 'line') {
+        const candidateShapes = elements.filter(
+          (el) => !el.isDeleted && el.type !== 'arrow' && el.type !== 'line' && el.type !== 'draw'
+        );
+        const nearbyShape = candidateShapes.find((target) => {
+          const b = getElementBounds(target);
+          return (
+            worldPoint.x >= b.minX - 32 &&
+            worldPoint.x <= b.maxX + 32 &&
+            worldPoint.y >= b.minY - 32 &&
+            worldPoint.y <= b.maxY + 32
+          );
+        });
+
+        if (nearbyShape) {
+          const anchors = getShapeAnchors(nearbyShape);
+          const nearest = findNearestShapeAnchor(worldPoint, [nearbyShape], 28);
+          setCandidateAnchors(anchors);
+          setActiveSnapAnchor(nearest);
+        } else if (candidateAnchors.length > 0 || activeSnapAnchor) {
+          setCandidateAnchors([]);
+          setActiveSnapAnchor(null);
+        }
+      } else if (candidateAnchors.length > 0 || activeSnapAnchor) {
+        setCandidateAnchors([]);
+        setActiveSnapAnchor(null);
+      }
+      return;
+    }
 
     if (dragState.mode === 'panning') {
       const dx = e.clientX - dragState.lastPos.x;
@@ -691,7 +771,7 @@ export function Canvas({
       const finalDx = gridSnap ? snapToGrid(dx) : dx;
       const finalDy = gridSnap ? snapToGrid(dy) : dy;
 
-      const updated = elements.map((el) => {
+      const moved = elements.map((el) => {
         if (selectedElementIds.includes(el.id)) {
           const start = dragState.elementStartPositions?.get(el.id);
           if (start) {
@@ -705,6 +785,9 @@ export function Canvas({
         }
         return el;
       });
+
+      // Dynamically update connectors anchored to any moving shapes!
+      const updated = updateBoundArrows(moved, selectedElementIds);
 
       latestElementsRef.current = updated;
       requestRender();
@@ -752,8 +835,39 @@ export function Canvas({
             : item
         );
       } else if (el.type === 'arrow' || el.type === 'line') {
-        const targetX = gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
-        const targetY = gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
+        const candidateElements = currentElements.filter(
+          (e) => !e.isDeleted && e.id !== el.id && e.type !== 'arrow' && e.type !== 'line' && e.type !== 'draw'
+        );
+
+        // Find nearby candidate shape to display anchor points
+        const nearbyShape = candidateElements.find((target) => {
+          const b = getElementBounds(target);
+          return (
+            worldPoint.x >= b.minX - 32 &&
+            worldPoint.x <= b.maxX + 32 &&
+            worldPoint.y >= b.minY - 32 &&
+            worldPoint.y <= b.maxY + 32
+          );
+        });
+
+        const anchors = nearbyShape ? getShapeAnchors(nearbyShape) : [];
+        const snapAnchor = findNearestShapeAnchor(worldPoint, candidateElements, 28);
+
+        setCandidateAnchors(anchors);
+        setActiveSnapAnchor(snapAnchor);
+
+        const targetX = snapAnchor ? snapAnchor.x : gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
+        const targetY = snapAnchor ? snapAnchor.y : gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
+
+        const endBinding: ArrowBinding | undefined = snapAnchor
+          ? {
+              elementId: snapAnchor.elementId,
+              focus: 0,
+              anchorPosition: snapAnchor.position,
+            }
+          : undefined;
+        endBindingRef.current = endBinding;
+
         const p2 = { x: targetX - el.x, y: targetY - el.y };
 
         updated = currentElements.map((item) =>
@@ -763,6 +877,8 @@ export function Canvas({
                 width: p2.x,
                 height: p2.y,
                 points: [{ x: 0, y: 0 }, p2],
+                startBinding: startBindingRef.current,
+                endBinding: endBinding,
                 updatedAt: Date.now(),
               }
             : item
@@ -844,12 +960,21 @@ export function Canvas({
 
   // Pointer Up
   const handlePointerUp = () => {
+    setActiveSnapAnchor(null);
+    setCandidateAnchors([]);
+
     if (dragState.mode === 'drawing' || dragState.mode === 'moving' || dragState.mode === 'resizing') {
+      let finalElements = latestElementsRef.current;
+      if (dragState.mode === 'moving') {
+        finalElements = updateBoundArrows(finalElements, selectedElementIds);
+        latestElementsRef.current = finalElements;
+      }
+
       // Commit once to React state & history on drag completion
-      onElementsChange(latestElementsRef.current, true);
+      onElementsChange(finalElements, true);
 
       // Force immediate socket broadcast for final position
-      socketService.emitElementsChange(latestElementsRef.current, true);
+      socketService.emitElementsChange(finalElements, true);
 
       if (dragState.mode === 'drawing') {
         if (activeTool !== 'draw') {
@@ -857,6 +982,9 @@ export function Canvas({
         }
       }
     }
+
+    startBindingRef.current = undefined;
+    endBindingRef.current = undefined;
 
     setDragState({
       mode: 'none',
@@ -952,6 +1080,7 @@ export function Canvas({
   const getCursor = () => {
     if (dragState.mode === 'panning') return 'grabbing';
     if (activeTool === 'pan' || isSpacePressed) return 'grab';
+    if (activeTool === 'comment') return 'crosshair';
     if (activeTool === 'eraser') return 'crosshair';
     if (activeTool === 'selection') {
       if (dragState.activeHandle) {

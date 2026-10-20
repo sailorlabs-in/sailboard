@@ -93,6 +93,15 @@ export class CanvasElementEntity {
   @Column({ type: 'jsonb', nullable: true })
   boundElements: any;
 
+  @Column({ type: 'jsonb', nullable: true })
+  startBinding: any;
+
+  @Column({ type: 'jsonb', nullable: true })
+  endBinding: any;
+
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  startArrowhead: string;
+
   @Column({ type: 'varchar', length: 32, nullable: true })
   endArrowhead: string;
 

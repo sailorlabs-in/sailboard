@@ -1,4 +1,4 @@
-import { CanvasElement, Point } from '@rea/shared-types';
+import { CanvasElement, Point, AnchorPosition } from '@rea/shared-types';
 
 export interface BoundingBox {
   minX: number;
@@ -210,4 +210,168 @@ export function getHitResizeHandle(point: Point, bounds: BoundingBox, zoom: numb
 
 export function snapToGrid(val: number, gridSize = 16): number {
   return Math.round(val / gridSize) * gridSize;
+}
+
+// --- Shape Anchor & Dynamic Connector System ---
+
+export interface ShapeAnchor extends Point {
+  position: AnchorPosition;
+  elementId: string;
+}
+
+export function getAnchorCoordinates(shape: CanvasElement, position: AnchorPosition): Point {
+  const bounds = getElementBounds(shape);
+  const midX = bounds.minX + bounds.width / 2;
+  const midY = bounds.minY + bounds.height / 2;
+
+  switch (position) {
+    case 'top':
+      return { x: midX, y: bounds.minY };
+    case 'right':
+      return { x: bounds.maxX, y: midY };
+    case 'bottom':
+      return { x: midX, y: bounds.maxY };
+    case 'left':
+      return { x: bounds.minX, y: midY };
+    case 'center':
+    default:
+      return { x: midX, y: midY };
+  }
+}
+
+export function getShapeAnchors(el: CanvasElement): ShapeAnchor[] {
+  if (
+    el.isDeleted ||
+    el.type === 'arrow' ||
+    el.type === 'line' ||
+    el.type === 'draw' ||
+    el.type === 'selection'
+  ) {
+    return [];
+  }
+
+  const bounds = getElementBounds(el);
+  const midX = bounds.minX + bounds.width / 2;
+  const midY = bounds.minY + bounds.height / 2;
+
+  return [
+    { x: midX, y: bounds.minY, position: 'top', elementId: el.id },
+    { x: bounds.maxX, y: midY, position: 'right', elementId: el.id },
+    { x: midX, y: bounds.maxY, position: 'bottom', elementId: el.id },
+    { x: bounds.minX, y: midY, position: 'left', elementId: el.id },
+    { x: midX, y: midY, position: 'center', elementId: el.id },
+  ];
+}
+
+export function findNearestShapeAnchor(
+  point: Point,
+  elements: CanvasElement[],
+  maxDistance = 24,
+  excludeId?: string
+): ShapeAnchor | null {
+  let nearest: ShapeAnchor | null = null;
+  let minDistance = maxDistance;
+
+  for (const el of elements) {
+    if (el.isDeleted || el.id === excludeId) continue;
+    const anchors = getShapeAnchors(el);
+    for (const anchor of anchors) {
+      const d = distance(point, { x: anchor.x, y: anchor.y });
+      if (d < minDistance) {
+        minDistance = d;
+        nearest = anchor;
+      }
+    }
+  }
+
+  return nearest;
+}
+
+export function updateBoundArrows(
+  elements: CanvasElement[],
+  movedElementIds: string[]
+): CanvasElement[] {
+  if (movedElementIds.length === 0) {
+    return elements;
+  }
+
+  const movedSet = new Set(movedElementIds);
+  const elementMap = new Map<string, CanvasElement>(elements.map((el) => [el.id, el]));
+  let hasChanges = false;
+
+  const updatedElements = elements.map((el) => {
+    if (el.type !== 'arrow' && el.type !== 'line') {
+      return el;
+    }
+
+    const hasStartBound = el.startBinding && movedSet.has(el.startBinding.elementId);
+    const hasEndBound = el.endBinding && movedSet.has(el.endBinding.elementId);
+
+    if (!hasStartBound && !hasEndBound) {
+      return el;
+    }
+
+    const points = el.points ? [...el.points] : [
+      { x: 0, y: 0 },
+      { x: el.width, y: el.height },
+    ];
+
+    let newElX = el.x;
+    let newElY = el.y;
+
+    if (hasStartBound && el.startBinding) {
+      const targetShape = elementMap.get(el.startBinding.elementId);
+      if (targetShape && !targetShape.isDeleted) {
+        const anchorPos = el.startBinding.anchorPosition || 'center';
+        const anchorCoord = getAnchorCoordinates(targetShape, anchorPos);
+
+        const currentAbsEnd = {
+          x: el.x + points[points.length - 1].x,
+          y: el.y + points[points.length - 1].y,
+        };
+
+        newElX = anchorCoord.x;
+        newElY = anchorCoord.y;
+        points[0] = { x: 0, y: 0 };
+        points[points.length - 1] = {
+          x: currentAbsEnd.x - anchorCoord.x,
+          y: currentAbsEnd.y - anchorCoord.y,
+        };
+        hasChanges = true;
+      }
+    }
+
+    if (hasEndBound && el.endBinding) {
+      const targetShape = elementMap.get(el.endBinding.elementId);
+      if (targetShape && !targetShape.isDeleted) {
+        const anchorPos = el.endBinding.anchorPosition || 'center';
+        const anchorCoord = getAnchorCoordinates(targetShape, anchorPos);
+
+        points[points.length - 1] = {
+          x: anchorCoord.x - newElX,
+          y: anchorCoord.y - newElY,
+        };
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) return el;
+
+    const newWidth = points[points.length - 1].x;
+    const newHeight = points[points.length - 1].y;
+
+    return {
+      ...el,
+      x: newElX,
+      y: newElY,
+      width: newWidth,
+      height: newHeight,
+      points,
+      version: el.version + 1,
+      versionNonce: Math.floor(Math.random() * 100000),
+      updatedAt: Date.now(),
+    };
+  });
+
+  return updatedElements;
 }

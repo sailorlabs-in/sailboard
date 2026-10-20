@@ -25,10 +25,13 @@ export interface BoundElement {
   type: "arrow" | "text";
 }
 
+export type AnchorPosition = 'top' | 'right' | 'bottom' | 'left' | 'center';
+
 export interface ArrowBinding {
   elementId: string;
   focus: number;
   gap?: number;
+  anchorPosition?: AnchorPosition;
 }
 
 export interface CanvasElement {
@@ -77,6 +80,7 @@ export interface User {
   email: string;
   name: string;
   color: string;
+  avatar?: string;
   createdAt: string;
 }
 
@@ -180,4 +184,45 @@ export interface DocumentExportData {
   source: 'sailboard' | string;
   timestamp: number;
   document: WhiteboardDocument;
+}
+
+export interface CommentAuthor {
+  id: string;
+  name: string;
+  color: string;
+  email?: string;
+}
+
+export interface CommentReply {
+  id: string;
+  commentId: string;
+  author: CommentAuthor;
+  content: string;
+  createdAt: string;
+}
+
+export interface CanvasComment {
+  id: string;
+  documentId: string;
+  x: number;
+  y: number;
+  author: CommentAuthor;
+  content: string;
+  resolved: boolean;
+  replies: CommentReply[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCommentDto {
+  documentId: string;
+  x: number;
+  y: number;
+  content: string;
+  author?: CommentAuthor;
+}
+
+export interface ReplyCommentDto {
+  content: string;
+  author?: CommentAuthor;
 }
