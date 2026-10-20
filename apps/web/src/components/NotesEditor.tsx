@@ -26,13 +26,13 @@ interface NotesEditorProps {
   isViewer?: boolean;
 }
 
-export const NotesEditor: React.FC<NotesEditorProps> = React.memo(({
+export function NotesEditor({
   notes,
   onChange,
   onGenerateDiagramFromNotes,
   theme,
   isViewer,
-}) => {
+}: NotesEditorProps) {
   const isDark = theme === 'dark';
   const [tab, setTab] = useState<'edit' | 'preview'>(isViewer ? 'preview' : 'edit');
 
@@ -442,4 +442,4 @@ export const NotesEditor: React.FC<NotesEditorProps> = React.memo(({
       </Box>
     </Box>
   );
-});
+}

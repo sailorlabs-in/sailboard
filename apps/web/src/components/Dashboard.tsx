@@ -59,12 +59,12 @@ import {
 } from "../utils/animations";
 
 // 3D Magnetic Tactile Card with GSAP Spring Physics
-const DashboardCard: React.FC<React.ComponentProps<typeof Card>> = ({
+function DashboardCard({
   children,
   sx,
   className,
   ...props
-}) => {
+}: React.ComponentProps<typeof Card>) {
   const cardRef = useCardHover<HTMLDivElement>();
   return (
     <Card
@@ -83,7 +83,7 @@ const DashboardCard: React.FC<React.ComponentProps<typeof Card>> = ({
       {children}
     </Card>
   );
-};
+}
 
 interface DashboardProps {
   user: User | null;
@@ -116,10 +116,13 @@ interface DashboardProps {
 }
 
 // Mini Canvas Thumbnail Preview for Figma File Cards
-const FileThumbnail: React.FC<{
+function FileThumbnail({
+  file,
+  themeMode,
+}: {
   file: WhiteboardDocument;
   themeMode: "light" | "dark";
-}> = ({ file, themeMode }) => {
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const activeElements = file.elements?.filter((e) => !e.isDeleted) || [];
 
@@ -188,9 +191,9 @@ const FileThumbnail: React.FC<{
       )}
     </Box>
   );
-};
+}
 
-export const Dashboard: React.FC<DashboardProps> = ({
+export function Dashboard({
   user,
   projects,
   currentProject,
@@ -211,7 +214,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onThemeChange,
   themeMode,
   onToggleTheme,
-}) => {
+}: DashboardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isDark = themeMode === "dark";
@@ -1771,4 +1774,4 @@ export const Dashboard: React.FC<DashboardProps> = ({
       />
     </Box>
   );
-};
+}

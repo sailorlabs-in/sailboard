@@ -22,7 +22,7 @@ export interface ConfirmDeleteModalProps {
   onClose: () => void;
 }
 
-export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
+export function ConfirmDeleteModal({
   open,
   title,
   itemName,
@@ -31,7 +31,7 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   isDeleting = false,
   onConfirm,
   onClose,
-}) => {
+}: ConfirmDeleteModalProps) {
   const [internalDeleting, setInternalDeleting] = useState(false);
 
   const handleConfirm = async () => {
@@ -122,4 +122,4 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
       </DialogActions>
     </Dialog>
   );
-};
+}

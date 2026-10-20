@@ -24,11 +24,11 @@ export interface CreateProjectModalProps {
   onCreateProject: (name: string, description?: string) => Promise<void>;
 }
 
-export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
+export function CreateProjectModal({
   open,
   onClose,
   onCreateProject,
-}) => {
+}: CreateProjectModalProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -204,4 +204,4 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
       </Box>
     </Dialog>
   );
-};
+}

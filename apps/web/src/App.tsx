@@ -37,7 +37,7 @@ import { api } from "./services/api";
 import { socketService } from "./services/socket";
 import { useAuth } from "./context/AuthContext";
 
-export const App: React.FC = () => {
+export function App() {
   const { user, token, isAuthenticated, isLoading, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1767,4 +1767,4 @@ export const App: React.FC = () => {
       </Box>
     </ThemeProvider>
   );
-};
+}

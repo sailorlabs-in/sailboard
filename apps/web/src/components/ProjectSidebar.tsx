@@ -65,7 +65,7 @@ interface ProjectSidebarProps {
   onNavigateHome?: () => void;
 }
 
-export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
+export function ProjectSidebar({
   open,
   onToggle,
   projects,
@@ -84,7 +84,7 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onOpenAccountManage,
   userRole = 'editor',
   onNavigateHome,
-}) => {
+}: ProjectSidebarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
@@ -744,4 +744,4 @@ export const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       />
     </>
   );
-};
+}

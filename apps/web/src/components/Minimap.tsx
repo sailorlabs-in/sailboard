@@ -14,7 +14,7 @@ interface MinimapProps {
   theme: 'light' | 'dark';
 }
 
-export const Minimap: React.FC<MinimapProps> = ({
+export function Minimap({
   elements,
   zoom,
   pan,
@@ -22,7 +22,7 @@ export const Minimap: React.FC<MinimapProps> = ({
   containerHeight,
   onNavigate,
   theme,
-}) => {
+}: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const paperRef = useRef<HTMLDivElement | null>(null);
   const isDark = theme === 'dark';
@@ -162,4 +162,4 @@ export const Minimap: React.FC<MinimapProps> = ({
       <canvas ref={canvasRef} width={width} height={height} onClick={handleClick} />
     </Paper>
   );
-};
+}

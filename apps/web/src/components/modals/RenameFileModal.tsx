@@ -21,12 +21,12 @@ export interface RenameFileModalProps {
   onRename: (newTitle: string) => Promise<void>;
 }
 
-export const RenameFileModal: React.FC<RenameFileModalProps> = ({
+export function RenameFileModal({
   open,
   initialTitle,
   onClose,
   onRename,
-}) => {
+}: RenameFileModalProps) {
   const [title, setTitle] = useState(initialTitle || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -160,4 +160,4 @@ export const RenameFileModal: React.FC<RenameFileModalProps> = ({
       </form>
     </Dialog>
   );
-};
+}

@@ -9,12 +9,12 @@ interface ViewerNoticeBannerProps {
   onOpenAccountManage?: () => void;
 }
 
-export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
+export function ViewerNoticeBanner({
   ownerName,
   onOpenShare,
   onOpenAuth,
   onOpenAccountManage,
-}) => {
+}: ViewerNoticeBannerProps) {
   return (
     <Box
       sx={{
@@ -73,4 +73,4 @@ export const ViewerNoticeBanner: React.FC<ViewerNoticeBannerProps> = ({
       </Box>
     </Box>
   );
-};
+}

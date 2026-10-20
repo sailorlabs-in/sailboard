@@ -15,7 +15,13 @@ import { socketService } from '../services/socket';
 import gsap from 'gsap';
 
 // Animated spring pill indicator for Hand tool
-const HandToolPill: React.FC<{ isSpacePressed: boolean; theme: 'light' | 'dark' }> = ({ isSpacePressed, theme }) => {
+function HandToolPill({
+  isSpacePressed,
+  theme,
+}: {
+  isSpacePressed: boolean;
+  theme: 'light' | 'dark';
+}) {
   const pillRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -59,7 +65,7 @@ const HandToolPill: React.FC<{ isSpacePressed: boolean; theme: 'light' | 'dark' 
       <span>Hand Tool Active {isSpacePressed ? '(Space held)' : ''} • Drag to Pan</span>
     </div>
   );
-};
+}
 
 interface CanvasProps {
   elements: CanvasElement[];
@@ -94,7 +100,7 @@ interface CanvasProps {
   isViewer?: boolean;
 }
 
-export const Canvas: React.FC<CanvasProps> = React.memo(({
+export function Canvas({
   elements,
   onElementsChange,
   selectedElementIds,
@@ -114,7 +120,7 @@ export const Canvas: React.FC<CanvasProps> = React.memo(({
   remoteUsers,
   onCursorMove,
   isViewer,
-}) => {
+}: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -1022,4 +1028,4 @@ export const Canvas: React.FC<CanvasProps> = React.memo(({
       )}
     </div>
   );
-});
+}

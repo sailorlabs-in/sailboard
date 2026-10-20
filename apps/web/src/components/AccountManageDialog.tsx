@@ -52,11 +52,11 @@ const PALETTE_COLORS = [
   { label: 'Ruby Red', hex: '#ef4444' },
 ];
 
-export const AccountManageDialog: React.FC<AccountManageDialogProps> = ({
+export function AccountManageDialog({
   open,
   onClose,
   onAddAccountClick,
-}) => {
+}: AccountManageDialogProps) {
   const {
     user,
     accounts,
@@ -793,4 +793,4 @@ export const AccountManageDialog: React.FC<AccountManageDialogProps> = ({
       </DialogActions>
     </Dialog>
   );
-};
+}

@@ -25,7 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import gsap, { animateHeaderIn, animateStaggerIn, animateTabTransition } from '../utils/animations';
 
-export const AuthScreen: React.FC = () => {
+export function AuthScreen() {
   const { login, register } = useAuth();
   const [tabIndex, setTabIndex] = useState<number>(0); // 0: Sign In, 1: Register, 2: Reset Password
   const prevTabRef = useRef<number>(0);
@@ -546,4 +546,4 @@ export const AuthScreen: React.FC = () => {
       </Box>
     </Box>
   );
-};
+}

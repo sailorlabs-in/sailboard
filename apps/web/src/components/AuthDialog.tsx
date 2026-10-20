@@ -35,7 +35,7 @@ interface AuthDialogProps {
   subtitle?: string;
 }
 
-export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess, title, subtitle }) => {
+export function AuthDialog({ open, onClose, onSuccess, title, subtitle }: AuthDialogProps) {
   const { login, register } = useAuth();
   const [tabIndex, setTabIndex] = useState<number>(0); // 0 = Sign In, 1 = Create Account, 2 = Reset Password
   const formContainerRef = useRef<HTMLDivElement | null>(null);
@@ -454,4 +454,4 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ open, onClose, onSuccess
       </DialogActions>
     </Dialog>
   );
-};
+}

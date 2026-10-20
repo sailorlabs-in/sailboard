@@ -24,14 +24,14 @@ export interface CreateFileModalProps {
   onCreateProjectClick?: () => void;
 }
 
-export const CreateFileModal: React.FC<CreateFileModalProps> = ({
+export function CreateFileModal({
   open,
   projects,
   initialProjectId,
   onClose,
   onCreateFile,
   onCreateProjectClick,
-}) => {
+}: CreateFileModalProps) {
   const [title, setTitle] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,4 +217,4 @@ export const CreateFileModal: React.FC<CreateFileModalProps> = ({
       </Box>
     </Dialog>
   );
-};
+}

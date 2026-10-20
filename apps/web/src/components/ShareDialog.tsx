@@ -49,12 +49,12 @@ interface ShareDialogProps {
   onProjectUpdated: (updatedProject: Project) => void;
 }
 
-export const ShareDialog: React.FC<ShareDialogProps> = ({
+export function ShareDialog({
   open,
   onClose,
   project,
   onProjectUpdated,
-}) => {
+}: ShareDialogProps) {
   const { user } = useAuth();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<ProjectRole>('editor');
@@ -369,4 +369,4 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       />
     </Dialog>
   );
-};
+}

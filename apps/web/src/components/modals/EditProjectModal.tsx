@@ -22,12 +22,12 @@ export interface EditProjectModalProps {
   onUpdateProject: (projectId: string, updates: { name?: string; description?: string }) => Promise<void>;
 }
 
-export const EditProjectModal: React.FC<EditProjectModalProps> = ({
+export function EditProjectModal({
   open,
   project,
   onClose,
   onUpdateProject,
-}) => {
+}: EditProjectModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -190,4 +190,4 @@ export const EditProjectModal: React.FC<EditProjectModalProps> = ({
       </form>
     </Dialog>
   );
-};
+}

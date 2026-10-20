@@ -95,7 +95,7 @@ const TEXT_COLORS = [
   '#94a3b8',
 ];
 
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
+export function PropertiesPanel({
   selectedElements,
   currentStyle,
   onUpdateStyle,
@@ -105,7 +105,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   onSendToBack,
   theme,
   activeTool,
-}) => {
+}: PropertiesPanelProps) {
   const isDark = theme === 'dark';
   const hasSelection = selectedElements.length > 0;
   const muiTheme = useTheme();
@@ -835,4 +835,4 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
       )}
     </Paper>
   );
-};
+}

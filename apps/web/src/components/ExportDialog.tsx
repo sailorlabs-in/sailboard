@@ -52,13 +52,13 @@ function escapeXml(unsafe: string): string {
   });
 }
 
-export const ExportDialog: React.FC<ExportDialogProps> = ({
+export function ExportDialog({
   open,
   onClose,
   document: doc,
   theme,
   styleMode,
-}) => {
+}: ExportDialogProps) {
   const [exportFormat, setExportFormat] = useState<"png" | "svg" | "json">(
     "png",
   );
@@ -542,4 +542,4 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       </DialogActions>
     </Dialog>
   );
-};
+}

@@ -90,7 +90,7 @@ interface HeaderProps {
   onNavigateHome?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export function Header({
   projectName = 'Sailboard Project',
   userRole = 'editor',
   title,
@@ -129,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onToggleSidebar,
   onNavigateHome,
-}) => {
+}: HeaderProps) {
   const [gridMenuAnchor, setGridMenuAnchor] = useState<null | HTMLElement>(null);
   const [themeMenuAnchor, setThemeMenuAnchor] = useState<null | HTMLElement>(null);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1082,4 +1082,4 @@ export const Header: React.FC<HeaderProps> = ({
       </Toolbar>
     </AppBar>
   );
-};
+}
