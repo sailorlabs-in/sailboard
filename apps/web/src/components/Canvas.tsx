@@ -106,6 +106,7 @@ interface CanvasProps {
   onCursorMove: (point: Point) => void;
   isViewer?: boolean;
   canComment?: boolean;
+  onInteractionChange?: (isInteracting: boolean) => void;
 }
 
 function CanvasComponent({
@@ -130,6 +131,7 @@ function CanvasComponent({
   onCursorMove,
   isViewer,
   canComment = true,
+  onInteractionChange,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -245,11 +247,26 @@ function CanvasComponent({
   const pendingPanSyncRef = useRef<{ x: number; y: number } | null>(null);
   const pendingZoomSyncRef = useRef<number | null>(null);
 
+  // Figma Interaction: Immediately toggle comments overlay visibility at 0ms latency during viewport movement
+  const setCommentsOverlayVisibility = useCallback((visible: boolean) => {
+    const overlay = document.getElementById('sailboard-comments-overlay');
+    if (overlay) {
+      overlay.style.opacity = visible ? '1' : '0';
+    }
+    const popovers = document.querySelectorAll('.sailboard-comment-popover');
+    popovers.forEach((p) => {
+      (p as HTMLElement).style.opacity = visible ? '1' : '0';
+      (p as HTMLElement).style.pointerEvents = visible ? 'auto' : 'none';
+    });
+  }, []);
+
   const flushCameraSync = useCallback(() => {
     if (wheelIdleTimerRef.current) {
       clearTimeout(wheelIdleTimerRef.current);
       wheelIdleTimerRef.current = null;
     }
+    setCommentsOverlayVisibility(true);
+    onInteractionChange?.(false);
     if (pendingPanSyncRef.current) {
       onPanChange(pendingPanSyncRef.current);
       pendingPanSyncRef.current = null;
@@ -258,7 +275,7 @@ function CanvasComponent({
       onZoomChange(pendingZoomSyncRef.current);
       pendingZoomSyncRef.current = null;
     }
-  }, [onPanChange, onZoomChange]);
+  }, [onPanChange, onZoomChange, onInteractionChange, setCommentsOverlayVisibility]);
 
   // Main Render Loop (always uses latest elements and camera)
   const render = useCallback(() => {
@@ -432,13 +449,16 @@ function CanvasComponent({
     const onWheelNonPassive = (e: WheelEvent) => {
       e.preventDefault();
 
-      // Shield camera from incoming React props during wheel interaction
+      // Shield camera from incoming React props during wheel interaction and hide comments
       isUserInteractingRef.current = true;
+      setCommentsOverlayVisibility(false);
+      onInteractionChange?.(true);
+
       if (wheelIdleTimerRef.current) clearTimeout(wheelIdleTimerRef.current);
       wheelIdleTimerRef.current = setTimeout(() => {
         isUserInteractingRef.current = false;
         flushCameraSync();
-      }, 150);
+      }, 160);
 
       const cam = cameraRef.current;
 
@@ -498,7 +518,7 @@ function CanvasComponent({
       container.removeEventListener('wheel', onWheelNonPassive);
       if (wheelIdleTimerRef.current) clearTimeout(wheelIdleTimerRef.current);
     };
-  }, [requestRender, flushCameraSync]);
+  }, [requestRender, flushCameraSync, setCommentsOverlayVisibility, onInteractionChange]);
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -512,6 +532,8 @@ function CanvasComponent({
 
     if (isSpacePan) {
       isUserInteractingRef.current = true;
+      setCommentsOverlayVisibility(false);
+      onInteractionChange?.(true);
       panLastPosRef.current = { x: e.clientX, y: e.clientY };
       updateDragState({
         mode: 'panning',

@@ -41,6 +41,9 @@ export interface CanvasCommentsProps {
   canComment?: boolean;
   isOwner?: boolean;
   isEditor?: boolean;
+  isInteracting?: boolean;
+  viewportWidth?: number;
+  viewportHeight?: number;
 }
 
 function CanvasCommentsComponent({
@@ -63,15 +66,63 @@ function CanvasCommentsComponent({
   canComment = true,
   isOwner = false,
   isEditor = false,
+  isInteracting = false,
+  viewportWidth,
+  viewportHeight,
 }: CanvasCommentsProps) {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const newCommentInputRef = useRef<HTMLInputElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+
+  const [measuredSize, setMeasuredSize] = useState<{ width: number; height: number }>({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    height: typeof window !== 'undefined' ? window.innerHeight : 1080,
+  });
+
+  // Track container dimensions for dynamic frustum culling matching Figma
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      if (el.clientWidth > 0 && el.clientHeight > 0) {
+        setMeasuredSize({ width: el.clientWidth, height: el.clientHeight });
+      }
+    };
+
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const activeComment = useMemo(() => {
     return comments.find((c) => c.id === activeCommentId) || null;
   }, [comments, activeCommentId]);
+
+  // Figma Frustum Culling: Render only comment pins that fall within the current visible viewport/focused area
+  const viewW = viewportWidth || measuredSize.width;
+  const viewH = viewportHeight || measuredSize.height;
+  const CULL_MARGIN = 60; // 60px safety boundary margin so pins near borders do not pop abruptly
+
+  const focusedComments = useMemo(() => {
+    return comments.filter((comment) => {
+      // Always keep active open comment thread visible
+      if (comment.id === activeCommentId) return true;
+
+      const screenX = comment.x * zoom + pan.x;
+      const screenY = comment.y * zoom + pan.y;
+
+      return (
+        screenX >= -CULL_MARGIN &&
+        screenX <= viewW + CULL_MARGIN &&
+        screenY >= -CULL_MARGIN &&
+        screenY <= viewH + CULL_MARGIN
+      );
+    });
+  }, [comments, activeCommentId, zoom, pan.x, pan.y, viewW, viewH]);
 
   useEffect(() => {
     if (pendingPinPos && newCommentInputRef.current) {
@@ -109,6 +160,8 @@ function CanvasCommentsComponent({
 
   return (
     <Box
+      id="sailboard-comments-overlay"
+      ref={overlayRef}
       sx={{
         position: 'absolute',
         top: 0,
@@ -117,10 +170,13 @@ function CanvasCommentsComponent({
         height: '100%',
         pointerEvents: 'none',
         zIndex: 25,
+        opacity: isInteracting ? 0 : 1,
+        transition: 'opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        willChange: 'opacity',
       }}
     >
-      {/* 1. Existing Comment Pins on Canvas */}
-      {comments.map((comment) => {
+      {/* 1. Existing Comment Pins on Focused Area of Canvas */}
+      {focusedComments.map((comment) => {
         const screenX = comment.x * zoom + pan.x;
         const screenY = comment.y * zoom + pan.y;
         const isOpen = activeCommentId === comment.id;
@@ -252,7 +308,7 @@ function CanvasCommentsComponent({
           }}
           slotProps={{
             paper: {
-              className: 'neu-card',
+              className: 'neu-card sailboard-comment-popover',
               sx: {
                 width: 320,
                 maxHeight: 440,
@@ -264,6 +320,9 @@ function CanvasCommentsComponent({
                 border: 'var(--neu-border)',
                 overflow: 'hidden',
                 p: 2,
+                opacity: isInteracting ? 0 : 1,
+                pointerEvents: isInteracting ? 'none' : 'auto',
+                transition: 'opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
               },
             },
           }}
@@ -498,7 +557,7 @@ function CanvasCommentsComponent({
           }}
           slotProps={{
             paper: {
-              className: 'neu-card',
+              className: 'neu-card sailboard-comment-popover',
               sx: {
                 width: 290,
                 bgcolor: 'var(--neu-surface)',
@@ -506,6 +565,9 @@ function CanvasCommentsComponent({
                 boxShadow: '0 16px 40px rgba(0,0,0,0.3)',
                 border: 'var(--neu-border)',
                 p: 2,
+                opacity: isInteracting ? 0 : 1,
+                pointerEvents: isInteracting ? 'none' : 'auto',
+                transition: 'opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
               },
             },
           }}

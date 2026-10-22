@@ -962,21 +962,50 @@ export function App() {
     }
   };
 
-  // Zoom Helpers
-  const handleZoomIn = useCallback(
-    () => setZoom((prev) => Math.min(prev + 0.15, 3)),
-    [],
-  );
-  const handleZoomOut = useCallback(
-    () => setZoom((prev) => Math.max(prev - 0.15, 0.2)),
-    [],
-  );
-  const handleZoomReset = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 60, y: 60 });
+  // Camera Navigation Interaction State for Comments Fade (Figma style)
+  const [isCanvasInteracting, setIsCanvasInteracting] = useState(false);
+  const navInteractionTimerRef = useRef<any>(null);
+
+  const triggerNavInteraction = useCallback(() => {
+    setIsCanvasInteracting(true);
+    const overlay = document.getElementById("sailboard-comments-overlay");
+    if (overlay) overlay.style.opacity = "0";
+    const popovers = document.querySelectorAll(".sailboard-comment-popover");
+    popovers.forEach((p) => {
+      (p as HTMLElement).style.opacity = "0";
+      (p as HTMLElement).style.pointerEvents = "none";
+    });
+
+    if (navInteractionTimerRef.current) clearTimeout(navInteractionTimerRef.current);
+    navInteractionTimerRef.current = setTimeout(() => {
+      setIsCanvasInteracting(false);
+      if (overlay) overlay.style.opacity = "1";
+      popovers.forEach((p) => {
+        (p as HTMLElement).style.opacity = "1";
+        (p as HTMLElement).style.pointerEvents = "auto";
+      });
+    }, 180);
   }, []);
 
+  // Zoom Helpers
+  const handleZoomIn = useCallback(() => {
+    triggerNavInteraction();
+    setZoom((prev) => Math.min(prev + 0.15, 3));
+  }, [triggerNavInteraction]);
+
+  const handleZoomOut = useCallback(() => {
+    triggerNavInteraction();
+    setZoom((prev) => Math.max(prev - 0.15, 0.2));
+  }, [triggerNavInteraction]);
+
+  const handleZoomReset = useCallback(() => {
+    triggerNavInteraction();
+    setZoom(1);
+    setPan({ x: 60, y: 60 });
+  }, [triggerNavInteraction]);
+
   const handleZoomToFit = useCallback(() => {
+    triggerNavInteraction();
     const active = doc.elements.filter((el) => !el.isDeleted);
     if (active.length === 0) return handleZoomReset();
 
@@ -1003,7 +1032,7 @@ export function App() {
       x: (w - (maxX - minX) * fitZoom) / 2 - minX * fitZoom,
       y: (h - (maxY - minY) * fitZoom) / 2 - minY * fitZoom,
     });
-  }, [doc.elements, handleZoomReset]);
+  }, [doc.elements, handleZoomReset, triggerNavInteraction]);
 
   // Global Keyboard Shortcuts (Zoom, Undo, Redo, Tools)
   useEffect(() => {
@@ -1802,6 +1831,7 @@ export function App() {
                 onCursorMove={handleCursorMove}
                 isViewer={isViewer}
                 canComment={canComment}
+                onInteractionChange={setIsCanvasInteracting}
               />
 
               {/* Figma-Style Canvas Comment Pins */}
@@ -1821,6 +1851,9 @@ export function App() {
                 canComment={canComment}
                 isOwner={isOwner}
                 isEditor={isEditor}
+                isInteracting={isCanvasInteracting}
+                viewportWidth={canvasContainerRef.current?.clientWidth}
+                viewportHeight={canvasContainerRef.current?.clientHeight}
                 pendingPinPos={pendingPinPos}
                 onCancelPendingPin={() => {
                   setPendingPinPos(null);
@@ -1838,7 +1871,10 @@ export function App() {
                 containerHeight={
                   canvasContainerRef.current?.clientHeight || 600
                 }
-                onNavigate={setPan}
+                onNavigate={(newPan) => {
+                  triggerNavInteraction();
+                  setPan(newPan);
+                }}
                 theme={effectiveThemeMode}
               />
             </Box>
