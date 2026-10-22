@@ -1,20 +1,11 @@
 import rough from 'roughjs';
 import { CanvasElement, UserPresence } from '@rea/shared-types';
 import { BoundingBox, getElementBounds, getResizeHandles, ShapeAnchor } from './math';
-import { applyFillOpacity } from '../utils/colorUtils';
-
-function getEffectiveFill(backgroundColor?: string, fillOpacity?: number): string | undefined {
-  if (!backgroundColor || backgroundColor === 'transparent' || backgroundColor === 'none') {
-    return undefined;
-  }
-  if (fillOpacity !== undefined && fillOpacity <= 0) {
-    return undefined;
-  }
-  if (fillOpacity !== undefined && fillOpacity < 100 && !backgroundColor.startsWith('rgba')) {
-    return applyFillOpacity(backgroundColor, fillOpacity);
-  }
-  return backgroundColor;
-}
+import {
+  getEffectiveStrokeColor,
+  getEffectiveBackgroundColor,
+  getEffectiveTextColor,
+} from '../utils/colorUtils';
 
 export interface RenderOptions {
   theme: 'light' | 'dark';
@@ -60,13 +51,33 @@ export function renderScene(
     renderGrid(ctx, width / dpr, height / dpr, zoom, pan, isDark, gridType);
   }
 
-  // Initialize Rough.js canvas generator
-  const rc = rough.canvas(canvas);
+  // Figma Performance Optimization: Frustum / Viewport Culling
+  // Compute visible world bounds plus margin and skip all off-screen elements
+  const cullMargin = Math.max(120, 80 / zoom);
+  const vMinX = -pan.x / zoom - cullMargin;
+  const vMinY = -pan.y / zoom - cullMargin;
+  const vMaxX = (width / dpr - pan.x) / zoom + cullMargin;
+  const vMaxY = (height / dpr - pan.y) / zoom + cullMargin;
 
-  // Render Elements in Z-Index / Order
+  // Cached Rough.js canvas instance (avoid allocating new instance per frame)
+  const rc = getRoughCanvas(canvas);
+
+  // Render Elements in Z-Index / Order (Skipping offscreen elements)
   for (const el of elements) {
     if (el.isDeleted) continue;
-    renderElement(ctx, rc, el, activeStyleMode, isDark);
+
+    // Viewport bounds check
+    const bounds = getElementBounds(el);
+    if (
+      bounds.maxX < vMinX ||
+      bounds.minX > vMaxX ||
+      bounds.maxY < vMinY ||
+      bounds.minY > vMaxY
+    ) {
+      continue; // Offscreen! Skip rough path calculation and canvas drawing
+    }
+
+    renderElement(ctx, rc, el, activeStyleMode, isDark, elements);
   }
 
   // Render Selection Bounds & Handles
@@ -173,6 +184,16 @@ function renderShapeAnchors(
 
 const generator = rough.generator();
 const roughShapeCache = new Map<string, { key: string; drawable: any }>();
+const roughCanvasMap = new WeakMap<HTMLCanvasElement, any>();
+
+function getRoughCanvas(canvas: HTMLCanvasElement) {
+  let rc = roughCanvasMap.get(canvas);
+  if (!rc) {
+    rc = rough.canvas(canvas);
+    roughCanvasMap.set(canvas, rc);
+  }
+  return rc;
+}
 
 function renderGrid(
   ctx: CanvasRenderingContext2D,
@@ -183,7 +204,21 @@ function renderGrid(
   isDark: boolean,
   type: 'dots' | 'grid'
 ) {
-  const gridSize = 24;
+  let gridSize = 24;
+
+  // Figma Level-of-Detail (LOD): Dynamically adjust grid density when zoomed out
+  // Clamps total rendered grid points to under 2,000, preventing 100k+ rects from dropping FPS
+  if (gridSize * zoom < 8) {
+    gridSize = 48;
+  }
+  if (gridSize * zoom < 8) {
+    gridSize = 96;
+  }
+  if (gridSize * zoom < 8) {
+    // If zoomed out so far that grid points would collapse sub-pixel, skip drawing
+    return;
+  }
+
   const startX = Math.floor(-pan.x / zoom / gridSize) * gridSize;
   const endX = startX + Math.ceil(viewWidth / zoom) + gridSize;
   const startY = Math.floor(-pan.y / zoom / gridSize) * gridSize;
@@ -225,19 +260,23 @@ function renderElement(
   rc: any,
   el: CanvasElement,
   activeStyleMode: 'rough' | 'clean',
-  isDark: boolean
+  isDark: boolean,
+  allElements?: CanvasElement[]
 ) {
   ctx.save();
   ctx.globalAlpha = (el.opacity ?? 100) / 100;
+
+  const effectiveStroke = getEffectiveStrokeColor(el.strokeColor, isDark);
+  const effectiveFill = getEffectiveBackgroundColor(el.backgroundColor, el.fillOpacity, isDark);
 
   // Use element's roughness unless override or clean mode selected
   const useRough = activeStyleMode === 'rough' && (el.roughness ?? 1) > 0;
   const roughOpts = {
     seed: el.seed || 1,
-    stroke: el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b'),
+    stroke: effectiveStroke,
     strokeWidth: el.strokeWidth || 2,
     roughness: el.roughness ?? (useRough ? 1.2 : 0),
-    fill: getEffectiveFill(el.backgroundColor, el.fillOpacity),
+    fill: effectiveFill,
     fillStyle: el.fillStyle === 'none' ? undefined : el.fillStyle,
     strokeLineDash:
       el.strokeStyle === 'dashed' ? [8, 6] : el.strokeStyle === 'dotted' ? [3, 4] : undefined,
@@ -248,16 +287,21 @@ function renderElement(
   const w = el.width;
   const h = el.height;
 
-  // Rotation
+  // Move origin to element's (x, y) coordinates
+  ctx.translate(x, y);
+
+  // Rotation around element center
   if (el.angle && el.angle !== 0) {
-    const cx = x + w / 2;
-    const cy = y + h / 2;
+    const cx = w / 2;
+    const cy = h / 2;
     ctx.translate(cx, cy);
     ctx.rotate(el.angle);
     ctx.translate(-cx, -cy);
   }
 
-  const baseKey = `${el.id}_${x}_${y}_${w}_${h}_${roughOpts.stroke}_${roughOpts.fill}_${roughOpts.fillStyle}_${roughOpts.strokeWidth}_${roughOpts.roughness}_${roughOpts.seed}_${el.strokeStyle}`;
+  // Figma Performance: Position-independent geometry cache key
+  // Moving/dragging an element NEVER invalidates the rough shape cache!
+  const baseKey = `${el.id}_${Math.round(w)}_${Math.round(h)}_${effectiveStroke}_${effectiveFill}_${roughOpts.fillStyle}_${roughOpts.strokeWidth}_${roughOpts.roughness}_${roughOpts.seed}_${el.strokeStyle}_${isDark}`;
 
   switch (el.type) {
     case 'rectangle': {
@@ -266,23 +310,23 @@ function renderElement(
         if (!cached || cached.key !== baseKey) {
           cached = {
             key: baseKey,
-            drawable: generator.rectangle(x, y, w, h, roughOpts),
+            drawable: generator.rectangle(0, 0, w, h, roughOpts),
           };
           roughShapeCache.set(el.id, cached);
         }
         rc.draw(cached.drawable);
       } else {
-        renderCleanRect(ctx, x, y, w, h, el, isDark);
+        renderCleanRect(ctx, 0, 0, w, h, el, isDark);
       }
-      renderElementText(ctx, el, isDark);
+      renderElementText(ctx, el, isDark, allElements);
       break;
     }
 
     case 'diamond': {
-      const top: [number, number] = [x + w / 2, y];
-      const right: [number, number] = [x + w, y + h / 2];
-      const bottom: [number, number] = [x + w / 2, y + h];
-      const left: [number, number] = [x, y + h / 2];
+      const top: [number, number] = [w / 2, 0];
+      const right: [number, number] = [w, h / 2];
+      const bottom: [number, number] = [w / 2, h];
+      const left: [number, number] = [0, h / 2];
 
       if (useRough) {
         let cached = roughShapeCache.get(el.id);
@@ -303,13 +347,13 @@ function renderElement(
         ctx.closePath();
         applyCleanFillAndStroke(ctx, el, isDark);
       }
-      renderElementText(ctx, el, isDark);
+      renderElementText(ctx, el, isDark, allElements);
       break;
     }
 
     case 'ellipse': {
-      const cx = x + w / 2;
-      const cy = y + h / 2;
+      const cx = w / 2;
+      const cy = h / 2;
       if (useRough) {
         let cached = roughShapeCache.get(el.id);
         if (!cached || cached.key !== baseKey) {
@@ -325,32 +369,48 @@ function renderElement(
         ctx.ellipse(cx, cy, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, Math.PI * 2);
         applyCleanFillAndStroke(ctx, el, isDark);
       }
-      renderElementText(ctx, el, isDark);
+      renderElementText(ctx, el, isDark, allElements);
       break;
     }
 
     case 'sticky': {
-      renderStickyNote(ctx, rc, el, useRough, isDark);
+      renderStickyNote(ctx, rc, el, useRough, isDark, allElements);
       break;
     }
 
     case 'line': {
       if (el.points && el.points.length >= 2) {
         if (useRough) {
-          for (let i = 0; i < el.points.length - 1; i++) {
-            rc.line(
-              x + el.points[i].x,
-              y + el.points[i].y,
-              x + el.points[i + 1].x,
-              y + el.points[i + 1].y,
-              roughOpts
-            );
+          let cached = roughShapeCache.get(el.id);
+          const ptsKey = `${el.points.length}_${el.points[0]?.x}_${el.points[0]?.y}_${el.points[el.points.length - 1]?.x}_${el.points[el.points.length - 1]?.y}`;
+          const lineKey = `${baseKey}_${ptsKey}`;
+          if (!cached || cached.key !== lineKey) {
+            const drawables = [];
+            for (let i = 0; i < el.points.length - 1; i++) {
+              drawables.push(
+                generator.line(
+                  el.points[i].x,
+                  el.points[i].y,
+                  el.points[i + 1].x,
+                  el.points[i + 1].y,
+                  roughOpts
+                )
+              );
+            }
+            cached = { key: lineKey, drawable: drawables };
+            if (roughShapeCache.size > 1000) roughShapeCache.clear();
+            roughShapeCache.set(el.id, cached);
+          }
+          if (Array.isArray(cached.drawable)) {
+            for (const d of cached.drawable) {
+              rc.draw(d);
+            }
           }
         } else {
           ctx.beginPath();
-          ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
+          ctx.moveTo(el.points[0].x, el.points[0].y);
           for (let i = 1; i < el.points.length; i++) {
-            ctx.lineTo(x + el.points[i].x, y + el.points[i].y);
+            ctx.lineTo(el.points[i].x, el.points[i].y);
           }
           applyCleanStroke(ctx, el, isDark);
         }
@@ -366,7 +426,7 @@ function renderElement(
     case 'draw': {
       if (el.points && el.points.length > 0) {
         ctx.beginPath();
-        const strokeColor = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
+        const strokeColor = effectiveStroke;
         const strokeWidth = el.strokeWidth || 2;
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = strokeWidth;
@@ -374,24 +434,24 @@ function renderElement(
         ctx.lineJoin = 'round';
 
         if (el.points.length === 1) {
-          ctx.arc(x + el.points[0].x, y + el.points[0].y, strokeWidth / 2, 0, Math.PI * 2);
+          ctx.arc(el.points[0].x, el.points[0].y, strokeWidth / 2, 0, Math.PI * 2);
           ctx.fillStyle = strokeColor;
           ctx.fill();
         } else if (el.points.length === 2) {
-          ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
-          ctx.lineTo(x + el.points[1].x, y + el.points[1].y);
+          ctx.moveTo(el.points[0].x, el.points[0].y);
+          ctx.lineTo(el.points[1].x, el.points[1].y);
           ctx.stroke();
         } else {
-          ctx.moveTo(x + el.points[0].x, y + el.points[0].y);
+          ctx.moveTo(el.points[0].x, el.points[0].y);
           for (let i = 1; i < el.points.length - 1; i++) {
             const p1 = el.points[i];
             const p2 = el.points[i + 1];
             const midX = (p1.x + p2.x) / 2;
             const midY = (p1.y + p2.y) / 2;
-            ctx.quadraticCurveTo(x + p1.x, y + p1.y, x + midX, y + midY);
+            ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
           }
           const last = el.points[el.points.length - 1];
-          ctx.lineTo(x + last.x, y + last.y);
+          ctx.lineTo(last.x, last.y);
           ctx.stroke();
         }
       }
@@ -399,7 +459,7 @@ function renderElement(
     }
 
     case 'text': {
-      renderStandaloneText(ctx, el, isDark);
+      renderStandaloneText(ctx, el, isDark, allElements);
       break;
     }
   }
@@ -427,12 +487,12 @@ function applyCleanFillAndStroke(
   el: CanvasElement,
   isDark: boolean
 ) {
-  const fill = getEffectiveFill(el.backgroundColor, el.fillOpacity);
+  const fill = getEffectiveBackgroundColor(el.backgroundColor, el.fillOpacity, isDark);
   if (fill) {
     ctx.fillStyle = fill;
     ctx.fill();
   }
-  ctx.strokeStyle = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
+  ctx.strokeStyle = getEffectiveStrokeColor(el.strokeColor, isDark);
   ctx.lineWidth = el.strokeWidth || 2;
   if (el.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
   else if (el.strokeStyle === 'dotted') ctx.setLineDash([3, 4]);
@@ -445,7 +505,7 @@ function applyCleanStroke(
   el: CanvasElement,
   isDark: boolean
 ) {
-  ctx.strokeStyle = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
+  ctx.strokeStyle = getEffectiveStrokeColor(el.strokeColor, isDark);
   ctx.lineWidth = el.strokeWidth || 2;
   if (el.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
   else if (el.strokeStyle === 'dotted') ctx.setLineDash([3, 4]);
@@ -458,20 +518,28 @@ function renderStickyNote(
   rc: any,
   el: CanvasElement,
   useRough: boolean,
-  isDark: boolean
+  isDark: boolean,
+  allElements?: CanvasElement[]
 ) {
-  const { x, y, width: w, height: h } = el;
+  const { width: w, height: h } = el;
   const foldSize = 16;
-  const rawBg = el.backgroundColor || (isDark ? '#3b3218' : '#fef08a');
-  const bgColor = getEffectiveFill(rawBg, el.fillOpacity) || 'transparent';
-  const borderColor = el.strokeColor || (isDark ? '#eab308' : '#ca8a04');
+  const rawBg =
+    el.backgroundColor === 'contrast' || !el.backgroundColor
+      ? isDark
+        ? '#3b3218'
+        : '#fef08a'
+      : el.backgroundColor;
+  const bgColor =
+    getEffectiveBackgroundColor(rawBg, el.fillOpacity, isDark) || (isDark ? '#3b3218' : '#fef08a');
+  const borderColor =
+    getEffectiveStrokeColor(el.strokeColor, isDark) || (isDark ? '#eab308' : '#ca8a04');
 
-  // Sticky body polygon with folded corner
-  const p1 = [x, y];
-  const p2 = [x + w - foldSize, y];
-  const p3 = [x + w, y + foldSize];
-  const p4 = [x + w, y + h];
-  const p5 = [x, y + h];
+  // Sticky body polygon with folded corner in local coordinates
+  const p1 = [0, 0];
+  const p2 = [w - foldSize, 0];
+  const p3 = [w, foldSize];
+  const p4 = [w, h];
+  const p5 = [0, h];
 
   ctx.save();
   // Drop shadow for sticky note
@@ -499,18 +567,23 @@ function renderStickyNote(
 
   // Little fold triangle
   ctx.beginPath();
-  ctx.moveTo(x + w - foldSize, y);
-  ctx.lineTo(x + w - foldSize, y + foldSize);
-  ctx.lineTo(x + w, y + foldSize);
+  ctx.moveTo(w - foldSize, 0);
+  ctx.lineTo(w - foldSize, foldSize);
+  ctx.lineTo(w, foldSize);
   ctx.fillStyle = isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)';
   ctx.fill();
   ctx.stroke();
   ctx.restore();
 
-  // Sticky Text using Lobster Two
+  // Sticky Text using Lobster Two with adaptive contrast
   if (el.text) {
     ctx.save();
-    ctx.fillStyle = el.textColor || (isDark ? '#fef3c7' : '#1e293b');
+    ctx.fillStyle = getEffectiveTextColor(
+      el.textColor,
+      { ...el, backgroundColor: rawBg },
+      isDark,
+      allElements
+    );
     ctx.font = `600 ${el.fontSize || 16}px 'Lobster Two', cursive, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -518,7 +591,7 @@ function renderStickyNote(
     const lines = el.text.split('\n');
     const lineHeight = (el.fontSize || 14) * 1.35;
     lines.forEach((line, index) => {
-      ctx.fillText(line, x + 12, y + 14 + index * lineHeight);
+      ctx.fillText(line, 12, 14 + index * lineHeight);
     });
     ctx.restore();
   }
@@ -537,12 +610,12 @@ function renderArrow(
   ];
   if (points.length < 2) return;
 
-  const startX = el.x + points[0].x;
-  const startY = el.y + points[0].y;
-  const endX = el.x + points[points.length - 1].x;
-  const endY = el.y + points[points.length - 1].y;
+  const startX = points[0].x;
+  const startY = points[0].y;
+  const endX = points[points.length - 1].x;
+  const endY = points[points.length - 1].y;
 
-  const strokeColor = el.strokeColor || (isDark ? '#e2e8f0' : '#1e293b');
+  const strokeColor = getEffectiveStrokeColor(el.strokeColor, isDark);
   const strokeWidth = el.strokeWidth || 2;
 
   // Draw arrow shaft
@@ -555,12 +628,12 @@ function renderArrow(
   ctx.beginPath();
   ctx.moveTo(startX, startY);
   for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(el.x + points[i].x, el.y + points[i].y);
+    ctx.lineTo(points[i].x, points[i].y);
   }
   ctx.stroke();
 
   // Draw Arrowhead at the end
-  const angle = Math.atan2(endY - (el.y + points[points.length - 2].y), endX - (el.x + points[points.length - 2].x));
+  const angle = Math.atan2(endY - points[points.length - 2].y, endX - points[points.length - 2].x);
   const headLen = 14 + strokeWidth * 2;
 
   ctx.beginPath();
@@ -581,11 +654,12 @@ function renderArrow(
 function renderElementText(
   ctx: CanvasRenderingContext2D,
   el: CanvasElement,
-  isDark: boolean
+  isDark: boolean,
+  allElements?: CanvasElement[]
 ) {
   if (!el.text) return;
   ctx.save();
-  ctx.fillStyle = el.textColor || (isDark ? '#f8fafc' : '#0f172a');
+  ctx.fillStyle = getEffectiveTextColor(el.textColor, el, isDark, allElements);
   ctx.font = `600 ${el.fontSize || 14}px 'Teachers', 'Inter', sans-serif`;
   ctx.textAlign = (el.textAlign as CanvasTextAlign) || 'center';
   ctx.textBaseline = 'middle';
@@ -593,14 +667,14 @@ function renderElementText(
   const lines = el.text.split('\n');
   const lineHeight = (el.fontSize || 14) * 1.35;
   const totalHeight = lines.length * lineHeight;
-  const startY = el.y + el.height / 2 - totalHeight / 2 + lineHeight / 2;
+  const startY = el.height / 2 - totalHeight / 2 + lineHeight / 2;
 
   const textX =
     el.textAlign === 'left'
-      ? el.x + 12
+      ? 12
       : el.textAlign === 'right'
-      ? el.x + el.width - 12
-      : el.x + el.width / 2;
+      ? el.width - 12
+      : el.width / 2;
 
   lines.forEach((line, index) => {
     ctx.fillText(line, textX, startY + index * lineHeight);
@@ -611,11 +685,12 @@ function renderElementText(
 function renderStandaloneText(
   ctx: CanvasRenderingContext2D,
   el: CanvasElement,
-  isDark: boolean
+  isDark: boolean,
+  allElements?: CanvasElement[]
 ) {
   if (!el.text) return;
   ctx.save();
-  ctx.fillStyle = el.textColor || el.strokeColor || (isDark ? '#f8fafc' : '#0f172a');
+  ctx.fillStyle = getEffectiveTextColor(el.textColor, el, isDark, allElements);
   ctx.font = `500 ${el.fontSize || 18}px 'Teachers', 'Inter', sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
@@ -623,7 +698,7 @@ function renderStandaloneText(
   const lines = el.text.split('\n');
   const lineHeight = (el.fontSize || 18) * 1.35;
   lines.forEach((line, index) => {
-    ctx.fillText(line, el.x, el.y + index * lineHeight);
+    ctx.fillText(line, 0, index * lineHeight);
   });
   ctx.restore();
 }

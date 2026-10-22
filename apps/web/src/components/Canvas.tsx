@@ -225,15 +225,25 @@ export function Canvas({
   const hoveredShapeIdRef = useRef<string | null>(null);
   const currentSnapAnchorRef = useRef<ShapeAnchor | null>(null);
 
-  // RAF Parent Sync: Throttle onPanChange & onZoomChange updates to App.tsx
+  // Figma Performance: Interaction Shield
+  // When true (during active drag, scroll, or pinch), incoming stale pan/zoom props
+  // from React parent re-renders are ignored, eliminating camera rubber-banding and jitter.
+  const isUserInteractingRef = useRef(false);
+  const wheelIdleTimerRef = useRef<any>(null);
+
+  // Throttled Parent Sync: Throttle onPanChange & onZoomChange updates to App.tsx
   const pendingPanSyncRef = useRef<{ x: number; y: number } | null>(null);
   const pendingZoomSyncRef = useRef<number | null>(null);
-  const panZoomRafRef = useRef<number | null>(null);
+  const lastSyncTimeRef = useRef<number>(0);
+  const syncThrottleTimerRef = useRef<any>(null);
 
   const syncCameraToParent = useCallback(() => {
-    if (panZoomRafRef.current) return;
-    panZoomRafRef.current = requestAnimationFrame(() => {
-      panZoomRafRef.current = null;
+    const now = Date.now();
+    const elapsed = now - lastSyncTimeRef.current;
+    const THROTTLE_MS = 120; // Throttle App.tsx component tree updates to ~8fps during active gestures
+
+    if (elapsed >= THROTTLE_MS) {
+      lastSyncTimeRef.current = now;
       if (pendingPanSyncRef.current) {
         onPanChange(pendingPanSyncRef.current);
         pendingPanSyncRef.current = null;
@@ -242,14 +252,28 @@ export function Canvas({
         onZoomChange(pendingZoomSyncRef.current);
         pendingZoomSyncRef.current = null;
       }
-    });
+    } else if (!syncThrottleTimerRef.current) {
+      syncThrottleTimerRef.current = setTimeout(() => {
+        syncThrottleTimerRef.current = null;
+        lastSyncTimeRef.current = Date.now();
+        if (pendingPanSyncRef.current) {
+          onPanChange(pendingPanSyncRef.current);
+          pendingPanSyncRef.current = null;
+        }
+        if (pendingZoomSyncRef.current !== null) {
+          onZoomChange(pendingZoomSyncRef.current);
+          pendingZoomSyncRef.current = null;
+        }
+      }, THROTTLE_MS - elapsed);
+    }
   }, [onPanChange, onZoomChange]);
 
   const flushCameraSync = useCallback(() => {
-    if (panZoomRafRef.current) {
-      cancelAnimationFrame(panZoomRafRef.current);
-      panZoomRafRef.current = null;
+    if (syncThrottleTimerRef.current) {
+      clearTimeout(syncThrottleTimerRef.current);
+      syncThrottleTimerRef.current = null;
     }
+    lastSyncTimeRef.current = Date.now();
     if (pendingPanSyncRef.current) {
       onPanChange(pendingPanSyncRef.current);
       pendingPanSyncRef.current = null;
@@ -303,8 +327,10 @@ export function Canvas({
     }
   }, []);
 
-  // Sync cameraRef with incoming props when updated from toolbar/reset/fit
+  // Sync cameraRef with incoming props when updated externally (e.g. from toolbar/reset/fit)
+  // Ignored while user is actively gesturing to prevent stutter/jitter
   useEffect(() => {
+    if (isUserInteractingRef.current) return;
     if (
       cameraRef.current.pan.x !== pan.x ||
       cameraRef.current.pan.y !== pan.y
@@ -315,6 +341,7 @@ export function Canvas({
   }, [pan, requestRender]);
 
   useEffect(() => {
+    if (isUserInteractingRef.current) return;
     if (cameraRef.current.zoom !== zoom) {
       cameraRef.current.zoom = zoom;
       requestRender();
@@ -387,9 +414,11 @@ export function Canvas({
     return () => ro.disconnect();
   }, []);
 
+  // Request frame whenever elements prop updates
   useEffect(() => {
-    render();
-  }, [render, elements]);
+    latestElementsRef.current = elements;
+    requestRender();
+  }, [requestRender, elements]);
 
   // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, Shift + Wheel to pan horizontally, or regular scroll to pan
   useEffect(() => {
@@ -399,6 +428,14 @@ export function Canvas({
     const onWheelNonPassive = (e: WheelEvent) => {
       e.preventDefault();
 
+      // Shield camera from incoming React props during wheel interaction
+      isUserInteractingRef.current = true;
+      if (wheelIdleTimerRef.current) clearTimeout(wheelIdleTimerRef.current);
+      wheelIdleTimerRef.current = setTimeout(() => {
+        isUserInteractingRef.current = false;
+        flushCameraSync();
+      }, 150);
+
       const cam = cameraRef.current;
 
       // Normalize delta values for different deltaMode (pixel vs line vs page)
@@ -406,8 +443,8 @@ export function Canvas({
       let dy = e.deltaY;
       if (e.deltaMode === 1) {
         // Line mode (most non-trackpad mice): multiply by line height
-        dx *= 28;
-        dy *= 28;
+        dx *= 24;
+        dy *= 24;
       } else if (e.deltaMode === 2) {
         // Page mode (rare): multiply by page height
         dx *= 400;
@@ -415,15 +452,15 @@ export function Canvas({
       }
 
       if (e.ctrlKey || e.metaKey) {
-        // Zoom towards mouse pointer with smooth exponential factor
+        // Zoom towards mouse pointer with smooth exponential factor matching Figma
         const rect = container.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // Clamp delta to prevent wild jumps from high-resolution trackpads
-        const clampedDelta = Math.max(-150, Math.min(150, dy));
-        const zoomFactor = Math.exp(-clampedDelta * 0.003);
-        const newZoom = Math.min(3, Math.max(0.2, cam.zoom * zoomFactor));
+        // Smooth exponential factor matching Figma/tldraw
+        const clampedDelta = Math.max(-100, Math.min(100, dy));
+        const zoomFactor = Math.pow(0.999, clampedDelta);
+        const newZoom = Math.min(5, Math.max(0.1, cam.zoom * zoomFactor));
 
         const newPanX = mouseX - (mouseX - cam.pan.x) * (newZoom / cam.zoom);
         const newPanY = mouseY - (mouseY - cam.pan.y) * (newZoom / cam.zoom);
@@ -437,7 +474,7 @@ export function Canvas({
         syncCameraToParent();
       } else if (e.shiftKey) {
         // Shift + scroll: horizontal pan
-        // When shift is held, browsers may swap deltaX/deltaY; use whichever is non-zero
+        // In Chrome/Edge on Windows, Shift+wheel generates deltaX; in Firefox/Mac it may be deltaY
         const scrollAmount = Math.abs(dx) > Math.abs(dy) ? dx : dy;
         cam.pan.x -= scrollAmount;
         requestRender();
@@ -458,8 +495,9 @@ export function Canvas({
     container.addEventListener('wheel', onWheelNonPassive, { passive: false });
     return () => {
       container.removeEventListener('wheel', onWheelNonPassive);
+      if (wheelIdleTimerRef.current) clearTimeout(wheelIdleTimerRef.current);
     };
-  }, [requestRender, syncCameraToParent]);
+  }, [requestRender, syncCameraToParent, flushCameraSync]);
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -468,6 +506,7 @@ export function Canvas({
     const isSpacePan = isSpacePressed || activeTool === 'pan' || isMiddleClick || e.buttons === 4;
 
     if (isSpacePan) {
+      isUserInteractingRef.current = true;
       panLastPosRef.current = { x: e.clientX, y: e.clientY };
       setDragState({
         mode: 'panning',
@@ -1110,6 +1149,7 @@ export function Canvas({
 
   // Pointer Up
   const handlePointerUp = () => {
+    isUserInteractingRef.current = false;
     setActiveSnapAnchor(null);
     setCandidateAnchors([]);
     hoveredShapeIdRef.current = null;
