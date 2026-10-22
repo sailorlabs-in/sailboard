@@ -152,6 +152,7 @@ export function Canvas({
   });
 
   const [selectionBox, setSelectionBox] = useState<BoundingBox | null>(null);
+  const selectionBoxRef = useRef<BoundingBox | null>(null);
   const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousToolRef = useRef<ElementType | 'eraser' | 'pan' | 'comment'>('selection');
@@ -295,7 +296,7 @@ export function Canvas({
       zoom: cam.zoom,
       pan: cam.pan,
       selectedElementIds,
-      selectionBox,
+      selectionBox: selectionBoxRef.current ?? selectionBox,
       remoteUsers,
       activeStyleMode: styleMode,
       activeSnapAnchor,
@@ -414,11 +415,15 @@ export function Canvas({
     return () => ro.disconnect();
   }, []);
 
-  // Request frame whenever elements prop updates
+  // Keep latest elements updated
   useEffect(() => {
     latestElementsRef.current = elements;
+  }, [elements]);
+
+  // Request frame whenever elements, selection, theme, grid, or render props update
+  useEffect(() => {
     requestRender();
-  }, [requestRender, elements]);
+  }, [requestRender, render, elements]);
 
   // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, Shift + Wheel to pan horizontally, or regular scroll to pan
   useEffect(() => {
@@ -613,14 +618,17 @@ export function Canvas({
           activeHandle: null,
           createdElementId: null,
         });
-        setSelectionBox({
+        const initialBox = {
           minX: worldPoint.x,
           minY: worldPoint.y,
           maxX: worldPoint.x,
           maxY: worldPoint.y,
           width: 0,
           height: 0,
-        });
+        };
+        selectionBoxRef.current = initialBox;
+        setSelectionBox(initialBox);
+        requestRender();
       }
       return;
     }
@@ -921,25 +929,29 @@ export function Canvas({
       const maxX = Math.max(dragState.startPos.x, worldPoint.x);
       const maxY = Math.max(dragState.startPos.y, worldPoint.y);
 
-      setSelectionBox({
+      const box = {
         minX,
         minY,
         maxX,
         maxY,
         width: maxX - minX,
         height: maxY - minY,
-      });
+      };
 
-      // Select elements inside box
+      selectionBoxRef.current = box;
+      setSelectionBox(box);
+      requestRender();
+
+      // Select elements inside or intersecting box (Figma marquee selection)
       const selected = elements
         .filter((el) => {
           if (el.isDeleted) return false;
           const bounds = getElementBounds(el);
           return (
-            bounds.minX >= minX &&
-            bounds.maxX <= maxX &&
-            bounds.minY >= minY &&
-            bounds.maxY <= maxY
+            bounds.minX <= maxX &&
+            bounds.maxX >= minX &&
+            bounds.minY <= maxY &&
+            bounds.maxY >= minY
           );
         })
         .map((el) => el.id);
@@ -1186,7 +1198,9 @@ export function Canvas({
       activeHandle: null,
       createdElementId: null,
     });
+    selectionBoxRef.current = null;
     setSelectionBox(null);
+    requestRender();
   };
 
   // Double click on element: Open inline text editor
