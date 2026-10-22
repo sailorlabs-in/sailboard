@@ -326,24 +326,37 @@ function NotesEditorComponent({
           </Box>
         </Box>
 
-        {/* Generate Diagram from Markdown */}
-        <Tooltip title={isViewer ? 'Viewers cannot generate diagrams' : 'AI/Syntax Assist: Generate architecture whiteboard shapes directly from document headings and lists!'}>
+        {/* Generate Diagram from Markdown Studio */}
+        <Tooltip title={isViewer ? 'Viewers cannot generate diagrams' : '✨ Doc → Diagram Studio: Convert document notes & architecture syntax into flowcharts, mindmaps & pipelines!'}>
           <span>
             <Button
               size="small"
               variant="contained"
               disabled={isViewer}
-              startIcon={<AutoAwesomeOutlined />}
+              startIcon={<AutoAwesomeOutlined sx={{ fontSize: 16 }} />}
               onClick={handleGenerate}
-              className="neu-btn-primary"
               sx={{
-                fontSize: '0.72rem',
-                py: 0.4,
-                px: { xs: 1, sm: 1.4 },
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                py: 0.5,
+                px: { xs: 1.2, sm: 1.6 },
                 borderRadius: '8px',
                 textTransform: 'none',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
+                background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                color: '#ffffff',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #9333ea 100%)',
+                  boxShadow: '0 6px 18px rgba(99, 102, 241, 0.5)',
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
               }}
             >
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Doc → Diagram</Box>

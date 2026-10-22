@@ -108,7 +108,7 @@ interface CanvasProps {
   canComment?: boolean;
 }
 
-export function Canvas({
+function CanvasComponent({
   elements,
   onElementsChange,
   selectedElementIds,
@@ -134,8 +134,7 @@ export function Canvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Interaction State
-  const [dragState, setDragState] = useState<{
+  type DragState = {
     mode: 'none' | 'drawing' | 'moving' | 'resizing' | 'box-select' | 'panning';
     startPos: Point;
     lastPos: Point;
@@ -143,28 +142,38 @@ export function Canvas({
     createdElementId: string | null;
     initialBounds?: BoundingBox;
     elementStartPositions?: Map<string, { x: number; y: number }>;
-  }>({
+  };
+
+  const [dragState, setDragState] = useState<DragState>({
     mode: 'none',
     startPos: { x: 0, y: 0 },
     lastPos: { x: 0, y: 0 },
     activeHandle: null,
     createdElementId: null,
   });
+  const dragStateRef = useRef<DragState>(dragState);
 
-  const [selectionBox, setSelectionBox] = useState<BoundingBox | null>(null);
+  const updateDragState = useCallback((next: DragState) => {
+    dragStateRef.current = next;
+    setDragState(next);
+  }, []);
+
   const selectionBoxRef = useRef<BoundingBox | null>(null);
-  const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle | null>(null);
+  const hoveredHandleRef = useRef<ResizeHandle | null>(null);
+  const lastSocketEmitRef = useRef<number>(0);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousToolRef = useRef<ElementType | 'eraser' | 'pan' | 'comment'>('selection');
 
-  // Dynamic Anchor Connector State
-  const [candidateAnchors, setCandidateAnchors] = useState<ShapeAnchor[]>([]);
-  const [activeSnapAnchor, setActiveSnapAnchor] = useState<ShapeAnchor | null>(null);
+  // Dynamic Anchor Connector State (refs only - prevents React re-render thrashing during pointer move)
+  const candidateAnchorsRef = useRef<ShapeAnchor[]>([]);
+  const activeSnapAnchorRef = useRef<ShapeAnchor | null>(null);
   const startBindingRef = useRef<ArrowBinding | undefined>(undefined);
   const endBindingRef = useRef<ArrowBinding | undefined>(undefined);
 
   const latestElementsRef = useRef(elements);
-  latestElementsRef.current = elements;
+  if (dragStateRef.current.mode === 'none') {
+    latestElementsRef.current = elements;
+  }
 
   // Spacebar Hand Tool (Hold Space to temporarily pan)
   useEffect(() => {
@@ -232,49 +241,15 @@ export function Canvas({
   const isUserInteractingRef = useRef(false);
   const wheelIdleTimerRef = useRef<any>(null);
 
-  // Throttled Parent Sync: Throttle onPanChange & onZoomChange updates to App.tsx
+  // Pending Camera Sync: Synchronize onPanChange & onZoomChange with parent on gesture completion
   const pendingPanSyncRef = useRef<{ x: number; y: number } | null>(null);
   const pendingZoomSyncRef = useRef<number | null>(null);
-  const lastSyncTimeRef = useRef<number>(0);
-  const syncThrottleTimerRef = useRef<any>(null);
-
-  const syncCameraToParent = useCallback(() => {
-    const now = Date.now();
-    const elapsed = now - lastSyncTimeRef.current;
-    const THROTTLE_MS = 120; // Throttle App.tsx component tree updates to ~8fps during active gestures
-
-    if (elapsed >= THROTTLE_MS) {
-      lastSyncTimeRef.current = now;
-      if (pendingPanSyncRef.current) {
-        onPanChange(pendingPanSyncRef.current);
-        pendingPanSyncRef.current = null;
-      }
-      if (pendingZoomSyncRef.current !== null) {
-        onZoomChange(pendingZoomSyncRef.current);
-        pendingZoomSyncRef.current = null;
-      }
-    } else if (!syncThrottleTimerRef.current) {
-      syncThrottleTimerRef.current = setTimeout(() => {
-        syncThrottleTimerRef.current = null;
-        lastSyncTimeRef.current = Date.now();
-        if (pendingPanSyncRef.current) {
-          onPanChange(pendingPanSyncRef.current);
-          pendingPanSyncRef.current = null;
-        }
-        if (pendingZoomSyncRef.current !== null) {
-          onZoomChange(pendingZoomSyncRef.current);
-          pendingZoomSyncRef.current = null;
-        }
-      }, THROTTLE_MS - elapsed);
-    }
-  }, [onPanChange, onZoomChange]);
 
   const flushCameraSync = useCallback(() => {
-    if (syncThrottleTimerRef.current) {
-      clearTimeout(syncThrottleTimerRef.current);
-      syncThrottleTimerRef.current = null;
+    if (wheelIdleTimerRef.current) {
+      clearTimeout(wheelIdleTimerRef.current);
+      wheelIdleTimerRef.current = null;
     }
-    lastSyncTimeRef.current = Date.now();
     if (pendingPanSyncRef.current) {
       onPanChange(pendingPanSyncRef.current);
       pendingPanSyncRef.current = null;
@@ -296,22 +271,19 @@ export function Canvas({
       zoom: cam.zoom,
       pan: cam.pan,
       selectedElementIds,
-      selectionBox: selectionBoxRef.current ?? selectionBox,
+      selectionBox: selectionBoxRef.current,
       remoteUsers,
       activeStyleMode: styleMode,
-      activeSnapAnchor,
-      candidateAnchors,
+      activeSnapAnchor: activeSnapAnchorRef.current,
+      candidateAnchors: candidateAnchorsRef.current,
     });
   }, [
     theme,
     gridVisible,
     gridType,
     selectedElementIds,
-    selectionBox,
     remoteUsers,
     styleMode,
-    activeSnapAnchor,
-    candidateAnchors,
   ]);
 
   const renderRef = useRef(render);
@@ -415,10 +387,37 @@ export function Canvas({
     return () => ro.disconnect();
   }, []);
 
-  // Keep latest elements updated
+  // Keep latest elements updated, auto-fixing any broken 0-length arrows to valid 120px arrows
   useEffect(() => {
-    latestElementsRef.current = elements;
-  }, [elements]);
+    if (isUserInteractingRef.current || dragStateRef.current.mode !== 'none') return;
+    let hasZeroLengthFix = false;
+    const sanitized = elements.map((el) => {
+      if ((el.type === 'arrow' || el.type === 'line') && !el.isDeleted) {
+        const pts = el.points || [];
+        const p1 = pts[0] || { x: 0, y: 0 };
+        const p2 = pts[pts.length - 1] || { x: el.width, y: el.height };
+        if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 4) {
+          hasZeroLengthFix = true;
+          return {
+            ...el,
+            width: 120,
+            height: 0,
+            points: [
+              { x: 0, y: 0 },
+              { x: 120, y: 0 },
+            ],
+            updatedAt: Date.now(),
+          };
+        }
+      }
+      return el;
+    });
+
+    latestElementsRef.current = sanitized;
+    if (hasZeroLengthFix) {
+      onElementsChange(sanitized, false);
+    }
+  }, [elements, onElementsChange]);
 
   // Request frame whenever elements, selection, theme, grid, or render props update
   useEffect(() => {
@@ -476,7 +475,6 @@ export function Canvas({
 
         pendingZoomSyncRef.current = newZoom;
         pendingPanSyncRef.current = { x: newPanX, y: newPanY };
-        syncCameraToParent();
       } else if (e.shiftKey) {
         // Shift + scroll: horizontal pan
         // In Chrome/Edge on Windows, Shift+wheel generates deltaX; in Firefox/Mac it may be deltaY
@@ -485,7 +483,6 @@ export function Canvas({
         requestRender();
 
         pendingPanSyncRef.current = { ...cam.pan };
-        syncCameraToParent();
       } else {
         // Normal scroll: pan (with normalized deltas)
         cam.pan.x -= dx;
@@ -493,7 +490,6 @@ export function Canvas({
         requestRender();
 
         pendingPanSyncRef.current = { ...cam.pan };
-        syncCameraToParent();
       }
     };
 
@@ -502,10 +498,14 @@ export function Canvas({
       container.removeEventListener('wheel', onWheelNonPassive);
       if (wheelIdleTimerRef.current) clearTimeout(wheelIdleTimerRef.current);
     };
-  }, [requestRender, syncCameraToParent, flushCameraSync]);
+  }, [requestRender, flushCameraSync]);
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent) => {
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {}
+
     const worldPoint = clientToWorld(e.clientX, e.clientY);
     const isMiddleClick = e.button === 1;
     const isSpacePan = isSpacePressed || activeTool === 'pan' || isMiddleClick || e.buttons === 4;
@@ -513,7 +513,7 @@ export function Canvas({
     if (isSpacePan) {
       isUserInteractingRef.current = true;
       panLastPosRef.current = { x: e.clientX, y: e.clientY };
-      setDragState({
+      updateDragState({
         mode: 'panning',
         startPos: { x: e.clientX, y: e.clientY },
         lastPos: { x: e.clientX, y: e.clientY },
@@ -524,6 +524,7 @@ export function Canvas({
     }
 
     if (e.button !== 0) return; // Only primary button
+    isUserInteractingRef.current = true;
 
     // 1. Comment Tool: Drop a pin on canvas coordinates
     if (activeTool === 'comment') {
@@ -545,19 +546,54 @@ export function Canvas({
     }
     if (selectedElementIds.length > 0) {
       const selected = elements.filter((el) => selectedElementIds.includes(el.id) && !el.isDeleted);
-      const bounds = getGroupBounds(selected);
-      if (bounds) {
-        const handle = getHitResizeHandle(worldPoint, bounds, zoom);
-        if (handle) {
-          setDragState({
+      if (selected.length === 1 && (selected[0].type === 'arrow' || selected[0].type === 'line')) {
+        const arrowEl = selected[0];
+        const pts = arrowEl.points || [
+          { x: 0, y: 0 },
+          { x: arrowEl.width, y: arrowEl.height },
+        ];
+        const startPt = { x: arrowEl.x + pts[0].x, y: arrowEl.y + pts[0].y };
+        const endPt = { x: arrowEl.x + pts[pts.length - 1].x, y: arrowEl.y + pts[pts.length - 1].y };
+        const hitRadius = 12 / zoom;
+
+        if (distance(worldPoint, startPt) <= hitRadius) {
+          updateDragState({
             mode: 'resizing',
             startPos: worldPoint,
             lastPos: worldPoint,
-            activeHandle: handle,
-            createdElementId: null,
-            initialBounds: bounds,
+            activeHandle: 'start',
+            createdElementId: arrowEl.id,
+            initialBounds: getElementBounds(arrowEl),
           });
           return;
+        }
+
+        if (distance(worldPoint, endPt) <= hitRadius) {
+          updateDragState({
+            mode: 'resizing',
+            startPos: worldPoint,
+            lastPos: worldPoint,
+            activeHandle: 'end',
+            createdElementId: arrowEl.id,
+            initialBounds: getElementBounds(arrowEl),
+          });
+          return;
+        }
+      } else {
+        const bounds = getGroupBounds(selected);
+        if (bounds) {
+          const handle = getHitResizeHandle(worldPoint, bounds, zoom);
+          if (handle) {
+            updateDragState({
+              mode: 'resizing',
+              startPos: worldPoint,
+              lastPos: worldPoint,
+              activeHandle: handle,
+              createdElementId: null,
+              initialBounds: bounds,
+            });
+            return;
+          }
         }
       }
     }
@@ -598,7 +634,7 @@ export function Canvas({
           }
         });
 
-        setDragState({
+        updateDragState({
           mode: 'moving',
           startPos: worldPoint,
           lastPos: worldPoint,
@@ -611,7 +647,7 @@ export function Canvas({
         if (!e.shiftKey) {
           onSelectElements([]);
         }
-        setDragState({
+        updateDragState({
           mode: 'box-select',
           startPos: worldPoint,
           lastPos: worldPoint,
@@ -627,7 +663,6 @@ export function Canvas({
           height: 0,
         };
         selectionBoxRef.current = initialBox;
-        setSelectionBox(initialBox);
         requestRender();
       }
       return;
@@ -637,7 +672,7 @@ export function Canvas({
     const newId = `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const isConnector = activeTool === 'arrow' || activeTool === 'line';
-    const nearestStartAnchor = isConnector ? findNearestShapeAnchor(worldPoint, elements, 28) : null;
+    const nearestStartAnchor = isConnector ? findNearestShapeAnchor(worldPoint, elements, 40) : null;
 
     const initialPos = nearestStartAnchor
       ? { x: nearestStartAnchor.x, y: nearestStartAnchor.y }
@@ -655,7 +690,7 @@ export function Canvas({
 
     startBindingRef.current = startBinding;
     endBindingRef.current = undefined;
-    setActiveSnapAnchor(nearestStartAnchor);
+    activeSnapAnchorRef.current = nearestStartAnchor;
 
     let newElement: CanvasElement;
 
@@ -814,13 +849,11 @@ export function Canvas({
     const nextElements = [...elements, newElement];
     latestElementsRef.current = nextElements;
     onElementsChange(nextElements, false);
-    if (activeTool !== 'draw') {
-      onSelectElements([newId]);
-    } else {
+    if (selectedElementIds.length > 0) {
       onSelectElements([]);
     }
 
-    setDragState({
+    updateDragState({
       mode: 'drawing',
       startPos: initialPos,
       lastPos: initialPos,
@@ -840,21 +873,43 @@ export function Canvas({
       lastCursorEmitRef.current = now;
     }
 
-    if (dragState.mode === 'none') {
+    const curDrag = dragStateRef.current;
+
+    if (curDrag.mode === 'none') {
       if (activeTool === 'selection') {
         if (selectedElementIds.length > 0) {
           const selected = elements.filter((el) => selectedElementIds.includes(el.id) && !el.isDeleted);
-          const bounds = getGroupBounds(selected);
-          if (bounds) {
-            const handle = getHitResizeHandle(worldPoint, bounds, zoom);
-            if (handle !== hoveredHandle) {
-              setHoveredHandle(handle);
+          if (selected.length === 1 && (selected[0].type === 'arrow' || selected[0].type === 'line')) {
+            const arrowEl = selected[0];
+            const pts = arrowEl.points || [
+              { x: 0, y: 0 },
+              { x: arrowEl.width, y: arrowEl.height },
+            ];
+            const startPt = { x: arrowEl.x + pts[0].x, y: arrowEl.y + pts[0].y };
+            const endPt = { x: arrowEl.x + pts[pts.length - 1].x, y: arrowEl.y + pts[pts.length - 1].y };
+            const hitRadius = 12 / zoom;
+
+            let handle: ResizeHandle | null = null;
+            if (distance(worldPoint, startPt) <= hitRadius) {
+              handle = 'start';
+            } else if (distance(worldPoint, endPt) <= hitRadius) {
+              handle = 'end';
             }
-          } else if (hoveredHandle) {
-            setHoveredHandle(null);
+            if (hoveredHandleRef.current !== handle) {
+              hoveredHandleRef.current = handle;
+              updateCursor();
+            }
+          } else {
+            const bounds = getGroupBounds(selected);
+            const handle = bounds ? getHitResizeHandle(worldPoint, bounds, zoom) : null;
+            if (hoveredHandleRef.current !== handle) {
+              hoveredHandleRef.current = handle;
+              updateCursor();
+            }
           }
-        } else if (hoveredHandle) {
-          setHoveredHandle(null);
+        } else if (hoveredHandleRef.current) {
+          hoveredHandleRef.current = null;
+          updateCursor();
         }
       }
 
@@ -862,53 +917,46 @@ export function Canvas({
         const candidateShapes = elements.filter(
           (el) => !el.isDeleted && el.type !== 'arrow' && el.type !== 'line' && el.type !== 'draw'
         );
-        const nearbyShape = candidateShapes.find((target) => {
+        const nearbyShape = [...candidateShapes].reverse().find((target) => {
           const b = getElementBounds(target);
           return (
-            worldPoint.x >= b.minX - 32 &&
-            worldPoint.x <= b.maxX + 32 &&
-            worldPoint.y >= b.minY - 32 &&
-            worldPoint.y <= b.maxY + 32
+            worldPoint.x >= b.minX - 40 &&
+            worldPoint.x <= b.maxX + 40 &&
+            worldPoint.y >= b.minY - 40 &&
+            worldPoint.y <= b.maxY + 40
           );
         });
 
         if (nearbyShape) {
-          const nearest = findNearestShapeAnchor(worldPoint, [nearbyShape], 28);
-          if (hoveredShapeIdRef.current !== nearbyShape.id) {
-            hoveredShapeIdRef.current = nearbyShape.id;
-            setCandidateAnchors(getShapeAnchors(nearbyShape));
-          }
-          if (
-            nearest?.elementId !== currentSnapAnchorRef.current?.elementId ||
-            nearest?.position !== currentSnapAnchorRef.current?.position
-          ) {
-            currentSnapAnchorRef.current = nearest || null;
-            setActiveSnapAnchor(nearest || null);
-          }
+          const nearest = findNearestShapeAnchor(worldPoint, [nearbyShape], 40);
+          const anchors = getShapeAnchors(nearbyShape);
+          candidateAnchorsRef.current = anchors;
+          activeSnapAnchorRef.current = nearest || null;
+          hoveredShapeIdRef.current = nearbyShape.id;
+          currentSnapAnchorRef.current = nearest || null;
+          requestRender();
         } else {
-          if (hoveredShapeIdRef.current !== null) {
+          if (hoveredShapeIdRef.current !== null || currentSnapAnchorRef.current !== null) {
             hoveredShapeIdRef.current = null;
-            setCandidateAnchors([]);
-          }
-          if (currentSnapAnchorRef.current !== null) {
             currentSnapAnchorRef.current = null;
-            setActiveSnapAnchor(null);
+            candidateAnchorsRef.current = [];
+            activeSnapAnchorRef.current = null;
+            requestRender();
           }
         }
       } else {
-        if (hoveredShapeIdRef.current !== null) {
+        if (hoveredShapeIdRef.current !== null || currentSnapAnchorRef.current !== null) {
           hoveredShapeIdRef.current = null;
-          setCandidateAnchors([]);
-        }
-        if (currentSnapAnchorRef.current !== null) {
           currentSnapAnchorRef.current = null;
-          setActiveSnapAnchor(null);
+          candidateAnchorsRef.current = [];
+          activeSnapAnchorRef.current = null;
+          requestRender();
         }
       }
       return;
     }
 
-    if (dragState.mode === 'panning') {
+    if (curDrag.mode === 'panning') {
       const dx = e.clientX - panLastPosRef.current.x;
       const dy = e.clientY - panLastPosRef.current.y;
       panLastPosRef.current = { x: e.clientX, y: e.clientY };
@@ -919,15 +967,14 @@ export function Canvas({
       requestRender();
 
       pendingPanSyncRef.current = { ...cam.pan };
-      syncCameraToParent();
       return;
     }
 
-    if (dragState.mode === 'box-select') {
-      const minX = Math.min(dragState.startPos.x, worldPoint.x);
-      const minY = Math.min(dragState.startPos.y, worldPoint.y);
-      const maxX = Math.max(dragState.startPos.x, worldPoint.x);
-      const maxY = Math.max(dragState.startPos.y, worldPoint.y);
+    if (curDrag.mode === 'box-select') {
+      const minX = Math.min(curDrag.startPos.x, worldPoint.x);
+      const minY = Math.min(curDrag.startPos.y, worldPoint.y);
+      const maxX = Math.max(curDrag.startPos.x, worldPoint.x);
+      const maxY = Math.max(curDrag.startPos.y, worldPoint.y);
 
       const box = {
         minX,
@@ -939,7 +986,6 @@ export function Canvas({
       };
 
       selectionBoxRef.current = box;
-      setSelectionBox(box);
       requestRender();
 
       // Select elements inside or intersecting box (Figma marquee selection)
@@ -965,16 +1011,16 @@ export function Canvas({
       return;
     }
 
-    if (dragState.mode === 'moving') {
-      const dx = worldPoint.x - dragState.startPos.x;
-      const dy = worldPoint.y - dragState.startPos.y;
+    if (curDrag.mode === 'moving') {
+      const dx = worldPoint.x - curDrag.startPos.x;
+      const dy = worldPoint.y - curDrag.startPos.y;
 
       const finalDx = gridSnap ? snapToGrid(dx) : dx;
       const finalDy = gridSnap ? snapToGrid(dy) : dy;
 
       const moved = elements.map((el) => {
         if (selectedElementIds.includes(el.id)) {
-          const start = dragState.elementStartPositions?.get(el.id);
+          const start = curDrag.elementStartPositions?.get(el.id);
           if (start) {
             return {
               ...el,
@@ -992,13 +1038,17 @@ export function Canvas({
 
       latestElementsRef.current = updated;
       requestRender();
-      socketService.emitElementsChange(updated, false);
+
+      if (now - lastSocketEmitRef.current > 33) {
+        lastSocketEmitRef.current = now;
+        socketService.emitElementsChange(updated, false);
+      }
       return;
     }
 
-    if (dragState.mode === 'drawing' && dragState.createdElementId) {
+    if (curDrag.mode === 'drawing' && curDrag.createdElementId) {
       const currentElements = latestElementsRef.current;
-      const el = currentElements.find((e) => e.id === dragState.createdElementId);
+      const el = currentElements.find((e) => e.id === curDrag.createdElementId);
       if (!el) return;
 
       let updated: CanvasElement[] = currentElements;
@@ -1041,24 +1091,36 @@ export function Canvas({
         );
 
         // Find nearby candidate shape to display anchor points
-        const nearbyShape = candidateElements.find((target) => {
+        const nearbyShape = [...candidateElements].reverse().find((target) => {
           const b = getElementBounds(target);
           return (
-            worldPoint.x >= b.minX - 32 &&
-            worldPoint.x <= b.maxX + 32 &&
-            worldPoint.y >= b.minY - 32 &&
-            worldPoint.y <= b.maxY + 32
+            worldPoint.x >= b.minX - 40 &&
+            worldPoint.x <= b.maxX + 40 &&
+            worldPoint.y >= b.minY - 40 &&
+            worldPoint.y <= b.maxY + 40
           );
         });
 
         const anchors = nearbyShape ? getShapeAnchors(nearbyShape) : [];
-        const snapAnchor = findNearestShapeAnchor(worldPoint, candidateElements, 28);
+        const snapAnchor = findNearestShapeAnchor(worldPoint, candidateElements, 40);
 
-        setCandidateAnchors(anchors);
-        setActiveSnapAnchor(snapAnchor);
+        candidateAnchorsRef.current = anchors;
+        activeSnapAnchorRef.current = snapAnchor;
 
-        const targetX = snapAnchor ? snapAnchor.x : gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
-        const targetY = snapAnchor ? snapAnchor.y : gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
+        let targetX = snapAnchor ? snapAnchor.x : gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
+        let targetY = snapAnchor ? snapAnchor.y : gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
+
+        // Holding Shift snaps arrow / line to 15-degree angle increments (0°, 15°, 30°, 45°, 90°, etc.)
+        if (e.shiftKey && !snapAnchor) {
+          const dx = targetX - el.x;
+          const dy = targetY - el.y;
+          const dist = Math.hypot(dx, dy);
+          const angle = Math.atan2(dy, dx);
+          const snapStep = Math.PI / 12; // 15°
+          const snappedAngle = Math.round(angle / snapStep) * snapStep;
+          targetX = el.x + dist * Math.cos(snappedAngle);
+          targetY = el.y + dist * Math.sin(snappedAngle);
+        }
 
         const endBinding: ArrowBinding | undefined = snapAnchor
           ? {
@@ -1085,13 +1147,20 @@ export function Canvas({
             : item
         );
       } else {
-        const rawW = worldPoint.x - dragState.startPos.x;
-        const rawH = worldPoint.y - dragState.startPos.y;
-        const w = gridSnap ? snapToGrid(rawW) : rawW;
-        const h = gridSnap ? snapToGrid(rawH) : rawH;
+        const rawW = worldPoint.x - curDrag.startPos.x;
+        const rawH = worldPoint.y - curDrag.startPos.y;
+        let w = gridSnap ? snapToGrid(rawW) : rawW;
+        let h = gridSnap ? snapToGrid(rawH) : rawH;
 
-        const posX = w < 0 ? dragState.startPos.x + w : dragState.startPos.x;
-        const posY = h < 0 ? dragState.startPos.y + h : dragState.startPos.y;
+        // Holding Shift constrains rectangle to square (1:1), ellipse to circle, diamond to square diamond (Paint / Figma standard)
+        if (e.shiftKey) {
+          const side = Math.max(Math.abs(w), Math.abs(h));
+          w = (w < 0 ? -1 : 1) * side;
+          h = (h < 0 ? -1 : 1) * side;
+        }
+
+        const posX = w < 0 ? curDrag.startPos.x + w : curDrag.startPos.x;
+        const posY = h < 0 ? curDrag.startPos.y + h : curDrag.startPos.y;
 
         updated = currentElements.map((item) =>
           item.id === el.id
@@ -1109,70 +1178,251 @@ export function Canvas({
 
       latestElementsRef.current = updated;
       requestRender();
-      socketService.emitElementsChange(updated, false);
+      if (now - lastSocketEmitRef.current > 33) {
+        lastSocketEmitRef.current = now;
+        socketService.emitElementsChange(updated, false);
+      }
       return;
     }
 
-    if (dragState.mode === 'resizing' && dragState.initialBounds) {
-      const handle = dragState.activeHandle;
+    if (curDrag.mode === 'resizing') {
+      const handle = curDrag.activeHandle;
       if (!handle) return;
 
-      const init = dragState.initialBounds;
-      let newBounds = { ...init };
+      if (handle === 'start' || handle === 'end') {
+        const targetArrowId = curDrag.createdElementId || selectedElementIds[0];
+        const targetArrow = latestElementsRef.current.find((item) => item.id === targetArrowId);
+        if (!targetArrow) return;
 
-      if (handle.includes('e')) newBounds.width = Math.max(20, worldPoint.x - init.minX);
-      if (handle.includes('s')) newBounds.height = Math.max(20, worldPoint.y - init.minY);
-      if (handle.includes('w')) {
-        const newW = Math.max(20, init.maxX - worldPoint.x);
-        newBounds.minX = init.maxX - newW;
-        newBounds.width = newW;
-      }
-      if (handle.includes('n')) {
-        const newH = Math.max(20, init.maxY - worldPoint.y);
-        newBounds.minY = init.maxY - newH;
-        newBounds.height = newH;
-      }
+        const candidateElements = latestElementsRef.current.filter(
+          (e) => !e.isDeleted && e.id !== targetArrow.id && e.type !== 'arrow' && e.type !== 'line' && e.type !== 'draw'
+        );
 
-      // Update selected elements proportional to new bounding box
-      const scaleX = newBounds.width / Math.max(1, init.width);
-      const scaleY = newBounds.height / Math.max(1, init.height);
+        // Find nearby candidate shape to display anchor points
+        const nearbyShape = [...candidateElements].reverse().find((target) => {
+          const b = getElementBounds(target);
+          return (
+            worldPoint.x >= b.minX - 40 &&
+            worldPoint.x <= b.maxX + 40 &&
+            worldPoint.y >= b.minY - 40 &&
+            worldPoint.y <= b.maxY + 40
+          );
+        });
 
-      const updated = elements.map((el) => {
-        if (selectedElementIds.includes(el.id)) {
-          const relX = (el.x - init.minX) * scaleX;
-          const relY = (el.y - init.minY) * scaleY;
-          return {
-            ...el,
-            x: newBounds.minX + relX,
-            y: newBounds.minY + relY,
-            width: Math.max(20, el.width * scaleX),
-            height: Math.max(20, el.height * scaleY),
-            updatedAt: Date.now(),
+        const anchors = nearbyShape ? getShapeAnchors(nearbyShape) : [];
+        const snapAnchor = findNearestShapeAnchor(worldPoint, candidateElements, 40);
+
+        candidateAnchorsRef.current = anchors;
+        activeSnapAnchorRef.current = snapAnchor;
+
+        const targetX = snapAnchor ? snapAnchor.x : gridSnap ? snapToGrid(worldPoint.x) : worldPoint.x;
+        const targetY = snapAnchor ? snapAnchor.y : gridSnap ? snapToGrid(worldPoint.y) : worldPoint.y;
+
+        const pts = targetArrow.points || [
+          { x: 0, y: 0 },
+          { x: targetArrow.width, y: targetArrow.height },
+        ];
+
+        let newX = targetArrow.x;
+        let newY = targetArrow.y;
+        let newPoints = [...pts];
+        let newStartBinding = targetArrow.startBinding;
+        let newEndBinding = targetArrow.endBinding;
+
+        if (handle === 'start') {
+          const currentAbsEnd = {
+            x: targetArrow.x + pts[pts.length - 1].x,
+            y: targetArrow.y + pts[pts.length - 1].y,
           };
+          newX = targetX;
+          newY = targetY;
+          newPoints[0] = { x: 0, y: 0 };
+          newPoints[pts.length - 1] = {
+            x: currentAbsEnd.x - newX,
+            y: currentAbsEnd.y - newY,
+          };
+          newStartBinding = snapAnchor
+            ? {
+                elementId: snapAnchor.elementId,
+                focus: 0,
+                anchorPosition: snapAnchor.position,
+              }
+            : undefined;
+        } else {
+          // 'end' handle
+          newPoints[pts.length - 1] = {
+            x: targetX - newX,
+            y: targetY - newY,
+          };
+          newEndBinding = snapAnchor
+            ? {
+                elementId: snapAnchor.elementId,
+                focus: 0,
+                anchorPosition: snapAnchor.position,
+              }
+            : undefined;
         }
-        return el;
-      });
 
-      latestElementsRef.current = updated;
-      requestRender();
-      socketService.emitElementsChange(updated, false);
+        const updated = latestElementsRef.current.map((item) =>
+          item.id === targetArrow.id
+            ? {
+                ...item,
+                x: newX,
+                y: newY,
+                width: newPoints[newPoints.length - 1].x,
+                height: newPoints[newPoints.length - 1].y,
+                points: newPoints,
+                startBinding: newStartBinding,
+                endBinding: newEndBinding,
+                updatedAt: Date.now(),
+              }
+            : item
+        );
+
+        latestElementsRef.current = updated;
+        requestRender();
+        if (now - lastSocketEmitRef.current > 33) {
+          lastSocketEmitRef.current = now;
+          socketService.emitElementsChange(updated, false);
+        }
+        return;
+      }
+
+      if (curDrag.initialBounds) {
+        const init = curDrag.initialBounds;
+        let newBounds = { ...init };
+
+        if (handle.includes('e')) newBounds.width = Math.max(20, worldPoint.x - init.minX);
+        if (handle.includes('s')) newBounds.height = Math.max(20, worldPoint.y - init.minY);
+        if (handle.includes('w')) {
+          const newW = Math.max(20, init.maxX - worldPoint.x);
+          newBounds.minX = init.maxX - newW;
+          newBounds.width = newW;
+        }
+        if (handle.includes('n')) {
+          const newH = Math.max(20, init.maxY - worldPoint.y);
+          newBounds.minY = init.maxY - newH;
+          newBounds.height = newH;
+        }
+
+        // Shift key locks aspect ratio during corner resize (Paint / Figma standard)
+        if (e.shiftKey && handle.length === 2) {
+          const initRatio = init.width / Math.max(1, init.height);
+          const currentRatio = newBounds.width / Math.max(1, newBounds.height);
+          if (currentRatio > initRatio) {
+            newBounds.width = newBounds.height * initRatio;
+            if (handle.includes('w')) {
+              newBounds.minX = init.maxX - newBounds.width;
+            }
+          } else {
+            newBounds.height = newBounds.width / initRatio;
+            if (handle.includes('n')) {
+              newBounds.minY = init.maxY - newBounds.height;
+            }
+          }
+        }
+
+        // Update selected elements proportional to new bounding box
+        const scaleX = newBounds.width / Math.max(1, init.width);
+        const scaleY = newBounds.height / Math.max(1, init.height);
+
+        const updated = elements.map((el) => {
+          if (selectedElementIds.includes(el.id)) {
+            const relX = (el.x - init.minX) * scaleX;
+            const relY = (el.y - init.minY) * scaleY;
+            const scaledPoints = el.points
+              ? el.points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY }))
+              : undefined;
+            return {
+              ...el,
+              x: newBounds.minX + relX,
+              y: newBounds.minY + relY,
+              width: Math.max(20, el.width * scaleX),
+              height: Math.max(20, el.height * scaleY),
+              points: scaledPoints,
+              updatedAt: Date.now(),
+            };
+          }
+          return el;
+        });
+
+        // Update any bound arrows anchored to the resized shapes
+        const withBoundArrows = updateBoundArrows(updated, selectedElementIds);
+
+        latestElementsRef.current = withBoundArrows;
+        requestRender();
+        if (now - lastSocketEmitRef.current > 33) {
+          lastSocketEmitRef.current = now;
+          socketService.emitElementsChange(withBoundArrows, false);
+        }
+      }
     }
   };
 
   // Pointer Up
-  const handlePointerUp = () => {
+  const handlePointerUp = (e?: React.PointerEvent) => {
+    try {
+      if (e) (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    } catch {}
+
     isUserInteractingRef.current = false;
-    setActiveSnapAnchor(null);
-    setCandidateAnchors([]);
+    candidateAnchorsRef.current = [];
+    activeSnapAnchorRef.current = null;
     hoveredShapeIdRef.current = null;
     currentSnapAnchorRef.current = null;
     flushCameraSync();
 
-    if (dragState.mode === 'drawing' || dragState.mode === 'moving' || dragState.mode === 'resizing') {
+    const curDrag = dragStateRef.current;
+
+    if (curDrag.mode === 'drawing' || curDrag.mode === 'moving' || curDrag.mode === 'resizing') {
       let finalElements = latestElementsRef.current;
-      if (dragState.mode === 'moving') {
+      if (curDrag.mode === 'moving' || curDrag.mode === 'resizing') {
         finalElements = updateBoundArrows(finalElements, selectedElementIds);
         latestElementsRef.current = finalElements;
+      }
+
+      // If user just clicked without dragging (dist < 6), create a clean default 120px arrow or line, or 100x100 shape
+      if (curDrag.mode === 'drawing' && curDrag.createdElementId) {
+        const createdEl = finalElements.find((item) => item.id === curDrag.createdElementId);
+        if (createdEl) {
+          if (createdEl.type === 'arrow' || createdEl.type === 'line') {
+            const pts = createdEl.points || [];
+            const p1 = pts[0] || { x: 0, y: 0 };
+            const p2 = pts[pts.length - 1] || { x: createdEl.width, y: createdEl.height };
+            if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 6) {
+              const defaultLen = 120;
+              finalElements = finalElements.map((item) =>
+                item.id === createdEl.id
+                  ? {
+                      ...item,
+                      width: defaultLen,
+                      height: 0,
+                      points: [
+                        { x: 0, y: 0 },
+                        { x: defaultLen, y: 0 },
+                      ],
+                      updatedAt: Date.now(),
+                    }
+                  : item
+              );
+              latestElementsRef.current = finalElements;
+            }
+          } else if (['rectangle', 'diamond', 'ellipse'].includes(createdEl.type)) {
+            if (createdEl.width < 6 && createdEl.height < 6) {
+              finalElements = finalElements.map((item) =>
+                item.id === createdEl.id
+                  ? {
+                      ...item,
+                      width: 100,
+                      height: 100,
+                      updatedAt: Date.now(),
+                    }
+                  : item
+              );
+              latestElementsRef.current = finalElements;
+            }
+          }
+        }
       }
 
       // Commit once to React state & history on drag completion
@@ -1181,8 +1431,9 @@ export function Canvas({
       // Force immediate socket broadcast for final position
       socketService.emitElementsChange(finalElements, true);
 
-      if (dragState.mode === 'drawing') {
+      if (curDrag.mode === 'drawing' && curDrag.createdElementId) {
         if (activeTool !== 'draw') {
+          onSelectElements([curDrag.createdElementId]);
           onToolChange('selection');
         }
       }
@@ -1191,7 +1442,7 @@ export function Canvas({
     startBindingRef.current = undefined;
     endBindingRef.current = undefined;
 
-    setDragState({
+    updateDragState({
       mode: 'none',
       startPos: { x: 0, y: 0 },
       lastPos: { x: 0, y: 0 },
@@ -1199,7 +1450,6 @@ export function Canvas({
       createdElementId: null,
     });
     selectionBoxRef.current = null;
-    setSelectionBox(null);
     requestRender();
   };
 
@@ -1284,14 +1534,20 @@ export function Canvas({
   };
 
   // Dynamic Cursor Style
-  const getCursor = () => {
+  function getCursor() {
     return getFigmaCursor(
       activeTool,
       dragState.mode,
       isSpacePressed,
-      dragState.activeHandle || hoveredHandle
+      dragState.activeHandle || hoveredHandleRef.current
     );
-  };
+  }
+
+  function updateCursor() {
+    if (containerRef.current) {
+      containerRef.current.style.cursor = getCursor();
+    }
+  }
 
   return (
     <div
@@ -1373,3 +1629,5 @@ export function Canvas({
     </div>
   );
 }
+
+export const Canvas = React.memo(CanvasComponent);

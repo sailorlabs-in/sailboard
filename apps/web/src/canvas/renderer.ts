@@ -41,15 +41,19 @@ export function renderScene(
   ctx.fillStyle = isDark ? '#121622' : '#e2e8f0';
   ctx.fillRect(0, 0, width, height);
 
-  // Apply High-DPI Camera Transform (DPR * Pan and Zoom)
+  // Apply DPR transform for Screen-Space elements (Background & Grid)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const viewWidth = width / dpr;
+  const viewHeight = height / dpr;
+
+  // Render Background Grid in Screen Space (Fast, strictly bounded O(1) loop)
+  if (gridVisible && gridType !== 'blank') {
+    renderGrid(ctx, viewWidth, viewHeight, zoom, pan, isDark, gridType);
+  }
+
+  // Apply High-DPI Camera Transform for World Elements (DPR * Pan and Zoom)
   ctx.translate(pan.x, pan.y);
   ctx.scale(zoom, zoom);
-
-  // Render Background Grid
-  if (gridVisible && gridType !== 'blank') {
-    renderGrid(ctx, width / dpr, height / dpr, zoom, pan, isDark, gridType);
-  }
 
   // Figma Performance Optimization: Frustum / Viewport Culling
   // Compute visible world bounds plus margin and skip all off-screen elements
@@ -118,8 +122,20 @@ export function renderScene(
   }
 
   // Render Connector Shape Anchors (Snapping Dots)
-  if (options.candidateAnchors && options.candidateAnchors.length > 0) {
-    renderShapeAnchors(ctx, options.candidateAnchors, options.activeSnapAnchor, zoom, isDark);
+  const candidateList = [...(options.candidateAnchors || [])];
+  if (
+    options.activeSnapAnchor &&
+    !candidateList.some(
+      (a) =>
+        a.elementId === options.activeSnapAnchor?.elementId &&
+        a.position === options.activeSnapAnchor?.position
+    )
+  ) {
+    candidateList.push(options.activeSnapAnchor);
+  }
+
+  if (candidateList.length > 0) {
+    renderShapeAnchors(ctx, candidateList, options.activeSnapAnchor, zoom, isDark);
   }
 
   ctx.restore();
@@ -204,50 +220,41 @@ function renderGrid(
   isDark: boolean,
   type: 'dots' | 'grid'
 ) {
-  let gridSize = 24;
-
-  // Figma Level-of-Detail (LOD): Dynamically adjust grid density when zoomed out
-  // Clamps total rendered grid points to under 2,000, preventing 100k+ rects from dropping FPS
-  if (gridSize * zoom < 8) {
-    gridSize = 48;
-  }
-  if (gridSize * zoom < 8) {
-    gridSize = 96;
-  }
-  if (gridSize * zoom < 8) {
-    // If zoomed out so far that grid points would collapse sub-pixel, skip drawing
-    return;
+  // Screen-space grid step based on base 24px grid
+  let step = 24 * zoom;
+  // Adaptive Level of Detail (LOD): keep on-screen spacing between 18px and 48px
+  while (step < 18) {
+    step *= 2;
   }
 
-  const startX = Math.floor(-pan.x / zoom / gridSize) * gridSize;
-  const endX = startX + Math.ceil(viewWidth / zoom) + gridSize;
-  const startY = Math.floor(-pan.y / zoom / gridSize) * gridSize;
-  const endY = startY + Math.ceil(viewHeight / zoom) + gridSize;
+  // Screen-space start offsets matching world coordinates
+  const startX = ((pan.x % step) + step) % step;
+  const startY = ((pan.y % step) + step) % step;
 
   ctx.save();
 
   if (type === 'dots') {
-    ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.14)';
-    const dotRadius = Math.max(0.75, 1.0 / zoom);
-    const size = dotRadius * 2;
+    ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.15)';
+    const dotSize = 1.8;
+    const half = dotSize / 2;
     ctx.beginPath();
-    for (let x = startX; x <= endX; x += gridSize) {
-      for (let y = startY; y <= endY; y += gridSize) {
-        ctx.rect(x - dotRadius, y - dotRadius, size, size);
+    for (let x = startX; x < viewWidth; x += step) {
+      for (let y = startY; y < viewHeight; y += step) {
+        ctx.rect(x - half, y - half, dotSize, dotSize);
       }
     }
     ctx.fill();
   } else {
-    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
-    ctx.lineWidth = 1 / zoom;
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = startX; x <= endX; x += gridSize) {
-      ctx.moveTo(x, startY);
-      ctx.lineTo(x, endY);
+    for (let x = startX; x < viewWidth; x += step) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, viewHeight);
     }
-    for (let y = startY; y <= endY; y += gridSize) {
-      ctx.moveTo(startX, y);
-      ctx.lineTo(endX, y);
+    for (let y = startY; y < viewHeight; y += step) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(viewWidth, y);
     }
     ctx.stroke();
   }
@@ -380,6 +387,9 @@ function renderElement(
 
     case 'line': {
       if (el.points && el.points.length >= 2) {
+        const p1 = el.points[0];
+        const p2 = el.points[el.points.length - 1];
+        if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 4) break;
         if (useRough) {
           let cached = roughShapeCache.get(el.id);
           const ptsKey = `${el.points.length}_${el.points[0]?.x}_${el.points[0]?.y}_${el.points[el.points.length - 1]?.x}_${el.points[el.points.length - 1]?.y}`;
@@ -615,6 +625,9 @@ function renderArrow(
   const endX = points[points.length - 1].x;
   const endY = points[points.length - 1].y;
 
+  const length = Math.hypot(endX - startX, endY - startY);
+  if (length < 4) return;
+
   const strokeColor = getEffectiveStrokeColor(el.strokeColor, isDark);
   const strokeWidth = el.strokeWidth || 2;
 
@@ -632,22 +645,49 @@ function renderArrow(
   }
   ctx.stroke();
 
-  // Draw Arrowhead at the end
+  // Draw sleek filled arrowhead at the end (Eraser diagram standard)
   const angle = Math.atan2(endY - points[points.length - 2].y, endX - points[points.length - 2].x);
-  const headLen = 14 + strokeWidth * 2;
+  const headLen = Math.min(13 + strokeWidth * 1.5, Math.max(9, length * 0.35));
 
+  ctx.fillStyle = strokeColor;
   ctx.beginPath();
   ctx.moveTo(endX, endY);
   ctx.lineTo(
-    endX - headLen * Math.cos(angle - Math.PI / 6),
-    endY - headLen * Math.sin(angle - Math.PI / 6)
+    endX - headLen * Math.cos(angle - Math.PI / 6.5),
+    endY - headLen * Math.sin(angle - Math.PI / 6.5)
   );
-  ctx.moveTo(endX, endY);
   ctx.lineTo(
-    endX - headLen * Math.cos(angle + Math.PI / 6),
-    endY - headLen * Math.sin(angle + Math.PI / 6)
+    endX - headLen * 0.75 * Math.cos(angle),
+    endY - headLen * 0.75 * Math.sin(angle)
   );
-  ctx.stroke();
+  ctx.lineTo(
+    endX - headLen * Math.cos(angle + Math.PI / 6.5),
+    endY - headLen * Math.sin(angle + Math.PI / 6.5)
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Optional start arrowhead if bidirectional
+  if (el.startArrowhead === 'arrow') {
+    const startAngle = Math.atan2(points[1].y - startY, points[1].x - startX);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(
+      startX + headLen * Math.cos(startAngle + Math.PI / 6.5),
+      startY + headLen * Math.sin(startAngle + Math.PI / 6.5)
+    );
+    ctx.lineTo(
+      startX + headLen * 0.75 * Math.cos(startAngle),
+      startY + headLen * 0.75 * Math.sin(startAngle)
+    );
+    ctx.lineTo(
+      startX + headLen * Math.cos(startAngle - Math.PI / 6.5),
+      startY + headLen * Math.sin(startAngle - Math.PI / 6.5)
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+
   ctx.restore();
 }
 
@@ -711,6 +751,37 @@ function renderSelection(
 ) {
   ctx.save();
   for (const el of selected) {
+    if (el.type === 'arrow' || el.type === 'line') {
+      const points = el.points || [
+        { x: 0, y: 0 },
+        { x: el.width, y: el.height },
+      ];
+      const startPt = { x: el.x + points[0].x, y: el.y + points[0].y };
+      const endPt = { x: el.x + points[points.length - 1].x, y: el.y + points[points.length - 1].y };
+
+      const handleRadius = 6 / zoom;
+
+      // Start endpoint handle (round grab handle)
+      ctx.beginPath();
+      ctx.arc(startPt.x, startPt.y, handleRadius, 0, Math.PI * 2);
+      ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 2.5 / zoom;
+      ctx.stroke();
+
+      // End endpoint handle (round grab handle)
+      ctx.beginPath();
+      ctx.arc(endPt.x, endPt.y, handleRadius, 0, Math.PI * 2);
+      ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 2.5 / zoom;
+      ctx.stroke();
+
+      continue;
+    }
+
     const bounds = getElementBounds(el);
     const padding = 6 / zoom;
     const x = bounds.minX - padding;

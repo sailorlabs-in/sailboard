@@ -254,26 +254,46 @@ export function getShapeAnchors(el: CanvasElement): ShapeAnchor[] {
   const midX = bounds.minX + bounds.width / 2;
   const midY = bounds.minY + bounds.height / 2;
 
+  // Figma/Miro perimeter anchor ports (top, right, bottom, left)
   return [
     { x: midX, y: bounds.minY, position: 'top', elementId: el.id },
     { x: bounds.maxX, y: midY, position: 'right', elementId: el.id },
     { x: midX, y: bounds.maxY, position: 'bottom', elementId: el.id },
     { x: bounds.minX, y: midY, position: 'left', elementId: el.id },
-    { x: midX, y: midY, position: 'center', elementId: el.id },
   ];
 }
 
 export function findNearestShapeAnchor(
   point: Point,
   elements: CanvasElement[],
-  maxDistance = 24,
+  maxDistance = 40,
   excludeId?: string
 ): ShapeAnchor | null {
   let nearest: ShapeAnchor | null = null;
-  let minDistance = maxDistance;
+  let minDistance = Infinity;
 
-  for (const el of elements) {
-    if (el.isDeleted || el.id === excludeId) continue;
+  // Search candidate shapes in reverse order (topmost z-index shape first)
+  const candidateElements = [...elements].reverse().filter(
+    (el) =>
+      !el.isDeleted &&
+      el.id !== excludeId &&
+      el.type !== 'arrow' &&
+      el.type !== 'line' &&
+      el.type !== 'draw' &&
+      el.type !== 'selection'
+  );
+
+  // 1. First prioritize shape whose bounding box contains or is in generous proximity to point
+  for (const el of candidateElements) {
+    const bounds = getElementBounds(el);
+    const isInsideOrNear =
+      point.x >= bounds.minX - maxDistance &&
+      point.x <= bounds.maxX + maxDistance &&
+      point.y >= bounds.minY - maxDistance &&
+      point.y <= bounds.maxY + maxDistance;
+
+    if (!isInsideOrNear) continue;
+
     const anchors = getShapeAnchors(el);
     for (const anchor of anchors) {
       const d = distance(point, { x: anchor.x, y: anchor.y });
@@ -282,9 +302,38 @@ export function findNearestShapeAnchor(
         nearest = anchor;
       }
     }
+
+    // If point is strictly inside this shape, stop and snap to this shape's closest port
+    if (
+      point.x >= bounds.minX &&
+      point.x <= bounds.maxX &&
+      point.y >= bounds.minY &&
+      point.y <= bounds.maxY &&
+      nearest
+    ) {
+      return nearest;
+    }
   }
 
-  return nearest;
+  if (nearest && minDistance <= maxDistance * 2.5) {
+    return nearest;
+  }
+
+  // 2. Direct euclidean distance fallback
+  minDistance = maxDistance;
+  let fallback: ShapeAnchor | null = null;
+  for (const el of candidateElements) {
+    const anchors = getShapeAnchors(el);
+    for (const anchor of anchors) {
+      const d = distance(point, { x: anchor.x, y: anchor.y });
+      if (d < minDistance) {
+        minDistance = d;
+        fallback = anchor;
+      }
+    }
+  }
+
+  return fallback;
 }
 
 export function updateBoundArrows(
@@ -292,6 +341,14 @@ export function updateBoundArrows(
   movedElementIds: string[]
 ): CanvasElement[] {
   if (movedElementIds.length === 0) {
+    return elements;
+  }
+
+  // Fast path: if no elements are connectors with bindings, return immediately!
+  const hasBindings = elements.some(
+    (el) => (el.type === 'arrow' || el.type === 'line') && (el.startBinding || el.endBinding)
+  );
+  if (!hasBindings) {
     return elements;
   }
 
@@ -304,68 +361,66 @@ export function updateBoundArrows(
       return el;
     }
 
-    const hasStartBound = el.startBinding && movedSet.has(el.startBinding.elementId);
-    const hasEndBound = el.endBinding && movedSet.has(el.endBinding.elementId);
+    const startBound = el.startBinding ? elementMap.get(el.startBinding.elementId) : undefined;
+    const endBound = el.endBinding ? elementMap.get(el.endBinding.elementId) : undefined;
 
-    if (!hasStartBound && !hasEndBound) {
+    const isStartBound = Boolean(startBound && !startBound.isDeleted);
+    const isEndBound = Boolean(endBound && !endBound.isDeleted);
+
+    if (!isStartBound && !isEndBound) {
       return el;
     }
 
-    const points = el.points ? [...el.points] : [
-      { x: 0, y: 0 },
-      { x: el.width, y: el.height },
-    ];
+    const isStartMoved = el.startBinding ? movedSet.has(el.startBinding.elementId) : false;
+    const isEndMoved = el.endBinding ? movedSet.has(el.endBinding.elementId) : false;
 
-    let newElX = el.x;
-    let newElY = el.y;
-
-    if (hasStartBound && el.startBinding) {
-      const targetShape = elementMap.get(el.startBinding.elementId);
-      if (targetShape && !targetShape.isDeleted) {
-        const anchorPos = el.startBinding.anchorPosition || 'center';
-        const anchorCoord = getAnchorCoordinates(targetShape, anchorPos);
-
-        const currentAbsEnd = {
-          x: el.x + points[points.length - 1].x,
-          y: el.y + points[points.length - 1].y,
-        };
-
-        newElX = anchorCoord.x;
-        newElY = anchorCoord.y;
-        points[0] = { x: 0, y: 0 };
-        points[points.length - 1] = {
-          x: currentAbsEnd.x - anchorCoord.x,
-          y: currentAbsEnd.y - anchorCoord.y,
-        };
-        hasChanges = true;
-      }
+    // Only update if at least one of its anchored shapes was moved or resized
+    if (!isStartMoved && !isEndMoved) {
+      return el;
     }
 
-    if (hasEndBound && el.endBinding) {
-      const targetShape = elementMap.get(el.endBinding.elementId);
-      if (targetShape && !targetShape.isDeleted) {
-        const anchorPos = el.endBinding.anchorPosition || 'center';
-        const anchorCoord = getAnchorCoordinates(targetShape, anchorPos);
+    const points =
+      el.points && el.points.length >= 2
+        ? el.points.map((p) => ({ ...p }))
+        : [
+            { x: 0, y: 0 },
+            { x: el.width, y: el.height },
+          ];
 
-        points[points.length - 1] = {
-          x: anchorCoord.x - newElX,
-          y: anchorCoord.y - newElY,
-        };
-        hasChanges = true;
-      }
+    // Compute absolute start coordinate
+    let absStartX = el.x;
+    let absStartY = el.y;
+
+    if (isStartBound && startBound && el.startBinding) {
+      const coord = getAnchorCoordinates(startBound, el.startBinding.anchorPosition || 'center');
+      absStartX = coord.x;
+      absStartY = coord.y;
     }
 
-    if (!hasChanges) return el;
+    // Compute absolute end coordinate
+    let absEndX = el.x + points[points.length - 1].x;
+    let absEndY = el.y + points[points.length - 1].y;
 
-    const newWidth = points[points.length - 1].x;
-    const newHeight = points[points.length - 1].y;
+    if (isEndBound && endBound && el.endBinding) {
+      const coord = getAnchorCoordinates(endBound, el.endBinding.anchorPosition || 'center');
+      absEndX = coord.x;
+      absEndY = coord.y;
+    }
+
+    const relEndX = absEndX - absStartX;
+    const relEndY = absEndY - absStartY;
+
+    points[0] = { x: 0, y: 0 };
+    points[points.length - 1] = { x: relEndX, y: relEndY };
+
+    hasChanges = true;
 
     return {
       ...el,
-      x: newElX,
-      y: newElY,
-      width: newWidth,
-      height: newHeight,
+      x: absStartX,
+      y: absStartY,
+      width: relEndX,
+      height: relEndY,
       points,
       version: el.version + 1,
       versionNonce: Math.floor(Math.random() * 100000),
@@ -373,5 +428,5 @@ export function updateBoundArrows(
     };
   });
 
-  return updatedElements;
+  return hasChanges ? updatedElements : elements;
 }

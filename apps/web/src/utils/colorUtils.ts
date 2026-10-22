@@ -265,27 +265,31 @@ export function getEffectiveTextColor(
   if (element.type === 'text' && allElements && allElements.length > 0) {
     const textCenter = { x: element.x + element.width / 2, y: element.y + element.height / 2 };
     const elIndex = allElements.indexOf(element);
-    const precedingElements = elIndex > 0 ? allElements.slice(0, elIndex) : allElements;
-    const hitShape = [...precedingElements].reverse().find((candidate) => {
-      if (candidate.isDeleted || candidate.id === (element as any).id) return false;
+    let hitShape: any;
+    for (let i = (elIndex > 0 ? elIndex : allElements.length) - 1; i >= 0; i--) {
+      const candidate = allElements[i];
+      if (candidate.isDeleted || candidate.id === (element as any).id) continue;
       if (
         candidate.type === 'line' ||
         candidate.type === 'arrow' ||
         candidate.type === 'draw' ||
         candidate.type === 'text'
       )
-        return false;
+        continue;
       const bMinX = Math.min(candidate.x, candidate.x + candidate.width);
       const bMaxX = Math.max(candidate.x, candidate.x + candidate.width);
       const bMinY = Math.min(candidate.y, candidate.y + candidate.height);
       const bMaxY = Math.max(candidate.y, candidate.y + candidate.height);
-      return (
+      if (
         textCenter.x >= bMinX &&
         textCenter.x <= bMaxX &&
         textCenter.y >= bMinY &&
         textCenter.y <= bMaxY
-      );
-    });
+      ) {
+        hitShape = candidate;
+        break;
+      }
+    }
 
     if (hitShape) {
       // Evaluate outer section from the underlying shape

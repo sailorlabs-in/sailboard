@@ -180,6 +180,9 @@ export function getFigmaCursor(
   activeHandle: string | null = null,
   isHoveringElement = false
 ): string {
+  // Actively drawing state (arrow, line, rectangle, etc.)
+  if (dragMode === 'drawing') return 'crosshair';
+
   // Panning state
   if (dragMode === 'panning') return 'grabbing';
   if (tool === 'pan' || isSpacePressed) return 'grab';
@@ -191,13 +194,14 @@ export function getFigmaCursor(
       if (['ne', 'sw'].includes(activeHandle)) return 'nesw-resize';
       if (['e', 'w'].includes(activeHandle)) return 'ew-resize';
       if (['n', 's'].includes(activeHandle)) return 'ns-resize';
+      if (activeHandle === 'start' || activeHandle === 'end') return 'crosshair';
     }
     if (dragMode === 'moving') return 'grabbing';
     if (isHoveringElement) return 'move';
     return 'default';
   }
 
-  // Tool specific custom Figma cursors
+  // Tool specific cursors (precision crosshair for arrow and line matching Figma)
   switch (tool) {
     case 'comment':
       return FIGMA_CURSORS.comment;
@@ -216,9 +220,9 @@ export function getFigmaCursor(
     case 'ellipse':
       return FIGMA_CURSORS.ellipse;
     case 'arrow':
-      return FIGMA_CURSORS.arrow;
+      return 'crosshair';
     case 'line':
-      return FIGMA_CURSORS.line;
+      return 'crosshair';
     default:
       return 'crosshair';
   }

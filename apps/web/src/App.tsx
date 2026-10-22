@@ -34,6 +34,7 @@ import { ViewerNoticeBanner } from "./components/ViewerNoticeBanner";
 import { AuthScreen } from "./components/AuthScreen";
 import { AuthDialog } from "./components/AuthDialog";
 import { AccountManageDialog } from "./components/AccountManageDialog";
+import { DocToDiagramModal } from "./components/modals";
 import { Dashboard } from "./components/Dashboard";
 import { CommandPalette } from "./components/CommandPalette";
 import { CanvasComments } from "./components/CanvasComments";
@@ -132,6 +133,7 @@ export function App() {
   // Modals
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [docToDiagramOpen, setDocToDiagramOpen] = useState(false);
 
   // Document State
   const [doc, setDoc] = useState<WhiteboardDocument>({
@@ -1231,134 +1233,11 @@ export function App() {
     }
   };
 
-  // Convert Doc Notes to Architecture Flowchart Shapes
-  const handleGenerateDiagramFromNotes = useCallback(
-    (markdownText: string) => {
-      if (isViewer) return;
-      const lines = markdownText.split("\n");
-      const nodes: string[] = [];
-
-      lines.forEach((line) => {
-        const clean = line.trim();
-        if (
-          clean.startsWith("#") ||
-          clean.startsWith("-") ||
-          clean.startsWith("*")
-        ) {
-          const text = clean
-            .replace(/^[#\-*\s]+/, "")
-            .replace(/\[[ xX]\]/, "")
-            .trim();
-          if (text && text.length > 1 && text.length < 50) {
-            nodes.push(text);
-          }
-        }
-      });
-
-      if (nodes.length === 0) {
-        nodes.push(
-          "Architecture Step 1",
-          "API Processing",
-          "Redis Cache",
-          "Storage",
-        );
-      }
-
-      const generatedElements: CanvasElement[] = [];
-      const startX = 140;
-      const startY = 180;
-      const nodeWidth = 190;
-      const nodeHeight = 85;
-      const gapX = 90;
-
-      nodes.slice(0, 7).forEach((nodeText, i) => {
-        const x = startX + i * (nodeWidth + gapX);
-        const y = startY + (i % 2 === 1 ? 50 : 0);
-        const isDecision =
-          nodeText.toLowerCase().includes("gateway") ||
-          nodeText.toLowerCase().includes("decision");
-        const isCache =
-          nodeText.toLowerCase().includes("cache") ||
-          nodeText.toLowerCase().includes("redis");
-
-        const shapeType: ElementType = isDecision
-          ? "diamond"
-          : isCache
-            ? "ellipse"
-            : "rectangle";
-        const shapeId = `gen-${Date.now()}-${i}`;
-
-        generatedElements.push({
-          id: shapeId,
-          type: shapeType,
-          x,
-          y,
-          width: nodeWidth,
-          height: nodeHeight,
-          angle: 0,
-          strokeColor: isDecision ? "#10b981" : isCache ? "#f59e0b" : "#6366f1",
-          backgroundColor: isDecision
-            ? "rgba(16, 185, 129, 0.15)"
-            : isCache
-              ? "rgba(245, 158, 11, 0.15)"
-              : "rgba(99, 102, 241, 0.15)",
-          fillStyle: "solid",
-          strokeWidth: 2,
-          strokeStyle: "solid",
-          roughness: styleMode === "rough" ? 1.2 : 0,
-          opacity: 100,
-          seed: Math.floor(Math.random() * 100000),
-          version: 1,
-          versionNonce: 1,
-          isDeleted: false,
-          updatedAt: Date.now(),
-          text: nodeText,
-          fontSize: 14,
-          textAlign: "center",
-        });
-
-        // Connector arrow to previous node
-        if (i > 0) {
-          const prevShape = generatedElements[generatedElements.length - 2];
-          const arrowId = `gen-arrow-${Date.now()}-${i}`;
-          const arrowStartX = prevShape.x + prevShape.width;
-          const arrowStartY = prevShape.y + prevShape.height / 2;
-          const arrowEndX = x;
-          const arrowEndY = y + nodeHeight / 2;
-
-          generatedElements.push({
-            id: arrowId,
-            type: "arrow",
-            x: arrowStartX,
-            y: arrowStartY,
-            width: arrowEndX - arrowStartX,
-            height: arrowEndY - arrowStartY,
-            angle: 0,
-            strokeColor: "#94a3b8",
-            backgroundColor: "transparent",
-            fillStyle: "none",
-            strokeWidth: 2,
-            strokeStyle: "solid",
-            roughness: styleMode === "rough" ? 1 : 0,
-            opacity: 100,
-            seed: Math.floor(Math.random() * 100000),
-            version: 1,
-            versionNonce: 1,
-            isDeleted: false,
-            updatedAt: Date.now(),
-            points: [
-              { x: 0, y: 0 },
-              { x: arrowEndX - arrowStartX, y: arrowEndY - arrowStartY },
-            ],
-            endArrowhead: "arrow",
-          });
-        }
-      });
-
-      handleElementsChange([...doc.elements, ...generatedElements]);
-    },
-    [doc.elements, isViewer, styleMode, handleElementsChange],
-  );
+  // Open Doc to Diagram Studio Modal (Eraser-grade Diagram-as-Code & Architecture Studio)
+  const handleGenerateDiagramFromNotes = useCallback(() => {
+    if (isViewer) return;
+    setDocToDiagramOpen(true);
+  }, [isViewer]);
 
   // Import JSON File
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1985,6 +1864,23 @@ export function App() {
           document={doc}
           theme={effectiveThemeMode}
           styleMode={styleMode}
+        />
+
+        {/* Doc to Diagram Studio Modal (Eraser-grade Diagram-as-Code & Architecture Studio) */}
+        <DocToDiagramModal
+          open={docToDiagramOpen}
+          onClose={() => setDocToDiagramOpen(false)}
+          initialText={doc.notes}
+          existingElements={doc.elements}
+          onInsertElements={(newElements, replace) => {
+            const nextElements = replace
+              ? newElements
+              : [...doc.elements, ...newElements];
+            handleElementsChange(nextElements, true);
+            setSelectedElementIds(newElements.map((e) => e.id));
+          }}
+          styleMode={styleMode}
+          theme={effectiveThemeMode}
         />
 
         {/* Account Management & Multi-Account Switcher Dialog */}
