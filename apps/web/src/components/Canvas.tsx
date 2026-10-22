@@ -16,6 +16,8 @@ import {
 } from '../canvas/math';
 import { renderScene } from '../canvas/renderer';
 import { socketService } from '../services/socket';
+import { getEffectiveTextColor } from '../utils/colorUtils';
+import { getFigmaCursor } from '../canvas/cursors';
 import gsap from 'gsap';
 
 // Animated spring pill indicator for Hand tool
@@ -103,6 +105,7 @@ interface CanvasProps {
   remoteUsers: UserPresence[];
   onCursorMove: (point: Point) => void;
   isViewer?: boolean;
+  canComment?: boolean;
 }
 
 export function Canvas({
@@ -126,6 +129,7 @@ export function Canvas({
   remoteUsers,
   onCursorMove,
   isViewer,
+  canComment = true,
 }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +152,7 @@ export function Canvas({
   });
 
   const [selectionBox, setSelectionBox] = useState<BoundingBox | null>(null);
+  const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle | null>(null);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousToolRef = useRef<ElementType | 'eraser' | 'pan' | 'comment'>('selection');
 
@@ -209,41 +214,62 @@ export function Canvas({
     fontSize?: number;
   } | null>(null);
 
-  // Convert Client Window Coordinates to Canvas World Coordinates
-  const clientToWorld = useCallback(
-    (clientX: number, clientY: number): Point => {
-      if (!canvasRef.current) return { x: 0, y: 0 };
-      const rect = canvasRef.current.getBoundingClientRect();
-      const rawX = clientX - rect.left;
-      const rawY = clientY - rect.top;
-      return {
-        x: (rawX - pan.x) / zoom,
-        y: (rawY - pan.y) / zoom,
-      };
-    },
-    [pan, zoom]
-  );
+  // Figma Optimization: Decoupled Camera State
+  // Panning and zooming update mutable cameraRef and repaint via requestAnimationFrame
+  // without triggering expensive 2000-line React App re-renders on every mouse pixel
+  const cameraRef = useRef<{ pan: { x: number; y: number }; zoom: number }>({
+    pan: { ...pan },
+    zoom,
+  });
+  const panLastPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hoveredShapeIdRef = useRef<string | null>(null);
+  const currentSnapAnchorRef = useRef<ShapeAnchor | null>(null);
 
-  // Convert Canvas World Coordinates to Screen Coordinates
-  const worldToClient = useCallback(
-    (worldX: number, worldY: number): Point => {
-      return {
-        x: worldX * zoom + pan.x,
-        y: worldY * zoom + pan.y,
-      };
-    },
-    [pan, zoom]
-  );
+  // RAF Parent Sync: Throttle onPanChange & onZoomChange updates to App.tsx
+  const pendingPanSyncRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingZoomSyncRef = useRef<number | null>(null);
+  const panZoomRafRef = useRef<number | null>(null);
 
-  // Main Render Loop (always uses latest elements and state)
+  const syncCameraToParent = useCallback(() => {
+    if (panZoomRafRef.current) return;
+    panZoomRafRef.current = requestAnimationFrame(() => {
+      panZoomRafRef.current = null;
+      if (pendingPanSyncRef.current) {
+        onPanChange(pendingPanSyncRef.current);
+        pendingPanSyncRef.current = null;
+      }
+      if (pendingZoomSyncRef.current !== null) {
+        onZoomChange(pendingZoomSyncRef.current);
+        pendingZoomSyncRef.current = null;
+      }
+    });
+  }, [onPanChange, onZoomChange]);
+
+  const flushCameraSync = useCallback(() => {
+    if (panZoomRafRef.current) {
+      cancelAnimationFrame(panZoomRafRef.current);
+      panZoomRafRef.current = null;
+    }
+    if (pendingPanSyncRef.current) {
+      onPanChange(pendingPanSyncRef.current);
+      pendingPanSyncRef.current = null;
+    }
+    if (pendingZoomSyncRef.current !== null) {
+      onZoomChange(pendingZoomSyncRef.current);
+      pendingZoomSyncRef.current = null;
+    }
+  }, [onPanChange, onZoomChange]);
+
+  // Main Render Loop (always uses latest elements and camera)
   const render = useCallback(() => {
     if (!canvasRef.current) return;
+    const cam = cameraRef.current;
     renderScene(canvasRef.current, latestElementsRef.current, {
       theme,
       gridVisible,
       gridType,
-      zoom,
-      pan,
+      zoom: cam.zoom,
+      pan: cam.pan,
       selectedElementIds,
       selectionBox,
       remoteUsers,
@@ -255,8 +281,6 @@ export function Canvas({
     theme,
     gridVisible,
     gridType,
-    zoom,
-    pan,
     selectedElementIds,
     selectionBox,
     remoteUsers,
@@ -278,6 +302,52 @@ export function Canvas({
       });
     }
   }, []);
+
+  // Sync cameraRef with incoming props when updated from toolbar/reset/fit
+  useEffect(() => {
+    if (
+      cameraRef.current.pan.x !== pan.x ||
+      cameraRef.current.pan.y !== pan.y
+    ) {
+      cameraRef.current.pan = { ...pan };
+      requestRender();
+    }
+  }, [pan, requestRender]);
+
+  useEffect(() => {
+    if (cameraRef.current.zoom !== zoom) {
+      cameraRef.current.zoom = zoom;
+      requestRender();
+    }
+  }, [zoom, requestRender]);
+
+  // Convert Client Window Coordinates to Canvas World Coordinates
+  const clientToWorld = useCallback(
+    (clientX: number, clientY: number): Point => {
+      if (!canvasRef.current) return { x: 0, y: 0 };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const rawX = clientX - rect.left;
+      const rawY = clientY - rect.top;
+      const cam = cameraRef.current;
+      return {
+        x: (rawX - cam.pan.x) / cam.zoom,
+        y: (rawY - cam.pan.y) / cam.zoom,
+      };
+    },
+    []
+  );
+
+  // Convert Canvas World Coordinates to Screen Coordinates
+  const worldToClient = useCallback(
+    (worldX: number, worldY: number): Point => {
+      const cam = cameraRef.current;
+      return {
+        x: worldX * cam.zoom + cam.pan.x,
+        y: worldY * cam.zoom + cam.pan.y,
+      };
+    },
+    []
+  );
 
   // High DPI Canvas Resizing & ResizeObserver
   useEffect(() => {
@@ -321,7 +391,7 @@ export function Canvas({
     render();
   }, [render, elements]);
 
-  // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, or regular scroll to pan
+  // Non-passive wheel listener: Ctrl + Wheel to zoom towards mouse, Shift + Wheel to pan horizontally, or regular scroll to pan
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -329,26 +399,59 @@ export function Canvas({
     const onWheelNonPassive = (e: WheelEvent) => {
       e.preventDefault();
 
+      const cam = cameraRef.current;
+
+      // Normalize delta values for different deltaMode (pixel vs line vs page)
+      let dx = e.deltaX;
+      let dy = e.deltaY;
+      if (e.deltaMode === 1) {
+        // Line mode (most non-trackpad mice): multiply by line height
+        dx *= 28;
+        dy *= 28;
+      } else if (e.deltaMode === 2) {
+        // Page mode (rare): multiply by page height
+        dx *= 400;
+        dy *= 400;
+      }
+
       if (e.ctrlKey || e.metaKey) {
-        // Zoom towards mouse pointer
+        // Zoom towards mouse pointer with smooth exponential factor
         const rect = container.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-        const newZoom = Math.min(3, Math.max(0.2, zoom * zoomFactor));
+        // Clamp delta to prevent wild jumps from high-resolution trackpads
+        const clampedDelta = Math.max(-150, Math.min(150, dy));
+        const zoomFactor = Math.exp(-clampedDelta * 0.003);
+        const newZoom = Math.min(3, Math.max(0.2, cam.zoom * zoomFactor));
 
-        const newPanX = mouseX - (mouseX - pan.x) * (newZoom / zoom);
-        const newPanY = mouseY - (mouseY - pan.y) * (newZoom / zoom);
+        const newPanX = mouseX - (mouseX - cam.pan.x) * (newZoom / cam.zoom);
+        const newPanY = mouseY - (mouseY - cam.pan.y) * (newZoom / cam.zoom);
 
-        onZoomChange(newZoom);
-        onPanChange({ x: newPanX, y: newPanY });
+        cam.zoom = newZoom;
+        cam.pan = { x: newPanX, y: newPanY };
+        requestRender();
+
+        pendingZoomSyncRef.current = newZoom;
+        pendingPanSyncRef.current = { x: newPanX, y: newPanY };
+        syncCameraToParent();
+      } else if (e.shiftKey) {
+        // Shift + scroll: horizontal pan
+        // When shift is held, browsers may swap deltaX/deltaY; use whichever is non-zero
+        const scrollAmount = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        cam.pan.x -= scrollAmount;
+        requestRender();
+
+        pendingPanSyncRef.current = { ...cam.pan };
+        syncCameraToParent();
       } else {
-        // Pan
-        onPanChange({
-          x: pan.x - e.deltaX,
-          y: pan.y - e.deltaY,
-        });
+        // Normal scroll: pan (with normalized deltas)
+        cam.pan.x -= dx;
+        cam.pan.y -= dy;
+        requestRender();
+
+        pendingPanSyncRef.current = { ...cam.pan };
+        syncCameraToParent();
       }
     };
 
@@ -356,7 +459,7 @@ export function Canvas({
     return () => {
       container.removeEventListener('wheel', onWheelNonPassive);
     };
-  }, [zoom, pan, onZoomChange, onPanChange]);
+  }, [requestRender, syncCameraToParent]);
 
   // Pointer Down
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -365,6 +468,7 @@ export function Canvas({
     const isSpacePan = isSpacePressed || activeTool === 'pan' || isMiddleClick || e.buttons === 4;
 
     if (isSpacePan) {
+      panLastPosRef.current = { x: e.clientX, y: e.clientY };
       setDragState({
         mode: 'panning',
         startPos: { x: e.clientX, y: e.clientY },
@@ -379,7 +483,9 @@ export function Canvas({
 
     // 1. Comment Tool: Drop a pin on canvas coordinates
     if (activeTool === 'comment') {
-      onDropCommentPin?.(worldPoint);
+      if (canComment) {
+        onDropCommentPin?.(worldPoint);
+      }
       return;
     }
 
@@ -648,7 +754,7 @@ export function Canvas({
         roughness: currentStyle.roughness,
         opacity: currentStyle.opacity,
         fillOpacity: currentStyle.fillOpacity,
-        textColor: currentStyle.textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
+        textColor: currentStyle.textColor || 'contrast',
         fontSize: currentStyle.fontSize || 16,
         seed: Math.floor(Math.random() * 100000),
         version: 1,
@@ -682,12 +788,29 @@ export function Canvas({
   const handlePointerMove = (e: React.PointerEvent) => {
     const worldPoint = clientToWorld(e.clientX, e.clientY);
     const now = Date.now();
-    if (now - lastCursorEmitRef.current > 20) {
+    if (now - lastCursorEmitRef.current > 33) {
       onCursorMove(worldPoint);
       lastCursorEmitRef.current = now;
     }
 
     if (dragState.mode === 'none') {
+      if (activeTool === 'selection') {
+        if (selectedElementIds.length > 0) {
+          const selected = elements.filter((el) => selectedElementIds.includes(el.id) && !el.isDeleted);
+          const bounds = getGroupBounds(selected);
+          if (bounds) {
+            const handle = getHitResizeHandle(worldPoint, bounds, zoom);
+            if (handle !== hoveredHandle) {
+              setHoveredHandle(handle);
+            }
+          } else if (hoveredHandle) {
+            setHoveredHandle(null);
+          }
+        } else if (hoveredHandle) {
+          setHoveredHandle(null);
+        }
+      }
+
       if (activeTool === 'arrow' || activeTool === 'line') {
         const candidateShapes = elements.filter(
           (el) => !el.isDeleted && el.type !== 'arrow' && el.type !== 'line' && el.type !== 'draw'
@@ -703,26 +826,53 @@ export function Canvas({
         });
 
         if (nearbyShape) {
-          const anchors = getShapeAnchors(nearbyShape);
           const nearest = findNearestShapeAnchor(worldPoint, [nearbyShape], 28);
-          setCandidateAnchors(anchors);
-          setActiveSnapAnchor(nearest);
-        } else if (candidateAnchors.length > 0 || activeSnapAnchor) {
+          if (hoveredShapeIdRef.current !== nearbyShape.id) {
+            hoveredShapeIdRef.current = nearbyShape.id;
+            setCandidateAnchors(getShapeAnchors(nearbyShape));
+          }
+          if (
+            nearest?.elementId !== currentSnapAnchorRef.current?.elementId ||
+            nearest?.position !== currentSnapAnchorRef.current?.position
+          ) {
+            currentSnapAnchorRef.current = nearest || null;
+            setActiveSnapAnchor(nearest || null);
+          }
+        } else {
+          if (hoveredShapeIdRef.current !== null) {
+            hoveredShapeIdRef.current = null;
+            setCandidateAnchors([]);
+          }
+          if (currentSnapAnchorRef.current !== null) {
+            currentSnapAnchorRef.current = null;
+            setActiveSnapAnchor(null);
+          }
+        }
+      } else {
+        if (hoveredShapeIdRef.current !== null) {
+          hoveredShapeIdRef.current = null;
           setCandidateAnchors([]);
+        }
+        if (currentSnapAnchorRef.current !== null) {
+          currentSnapAnchorRef.current = null;
           setActiveSnapAnchor(null);
         }
-      } else if (candidateAnchors.length > 0 || activeSnapAnchor) {
-        setCandidateAnchors([]);
-        setActiveSnapAnchor(null);
       }
       return;
     }
 
     if (dragState.mode === 'panning') {
-      const dx = e.clientX - dragState.lastPos.x;
-      const dy = e.clientY - dragState.lastPos.y;
-      onPanChange({ x: pan.x + dx, y: pan.y + dy });
-      setDragState((prev) => ({ ...prev, lastPos: { x: e.clientX, y: e.clientY } }));
+      const dx = e.clientX - panLastPosRef.current.x;
+      const dy = e.clientY - panLastPosRef.current.y;
+      panLastPosRef.current = { x: e.clientX, y: e.clientY };
+
+      const cam = cameraRef.current;
+      cam.pan.x += dx;
+      cam.pan.y += dy;
+      requestRender();
+
+      pendingPanSyncRef.current = { ...cam.pan };
+      syncCameraToParent();
       return;
     }
 
@@ -962,6 +1112,9 @@ export function Canvas({
   const handlePointerUp = () => {
     setActiveSnapAnchor(null);
     setCandidateAnchors([]);
+    hoveredShapeIdRef.current = null;
+    currentSnapAnchorRef.current = null;
+    flushCameraSync();
 
     if (dragState.mode === 'drawing' || dragState.mode === 'moving' || dragState.mode === 'resizing') {
       let finalElements = latestElementsRef.current;
@@ -1011,11 +1164,11 @@ export function Canvas({
         width: hit.width,
         height: hit.height,
         text: hit.text || '',
-        textColor: hit.textColor || (currentStyle as any).textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
+        textColor: hit.textColor || (currentStyle as any).textColor || 'contrast',
         fontSize: hit.fontSize || currentStyle.fontSize || 14,
       });
     } else if (activeTool === 'selection' || activeTool === 'text') {
-      const textColor = (currentStyle as any).textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a');
+      const textColor = (currentStyle as any).textColor || 'contrast';
       const newEl: CanvasElement = {
         id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         type: 'text',
@@ -1078,20 +1231,12 @@ export function Canvas({
 
   // Dynamic Cursor Style
   const getCursor = () => {
-    if (dragState.mode === 'panning') return 'grabbing';
-    if (activeTool === 'pan' || isSpacePressed) return 'grab';
-    if (activeTool === 'comment') return 'crosshair';
-    if (activeTool === 'eraser') return 'crosshair';
-    if (activeTool === 'selection') {
-      if (dragState.activeHandle) {
-        if (['nw', 'se'].includes(dragState.activeHandle)) return 'nwse-resize';
-        if (['ne', 'sw'].includes(dragState.activeHandle)) return 'nesw-resize';
-        if (['e', 'w'].includes(dragState.activeHandle)) return 'ew-resize';
-        if (['n', 's'].includes(dragState.activeHandle)) return 'ns-resize';
-      }
-      return 'default';
-    }
-    return 'crosshair';
+    return getFigmaCursor(
+      activeTool,
+      dragState.mode,
+      isSpacePressed,
+      dragState.activeHandle || hoveredHandle
+    );
   };
 
   return (
@@ -1113,43 +1258,59 @@ export function Canvas({
       <canvas ref={canvasRef} style={{ display: 'block' }} />
 
       {/* Inline Text Editor Overlay */}
-      {editingTextElement && (
-        <textarea
-          autoFocus
-          value={editingTextElement.text}
-          onChange={(e) =>
-            setEditingTextElement((prev) => (prev ? { ...prev, text: e.target.value } : null))
-          }
-          onBlur={() => handleFinishEditingText(editingTextElement.text)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
-              handleFinishEditingText(editingTextElement.text);
+      {editingTextElement && (() => {
+        const targetElement = elements.find((e) => e.id === editingTextElement.elementId);
+        const effectiveTextColor = getEffectiveTextColor(
+          editingTextElement.textColor,
+          targetElement || {
+            x: editingTextElement.x,
+            y: editingTextElement.y,
+            width: editingTextElement.width,
+            height: editingTextElement.height,
+            type: 'text',
+          },
+          theme === 'dark',
+          elements
+        );
+
+        return (
+          <textarea
+            autoFocus
+            value={editingTextElement.text}
+            onChange={(e) =>
+              setEditingTextElement((prev) => (prev ? { ...prev, text: e.target.value } : null))
             }
-          }}
-          style={{
-            position: 'absolute',
-            left: `${worldToClient(editingTextElement.x, editingTextElement.y).x}px`,
-            top: `${worldToClient(editingTextElement.x, editingTextElement.y).y}px`,
-            width: `${Math.max(120, editingTextElement.width * zoom)}px`,
-            height: `${Math.max(60, editingTextElement.height * zoom)}px`,
-            transformOrigin: 'top left',
-            background: theme === 'dark' ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            color: editingTextElement.textColor || (theme === 'dark' ? '#f8fafc' : '#0f172a'),
-            border: '2px solid #6366f1',
-            borderRadius: 6,
-            padding: 8,
-            fontFamily:
-              elements.find((e) => e.id === editingTextElement.elementId)?.type === 'sticky'
-                ? "'Lobster Two', cursive, sans-serif"
-                : "'Teachers', 'Inter', sans-serif",
-            fontSize: `${(editingTextElement.fontSize || 14) * zoom}px`,
-            resize: 'both',
-            zIndex: 100,
-            outline: 'none',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-          }}
-        />
-      )}
+            onBlur={() => handleFinishEditingText(editingTextElement.text)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
+                handleFinishEditingText(editingTextElement.text);
+              }
+            }}
+            style={{
+              position: 'absolute',
+              left: `${worldToClient(editingTextElement.x, editingTextElement.y).x}px`,
+              top: `${worldToClient(editingTextElement.x, editingTextElement.y).y}px`,
+              width: `${Math.max(120, editingTextElement.width * zoom)}px`,
+              height: `${Math.max(60, editingTextElement.height * zoom)}px`,
+              transformOrigin: 'top left',
+              background: theme === 'dark' ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              color: effectiveTextColor,
+              border: '2px solid #6366f1',
+              borderRadius: 6,
+              padding: 8,
+              fontFamily:
+                targetElement?.type === 'sticky'
+                  ? "'Lobster Two', cursive, sans-serif"
+                  : "'Teachers', 'Inter', sans-serif",
+              fontSize: `${(editingTextElement.fontSize || 14) * zoom}px`,
+              resize: 'both',
+              zIndex: 100,
+              outline: 'none',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          />
+        );
+      })()}
 
       {/* Neumorphic Hand Tool Active Indicator with GSAP Spring Entrance */}
       {(isSpacePressed || activeTool === 'pan') && (
