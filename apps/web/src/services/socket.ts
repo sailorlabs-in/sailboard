@@ -20,8 +20,20 @@ class SocketService {
 
   connect(): Socket {
     if (!this.socket) {
-      const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-      const serverUrl = `http://${host}:3333/whiteboard`;
+      let serverUrl = import.meta.env.VITE_SOCKET_URL;
+      if (!serverUrl) {
+        if (typeof window !== 'undefined') {
+          // If in local dev server (port 5173/5174), connect directly to backend 3333
+          if (window.location.port === '5173' || window.location.port === '5174') {
+            serverUrl = `http://${window.location.hostname}:3333/whiteboard`;
+          } else {
+            // In Docker/Production behind reverse proxy, connect to current origin /whiteboard
+            serverUrl = `${window.location.origin}/whiteboard`;
+          }
+        } else {
+          serverUrl = 'http://localhost:3333/whiteboard';
+        }
+      }
 
       this.socket = io(serverUrl, {
         transports: ['websocket', 'polling'],

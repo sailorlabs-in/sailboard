@@ -1,0 +1,31 @@
+# ========================================================
+# Dockerfile for Sailboard NestJS Backend & WebSocket API
+# ========================================================
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Install build dependencies for native Node packages (e.g. bcrypt/pg)
+RUN apk add --no-cache python3 make g++
+
+# Copy package manifests and workspace configuration
+COPY package*.json nx.json tsconfig*.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY libs/shared-types/package.json ./libs/shared-types/
+
+# Install dependencies cleanly
+RUN npm ci
+
+# Copy shared library and API application sources
+COPY libs/shared-types ./libs/shared-types
+COPY apps/api ./apps/api
+
+# Set default production environment variables
+ENV NODE_ENV=production
+ENV PORT=3333
+
+EXPOSE 3333
+
+# Run NestJS application via tsx
+CMD ["npx", "tsx", "apps/api/src/main.ts"]

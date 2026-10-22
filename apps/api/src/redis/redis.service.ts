@@ -13,10 +13,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const host = process.env.REDIS_HOST || 'localhost';
     const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+    const password = process.env.REDIS_PASSWORD || undefined;
 
-    const redisOptions = {
+    const redisOptions: any = {
       host,
       port,
+      password,
       lazyConnect: true,
       maxRetriesPerRequest: 3,
       retryStrategy: (times: number) => Math.min(times * 100, 3000),
