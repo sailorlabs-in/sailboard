@@ -127,19 +127,27 @@ class SocketService {
       }
       this.pendingElements = null;
       this.lastElementsEmitTime = Date.now();
-      this.socket.emit('elements-change', { documentId: this.currentDocId, elements });
+      this.socket.emit('elements-change', {
+        documentId: this.currentDocId,
+        elements,
+        isFinal: true,
+      });
       return;
     }
 
     const now = Date.now();
     const elapsed = now - this.lastElementsEmitTime;
-    const THROTTLE_MS = 40; // 25fps during continuous drag/draw motion
+    const THROTTLE_MS = 33; // ~30fps for smooth live multiplayer sync
 
     this.pendingElements = elements;
 
     if (elapsed >= THROTTLE_MS) {
       this.lastElementsEmitTime = now;
-      this.socket.emit('elements-change', { documentId: this.currentDocId, elements });
+      this.socket.emit('elements-change', {
+        documentId: this.currentDocId,
+        elements,
+        isFinal: false,
+      });
       this.pendingElements = null;
     } else if (!this.elementsThrottleTimer) {
       this.elementsThrottleTimer = setTimeout(() => {
@@ -149,6 +157,7 @@ class SocketService {
           this.socket.emit('elements-change', {
             documentId: this.currentDocId,
             elements: this.pendingElements,
+            isFinal: false,
           });
           this.pendingElements = null;
         }

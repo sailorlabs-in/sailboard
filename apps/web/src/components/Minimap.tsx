@@ -14,7 +14,7 @@ interface MinimapProps {
   theme: 'light' | 'dark';
 }
 
-export function Minimap({
+function MinimapComponent({
   elements,
   zoom,
   pan,
@@ -39,69 +39,79 @@ export function Minimap({
     }
   }, []);
 
+  const rafRef = useRef<number | null>(null);
+
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
-    ctx.clearRect(0, 0, width, height);
+    rafRef.current = requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // Compute bounding box of all elements with margin
-    const visibleElements = elements.filter((e) => !e.isDeleted);
-    let minX = -100;
-    let minY = -100;
-    let maxX = 1200;
-    let maxY = 800;
+      ctx.clearRect(0, 0, width, height);
 
-    if (visibleElements.length > 0) {
-      const bounds = visibleElements.map(getElementBounds);
-      minX = Math.min(...bounds.map((b) => b.minX)) - 200;
-      minY = Math.min(...bounds.map((b) => b.minY)) - 200;
-      maxX = Math.max(...bounds.map((b) => b.maxX)) + 200;
-      maxY = Math.max(...bounds.map((b) => b.maxY)) + 200;
-    }
+      // Compute bounding box of all elements with margin
+      const visibleElements = elements.filter((e) => !e.isDeleted);
+      let minX = -100;
+      let minY = -100;
+      let maxX = 1200;
+      let maxY = 800;
 
-    const worldW = Math.max(800, maxX - minX);
-    const worldH = Math.max(600, maxY - minY);
-    const scale = Math.min(width / worldW, height / worldH);
+      if (visibleElements.length > 0) {
+        const bounds = visibleElements.map(getElementBounds);
+        minX = Math.min(...bounds.map((b) => b.minX)) - 200;
+        minY = Math.min(...bounds.map((b) => b.minY)) - 200;
+        maxX = Math.max(...bounds.map((b) => b.maxX)) + 200;
+        maxY = Math.max(...bounds.map((b) => b.maxY)) + 200;
+      }
 
-    ctx.save();
-    ctx.translate(10, 10);
+      const worldW = Math.max(800, maxX - minX);
+      const worldH = Math.max(600, maxY - minY);
+      const scale = Math.min(width / worldW, height / worldH);
 
-    // Draw elements
-    ctx.fillStyle = isDark ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.3)';
-    ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(100, 116, 139, 0.3)';
-    ctx.lineWidth = 1;
+      ctx.save();
+      ctx.translate(10, 10);
 
-    for (const el of visibleElements) {
-      const b = getElementBounds(el);
-      const mx = (b.minX - minX) * scale;
-      const my = (b.minY - minY) * scale;
-      const mw = Math.max(2, b.width * scale);
-      const mh = Math.max(2, b.height * scale);
-      ctx.fillRect(mx, my, mw, mh);
-      ctx.strokeRect(mx, my, mw, mh);
-    }
+      // Draw elements
+      ctx.fillStyle = isDark ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.3)';
+      ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(100, 116, 139, 0.3)';
+      ctx.lineWidth = 1;
 
-    // Draw current viewport indicator
-    const viewWorldX = -pan.x / zoom;
-    const viewWorldY = -pan.y / zoom;
-    const viewWorldW = containerWidth / zoom;
-    const viewWorldH = containerHeight / zoom;
+      for (const el of visibleElements) {
+        const b = getElementBounds(el);
+        const mx = (b.minX - minX) * scale;
+        const my = (b.minY - minY) * scale;
+        const mw = Math.max(2, b.width * scale);
+        const mh = Math.max(2, b.height * scale);
+        ctx.fillRect(mx, my, mw, mh);
+        ctx.strokeRect(mx, my, mw, mh);
+      }
 
-    const vmx = (viewWorldX - minX) * scale;
-    const vmy = (viewWorldY - minY) * scale;
-    const vmw = viewWorldW * scale;
-    const vmh = viewWorldH * scale;
+      // Draw current viewport indicator
+      const viewWorldX = -pan.x / zoom;
+      const viewWorldY = -pan.y / zoom;
+      const viewWorldW = containerWidth / zoom;
+      const viewWorldH = containerHeight / zoom;
 
-    ctx.strokeStyle = '#6366f1';
-    ctx.lineWidth = 1.5;
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
-    ctx.fillRect(vmx, vmy, vmw, vmh);
-    ctx.strokeRect(vmx, vmy, vmw, vmh);
+      const vmx = (viewWorldX - minX) * scale;
+      const vmy = (viewWorldY - minY) * scale;
+      const vmw = viewWorldW * scale;
+      const vmh = viewWorldH * scale;
 
-    ctx.restore();
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+      ctx.fillRect(vmx, vmy, vmw, vmh);
+      ctx.strokeRect(vmx, vmy, vmw, vmh);
+
+      ctx.restore();
+    });
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [elements, zoom, pan, containerWidth, containerHeight, isDark]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -163,3 +173,5 @@ export function Minimap({
     </Paper>
   );
 }
+
+export const Minimap = React.memo(MinimapComponent);

@@ -73,7 +73,7 @@ export interface CanvasElement {
   customData?: Record<string, any>;
 }
 
-export type ProjectRole = "owner" | "editor" | "viewer";
+export type ProjectRole = "owner" | "editor" | "commenter" | "viewer";
 
 export interface User {
   id: string;

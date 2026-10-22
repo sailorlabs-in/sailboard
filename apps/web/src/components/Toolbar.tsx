@@ -8,6 +8,7 @@ interface ToolbarProps {
   onToolSelect: (tool: ElementType | 'eraser' | 'pan' | 'comment') => void;
   theme: 'light' | 'dark';
   isViewer?: boolean;
+  canComment?: boolean;
 }
 
 interface ToolItem {
@@ -123,7 +124,7 @@ function CommentIcon() {
   );
 }
 
-export function Toolbar({ activeTool, onToolSelect, isViewer }: ToolbarProps) {
+function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = true }: ToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   // Floating dock entrance with back.out spring physics
@@ -172,7 +173,12 @@ export function Toolbar({ activeTool, onToolSelect, isViewer }: ToolbarProps) {
     >
       {tools.map((item, index) => {
         const isActive = activeTool === item.id;
-        const isDisabled = isViewer && item.id !== 'selection' && item.id !== 'pan';
+        const isToolAllowed =
+          !isViewer ||
+          item.id === 'selection' ||
+          item.id === 'pan' ||
+          (item.id === 'comment' && canComment);
+        const isDisabled = !isToolAllowed;
         return (
           <React.Fragment key={item.id}>
             {index === 2 || index === 8 || index === 10 ? (
@@ -190,7 +196,9 @@ export function Toolbar({ activeTool, onToolSelect, isViewer }: ToolbarProps) {
             <Tooltip
               title={
                 isDisabled
-                  ? `${item.label} (Disabled for Viewers)`
+                  ? item.id === 'comment'
+                    ? `${item.label} (Disabled for Viewers)`
+                    : `${item.label} (Disabled in Read-Only Mode)`
                   : `${item.label} (${item.shortcut})`
               }
               arrow
@@ -247,3 +255,5 @@ export function Toolbar({ activeTool, onToolSelect, isViewer }: ToolbarProps) {
     </Paper>
   );
 }
+
+export const Toolbar = React.memo(ToolbarComponent);

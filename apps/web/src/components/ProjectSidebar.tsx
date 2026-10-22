@@ -65,7 +65,7 @@ interface ProjectSidebarProps {
   onNavigateHome?: () => void;
 }
 
-export function ProjectSidebar({
+function ProjectSidebarComponent({
   open,
   onToggle,
   projects,
@@ -105,7 +105,7 @@ export function ProjectSidebar({
   const [fileToRename, setFileToRename] = useState<WhiteboardDocument | null>(null);
 
   const safeRole: ProjectRole = userRole || 'editor';
-  const isViewer = safeRole === 'viewer';
+  const isViewer = safeRole === 'viewer' || safeRole === 'commenter';
   const isOwner = safeRole === 'owner';
 
   const filesListRef = useRef<HTMLUListElement | null>(null);
@@ -745,3 +745,5 @@ export function ProjectSidebar({
     </>
   );
 }
+
+export const ProjectSidebar = React.memo(ProjectSidebarComponent);

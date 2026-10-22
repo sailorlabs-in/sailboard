@@ -57,6 +57,7 @@ interface PropertiesPanelProps {
 }
 
 const STROKE_COLORS = [
+  'contrast',
   '#000000',
   '#ffffff',
   '#e11d48',
@@ -71,6 +72,7 @@ const STROKE_COLORS = [
 
 const FILL_COLORS = [
   'transparent',
+  'contrast',
   '#ffffff',
   '#ffe4e6',
   '#ffedd5',
@@ -83,6 +85,7 @@ const FILL_COLORS = [
 ];
 
 const TEXT_COLORS = [
+  'contrast',
   '#ffffff',
   '#000000',
   '#f87171',
@@ -95,7 +98,7 @@ const TEXT_COLORS = [
   '#94a3b8',
 ];
 
-export function PropertiesPanel({
+function PropertiesPanelComponent({
   selectedElements,
   currentStyle,
   onUpdateStyle,
@@ -262,10 +265,17 @@ export function PropertiesPanel({
 
   const handleSelectFillColor = (color: string) => {
     if (color === 'transparent') {
-      if (!parsedBg.isTransparent && parsedBg.baseHex !== 'transparent') {
+      if (!parsedBg.isTransparent && parsedBg.baseHex !== 'transparent' && parsedBg.baseHex !== 'contrast') {
         lastNonTransparentBgRef.current = parsedBg.baseHex;
       }
       onUpdateStyle({ backgroundColor: 'transparent', fillOpacity: 0 });
+      return;
+    }
+
+    if (color === 'contrast') {
+      lastNonTransparentBgRef.current = 'contrast';
+      const targetOpacity = activeFillOpacity <= 0 ? 15 : activeFillOpacity;
+      onUpdateStyle({ backgroundColor: 'contrast', fillOpacity: targetOpacity });
       return;
     }
 
@@ -290,12 +300,17 @@ export function PropertiesPanel({
         ? parsedBg.baseHex
         : (lastNonTransparentBgRef.current || '#6366f1');
 
+    if (baseColor === 'contrast') {
+      onUpdateStyle({ backgroundColor: 'contrast', fillOpacity: clamped });
+      return;
+    }
+
     const newBg = applyFillOpacity(baseColor, clamped);
     onUpdateStyle({ backgroundColor: newBg, fillOpacity: clamped });
   };
   const activeTextColor = hasSelection
-    ? selectedElements[0].textColor || (isDark ? '#f8fafc' : '#0f172a')
-    : currentStyle.textColor || (isDark ? '#f8fafc' : '#0f172a');
+    ? selectedElements[0].textColor || 'contrast'
+    : currentStyle.textColor || 'contrast';
   const activeFontSize = hasSelection
     ? selectedElements[0].fontSize || currentStyle.fontSize
     : currentStyle.fontSize;
@@ -341,41 +356,86 @@ export function PropertiesPanel({
     colors: string[],
     activeVal: string,
     onSelect: (color: string) => void,
-    isFill = false
-  ) => (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
-      {colors.map((color) => {
-        const isSelected = isFill
-          ? isColorMatchingSwatch(activeVal, color)
-          : activeVal?.toLowerCase() === color.toLowerCase();
-        return (
-          <Box
-            key={color}
-            onClick={() => onSelect(color)}
-            sx={{
-              width: 22,
-              height: 22,
-              borderRadius: '6px',
-              bgcolor: color === 'transparent' ? 'transparent' : color,
-              border: isSelected ? '2px solid var(--neu-primary-light)' : 'var(--neu-border)',
-              boxShadow: isSelected ? 'var(--neu-shadow-pressed)' : 'var(--neu-shadow-btn)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              justifySelf: 'center',
-              '&:hover': { transform: 'scale(1.15)' },
-              ...(isFill &&
-                color === 'transparent' && {
-                  backgroundImage:
-                    'linear-gradient(45deg, #888 25%, transparent 25%), linear-gradient(-45deg, #888 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #888 75%), linear-gradient(-45deg, transparent 75%, #888 75%)',
-                  backgroundSize: '6px 6px',
-                  backgroundPosition: '0 0, 0 3px, 3px -3px, -3px 0px',
-                }),
-            }}
-          />
-        );
-      })}
-    </Box>
-  );
+    mode: 'stroke' | 'fill' | 'text' = 'stroke'
+  ) => {
+    const isFill = mode === 'fill';
+    return (
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px' }}>
+        {colors.map((color) => {
+          const isSelected = isColorMatchingSwatch(activeVal, color, isFill);
+          const isContrast = color === 'contrast';
+          const isTransparent = isFill && color === 'transparent';
+
+          let tooltipTitle = color;
+          if (isContrast) {
+            tooltipTitle =
+              mode === 'text'
+                ? 'Contrast Text (Auto dark/light depending on outer shape & theme)'
+                : mode === 'fill'
+                ? 'Contrast Fill (Auto dark/light depending on theme)'
+                : 'Contrast Stroke (Auto dark/light depending on theme)';
+          } else if (isTransparent) {
+            tooltipTitle = 'Transparent / None';
+          }
+
+          return (
+            <Tooltip key={color} title={tooltipTitle} placement="top" arrow>
+              <Box
+                onClick={() => onSelect(color)}
+                sx={{
+                  position: 'relative',
+                  width: 22,
+                  height: 22,
+                  borderRadius: '6px',
+                  bgcolor: isContrast || isTransparent ? 'transparent' : color,
+                  border: isSelected
+                    ? '2px solid var(--neu-primary-light)'
+                    : isContrast
+                    ? '1.5px solid rgba(148, 163, 184, 0.4)'
+                    : 'var(--neu-border)',
+                  boxShadow: isSelected ? 'var(--neu-shadow-pressed)' : 'var(--neu-shadow-btn)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                  justifySelf: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  '&:hover': {
+                    transform: 'scale(1.18)',
+                    zIndex: 2,
+                    boxShadow: 'var(--neu-shadow-btn-hover)',
+                  },
+                  ...(isContrast && {
+                    background: 'linear-gradient(135deg, #0f172a 50%, #f8fafc 50%)',
+                  }),
+                  ...(isTransparent && {
+                    backgroundImage:
+                      'linear-gradient(45deg, #888 25%, transparent 25%), linear-gradient(-45deg, #888 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #888 75%), linear-gradient(-45deg, transparent 75%, #888 75%)',
+                    backgroundSize: '6px 6px',
+                    backgroundPosition: '0 0, 0 3px, 3px -3px, -3px 0px',
+                  }),
+                }}
+              >
+                {/* Visual marker inside contrast swatch */}
+                {isContrast && (
+                  <Box
+                    sx={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      bgcolor: isSelected ? 'var(--neu-primary-light)' : 'rgba(255, 255, 255, 0.9)',
+                      boxShadow: '0 0 4px rgba(0,0,0,0.4)',
+                    }}
+                  />
+                )}
+              </Box>
+            </Tooltip>
+          );
+        })}
+      </Box>
+    );
+  };
 
   if (isCollapsed && !isExiting) {
     return (
@@ -519,7 +579,7 @@ export function PropertiesPanel({
           >
             <BorderColorOutlined sx={{ fontSize: 12 }} /> Stroke Color
           </Typography>
-          {renderColorGrid(STROKE_COLORS, activeStroke, (c) => onUpdateStyle({ strokeColor: c }))}
+          {renderColorGrid(STROKE_COLORS, activeStroke, (c) => onUpdateStyle({ strokeColor: c }), 'stroke')}
         </Box>
       )}
 
@@ -541,7 +601,7 @@ export function PropertiesPanel({
             >
               <FormatColorFillOutlined sx={{ fontSize: 12 }} /> Fill Color
             </Typography>
-            {renderColorGrid(FILL_COLORS, activeBg, handleSelectFillColor, true)}
+            {renderColorGrid(FILL_COLORS, activeBg, handleSelectFillColor, 'fill')}
           </Box>
 
           {/* Fill Opacity Slider & Quick Presets */}
@@ -613,7 +673,7 @@ export function PropertiesPanel({
           >
             <TextFieldsOutlined sx={{ fontSize: 12 }} /> Text Color
           </Typography>
-          {renderColorGrid(TEXT_COLORS, activeTextColor, (c) => onUpdateStyle({ textColor: c }))}
+          {renderColorGrid(TEXT_COLORS, activeTextColor, (c) => onUpdateStyle({ textColor: c }), 'text')}
         </Box>
       )}
 
@@ -836,3 +896,5 @@ export function PropertiesPanel({
     </Paper>
   );
 }
+
+export const PropertiesPanel = React.memo(PropertiesPanelComponent);

@@ -1,9 +1,11 @@
 import React from 'react';
 import { Box, Typography, Button, Chip } from '@mui/material';
-import { VisibilityOutlined } from '@mui/icons-material';
+import { VisibilityOutlined, ChatBubbleOutlined } from '@mui/icons-material';
+import { ProjectRole } from '@rea/shared-types';
 
 interface ViewerNoticeBannerProps {
   ownerName: string;
+  userRole?: ProjectRole;
   onOpenShare: () => void;
   onOpenAuth: () => void;
   onOpenAccountManage?: () => void;
@@ -11,10 +13,13 @@ interface ViewerNoticeBannerProps {
 
 export function ViewerNoticeBanner({
   ownerName,
+  userRole = 'viewer',
   onOpenShare,
   onOpenAuth,
   onOpenAccountManage,
 }: ViewerNoticeBannerProps) {
+  const isCommenter = userRole === 'commenter';
+
   return (
     <Box
       sx={{
@@ -30,21 +35,45 @@ export function ViewerNoticeBanner({
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Chip
-          icon={<VisibilityOutlined sx={{ fontSize: '14px !important', color: '#f59e0b !important' }} />}
-          label="Viewer (Read-Only)"
-          size="small"
-          sx={{
-            bgcolor: 'rgba(245, 158, 11, 0.15)',
-            color: '#f59e0b',
-            fontWeight: 700,
-            fontSize: '0.72rem',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            boxShadow: 'var(--neu-shadow-btn)',
-          }}
-        />
+        {isCommenter ? (
+          <Chip
+            icon={<ChatBubbleOutlined sx={{ fontSize: '14px !important', color: '#06b6d4 !important' }} />}
+            label="Commenter"
+            size="small"
+            sx={{
+              bgcolor: 'rgba(6, 182, 212, 0.15)',
+              color: '#06b6d4',
+              fontWeight: 700,
+              fontSize: '0.72rem',
+              border: '1px solid rgba(6, 182, 212, 0.3)',
+              boxShadow: 'var(--neu-shadow-btn)',
+            }}
+          />
+        ) : (
+          <Chip
+            icon={<VisibilityOutlined sx={{ fontSize: '14px !important', color: '#f59e0b !important' }} />}
+            label="Viewer (Read-Only)"
+            size="small"
+            sx={{
+              bgcolor: 'rgba(245, 158, 11, 0.15)',
+              color: '#f59e0b',
+              fontWeight: 700,
+              fontSize: '0.72rem',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              boxShadow: 'var(--neu-shadow-btn)',
+            }}
+          />
+        )}
         <Typography variant="caption" sx={{ color: 'var(--neu-text-primary)', fontWeight: 500, fontSize: '0.8rem' }}>
-          You have view-only access. You can pan, zoom, and inspect. <b>Live edits made by editors will update on your screen in real time!</b>
+          {isCommenter ? (
+            <>
+              You have Commenter access — you can review, leave comment pins, reply, and resolve discussions. <b>Canvas elements and notes are read-only.</b>
+            </>
+          ) : (
+            <>
+              You have view-only access. You can pan, zoom, and inspect. <b>Live edits made by editors will update on your screen in real time!</b>
+            </>
+          )}
         </Typography>
       </Box>
 

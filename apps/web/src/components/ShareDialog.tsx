@@ -35,6 +35,7 @@ import {
   VisibilityOutlined,
   FolderSpecialOutlined,
   EmailOutlined,
+  ChatBubbleOutlined,
 } from '@mui/icons-material';
 import { Project, ProjectMember, ProjectRole } from '@rea/shared-types';
 import toast from 'react-hot-toast';
@@ -219,6 +220,12 @@ export function ShareDialog({
                     <span>Editor</span>
                   </Box>
                 </MenuItem>
+                <MenuItem value="commenter">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ChatBubbleOutlined fontSize="small" sx={{ color: '#06b6d4' }} />
+                    <span>Commenter</span>
+                  </Box>
+                </MenuItem>
                 <MenuItem value="viewer">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <VisibilityOutlined fontSize="small" color="warning" />
@@ -316,6 +323,7 @@ export function ShareDialog({
                         sx={{ height: 32, fontSize: '0.8rem', minWidth: 105 }}
                       >
                         <MenuItem value="editor">Editor</MenuItem>
+                        <MenuItem value="commenter">Commenter</MenuItem>
                         <MenuItem value="viewer">Viewer</MenuItem>
                       </Select>
                       <Tooltip title="Remove member">
@@ -326,9 +334,21 @@ export function ShareDialog({
                     </>
                   ) : (
                     <Chip
-                      label={member.role === 'editor' ? 'Editor' : 'Viewer'}
+                      label={
+                        member.role === 'editor'
+                          ? 'Editor'
+                          : member.role === 'commenter'
+                            ? 'Commenter'
+                            : 'Viewer'
+                      }
                       size="small"
-                      color={member.role === 'editor' ? 'success' : 'warning'}
+                      color={
+                        member.role === 'editor'
+                          ? 'success'
+                          : member.role === 'commenter'
+                            ? 'info'
+                            : 'warning'
+                      }
                       variant="outlined"
                       sx={{ fontWeight: 600, fontSize: '0.72rem' }}
                     />

@@ -329,8 +329,8 @@ export class ProjectService {
 
   async createFile(projectId: string, title: string, userId: string): Promise<WhiteboardDocument> {
     const role = await this.getUserRole(projectId, userId);
-    if (!role || role === 'viewer') {
-      throw new ForbiddenException('Viewers cannot create new files in this project');
+    if (!role || role === 'viewer' || role === 'commenter') {
+      throw new ForbiddenException('Viewers and commenters cannot create new files in this project');
     }
 
     const id = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -360,8 +360,8 @@ export class ProjectService {
 
   async deleteFile(projectId: string, fileId: string, userId: string): Promise<{ success: boolean }> {
     const role = await this.getUserRole(projectId, userId);
-    if (!role || role === 'viewer') {
-      throw new ForbiddenException('Viewers cannot delete files');
+    if (!role || role === 'viewer' || role === 'commenter') {
+      throw new ForbiddenException('Only owners and editors can delete files');
     }
 
     await this.docRepo.delete({ id: fileId, projectId });

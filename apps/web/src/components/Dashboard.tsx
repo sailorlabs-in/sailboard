@@ -1049,7 +1049,9 @@ export function Dashboard({
                               ? "primary"
                               : currentSelectedProj.userRole === "viewer"
                                 ? "warning"
-                                : "success"
+                                : currentSelectedProj.userRole === "commenter"
+                                  ? "info"
+                                  : "success"
                           }
                           sx={{
                             height: 18,
@@ -1588,7 +1590,9 @@ export function Dashboard({
                                 ? "primary"
                                 : project.userRole === "viewer"
                                   ? "warning"
-                                  : "success"
+                                  : project.userRole === "commenter"
+                                    ? "info"
+                                    : "success"
                             }
                             sx={{
                               height: 18,

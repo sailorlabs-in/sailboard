@@ -26,7 +26,7 @@ interface NotesEditorProps {
   isViewer?: boolean;
 }
 
-export function NotesEditor({
+function NotesEditorComponent({
   notes,
   onChange,
   onGenerateDiagramFromNotes,
@@ -443,3 +443,5 @@ export function NotesEditor({
     </Box>
   );
 }
+
+export const NotesEditor = React.memo(NotesEditorComponent);

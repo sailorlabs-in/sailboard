@@ -30,6 +30,10 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     { documentId: string; userId: string; userName: string; color: string; role: ProjectRole }
   > = new Map();
 
+  // Figma optimization: Debounced persistence to PostgreSQL to avoid flooding DB on continuous drag/draw
+  private syncDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private pendingDocElements: Map<string, CanvasElement[]> = new Map();
+
   constructor(
     @Inject(WhiteboardService)
     private readonly whiteboardService: WhiteboardService,
@@ -205,25 +209,64 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
   @SubscribeMessage('elements-change')
   async handleElementsChange(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { documentId: string; elements: CanvasElement[] }
+    @MessageBody() payload: { documentId: string; elements: CanvasElement[]; isFinal?: boolean }
   ) {
-    const { documentId, elements } = payload;
+    const { documentId, elements, isFinal } = payload;
     const meta = this.userRooms.get(client.id);
 
-    // Enforce permission: Viewers cannot edit!
-    if (meta && meta.role === 'viewer') {
-      this.logger.warn(`User ${meta.userId} is a viewer and attempted to edit elements. Rejected.`);
+    // Enforce permission: Viewers and Commenters cannot edit elements!
+    if (meta && (meta.role === 'viewer' || meta.role === 'commenter')) {
+      this.logger.warn(`User ${meta.userId} is a ${meta.role} and attempted to edit elements. Rejected.`);
       return;
     }
 
-    // Immediately broadcast to other clients in this room (User B sees it live!)
+    // 1. Immediately broadcast to other clients in this room (User B sees it live with zero delay!)
     client.to(documentId).emit('elements-update', elements);
 
-    // Publish to Redis channel for multi-server synchronization
-    await this.redisService.publish('canvas:elements', { documentId, elements });
+    // 2. Publish to Redis channel for multi-server synchronization
+    await this.redisService.publish('canvas:elements', {
+      documentId,
+      elements,
+      senderSocketId: client.id,
+    });
 
-    // Persist to PostgreSQL via TypeORM
-    await this.whiteboardService.syncElements(documentId, elements);
+    // 3. Figma Optimization: Database Persistence Decoupling
+    // Ephemeral dragging/drawing updates broadcast in-memory. DB writes execute immediately
+    // on gesture end (isFinal === true), or trailing debounce (1200ms) to prevent PostgreSQL saturation.
+    if (isFinal) {
+      this.clearSyncDebounce(documentId);
+      await this.whiteboardService.syncElements(documentId, elements);
+    } else {
+      this.scheduleSyncDebounce(documentId, elements);
+    }
+  }
+
+  private scheduleSyncDebounce(documentId: string, elements: CanvasElement[]) {
+    this.pendingDocElements.set(documentId, elements);
+    if (!this.syncDebounceTimers.has(documentId)) {
+      const timer = setTimeout(async () => {
+        this.syncDebounceTimers.delete(documentId);
+        const latest = this.pendingDocElements.get(documentId);
+        this.pendingDocElements.delete(documentId);
+        if (latest) {
+          try {
+            await this.whiteboardService.syncElements(documentId, latest);
+          } catch (err: any) {
+            this.logger.error(`Error in debounced elements sync for ${documentId}: ${err?.message}`);
+          }
+        }
+      }, 1200);
+      this.syncDebounceTimers.set(documentId, timer);
+    }
+  }
+
+  private clearSyncDebounce(documentId: string) {
+    const existing = this.syncDebounceTimers.get(documentId);
+    if (existing) {
+      clearTimeout(existing);
+      this.syncDebounceTimers.delete(documentId);
+    }
+    this.pendingDocElements.delete(documentId);
   }
 
   @SubscribeMessage('note-change')
@@ -234,9 +277,9 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     const { documentId, notes } = payload;
     const meta = this.userRooms.get(client.id);
 
-    // Enforce permission: Viewers cannot edit!
-    if (meta && meta.role === 'viewer') {
-      this.logger.warn(`User ${meta.userId} is a viewer and attempted to edit notes. Rejected.`);
+    // Enforce permission: Viewers and Commenters cannot edit notes!
+    if (meta && (meta.role === 'viewer' || meta.role === 'commenter')) {
+      this.logger.warn(`User ${meta.userId} is a ${meta.role} and attempted to edit notes. Rejected.`);
       return;
     }
 
@@ -256,6 +299,11 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     @MessageBody() payload: { documentId: string; comment: any }
   ) {
     const { documentId, comment } = payload;
+    const meta = this.userRooms.get(client.id);
+    if (meta && meta.role === 'viewer') {
+      this.logger.warn(`User ${meta.userId} is a viewer and attempted to create comment. Rejected.`);
+      return;
+    }
     client.to(documentId).emit('comment-created', comment);
   }
 
@@ -265,6 +313,11 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     @MessageBody() payload: { documentId: string; comment: any }
   ) {
     const { documentId, comment } = payload;
+    const meta = this.userRooms.get(client.id);
+    if (meta && meta.role === 'viewer') {
+      this.logger.warn(`User ${meta.userId} is a viewer and attempted to update comment. Rejected.`);
+      return;
+    }
     client.to(documentId).emit('comment-updated', comment);
   }
 
@@ -274,6 +327,11 @@ export class WhiteboardGateway implements OnGatewayConnection, OnGatewayDisconne
     @MessageBody() payload: { documentId: string; commentId: string }
   ) {
     const { documentId, commentId } = payload;
+    const meta = this.userRooms.get(client.id);
+    if (meta && meta.role === 'viewer') {
+      this.logger.warn(`User ${meta.userId} is a viewer and attempted to delete comment. Rejected.`);
+      return;
+    }
     client.to(documentId).emit('comment-deleted', { commentId });
   }
 }

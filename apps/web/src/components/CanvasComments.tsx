@@ -37,9 +37,12 @@ export interface CanvasCommentsProps {
   onCancelPendingPin: () => void;
   theme: 'light' | 'dark';
   isViewer?: boolean;
+  canComment?: boolean;
+  isOwner?: boolean;
+  isEditor?: boolean;
 }
 
-export function CanvasComments({
+function CanvasCommentsComponent({
   comments,
   zoom,
   pan,
@@ -56,6 +59,9 @@ export function CanvasComments({
   onSubmitPendingPin,
   theme,
   isViewer,
+  canComment = true,
+  isOwner = false,
+  isEditor = false,
 }: CanvasCommentsProps) {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyText, setReplyText] = useState('');
@@ -234,30 +240,40 @@ export function CanvasComments({
                   </Box>
 
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Tooltip title={comment.resolved ? 'Mark as Unresolved' : 'Mark as Resolved'}>
-                      <IconButton
-                        size="small"
-                        onClick={() => onResolveComment(comment.id)}
-                        sx={{
-                          color: comment.resolved ? '#10b981' : 'var(--neu-text-secondary)',
-                          p: 0.5,
-                        }}
-                      >
-                        {comment.resolved ? <CheckCircle sx={{ fontSize: 18 }} /> : <CheckCircleOutlined sx={{ fontSize: 18 }} />}
-                      </IconButton>
-                    </Tooltip>
-
-                    {(currentUser?.id === comment.author?.id || !comment.author?.id) && (
-                      <Tooltip title="Delete Comment Thread">
+                    {canComment && (
+                      <Tooltip title={comment.resolved ? 'Mark as Unresolved' : 'Mark as Resolved'}>
                         <IconButton
                           size="small"
-                          onClick={() => onDeleteComment(comment.id)}
-                          sx={{ color: 'var(--neu-text-secondary)', p: 0.5 }}
+                          onClick={() => onResolveComment(comment.id)}
+                          sx={{
+                            color: comment.resolved ? '#10b981' : 'var(--neu-text-secondary)',
+                            p: 0.5,
+                          }}
                         >
-                          <DeleteOutlined sx={{ fontSize: 18 }} />
+                          {comment.resolved ? <CheckCircle sx={{ fontSize: 18 }} /> : <CheckCircleOutlined sx={{ fontSize: 18 }} />}
                         </IconButton>
                       </Tooltip>
                     )}
+
+                    {(() => {
+                      const isCommentOwner = Boolean(
+                        (currentUser?.id && comment.author?.id && currentUser.id === comment.author.id) ||
+                        (!comment.author?.id && !currentUser?.id)
+                      );
+                      const canDelete = isOwner || isEditor || isCommentOwner;
+
+                      return canDelete ? (
+                        <Tooltip title="Delete Comment Thread">
+                          <IconButton
+                            size="small"
+                            onClick={() => onDeleteComment(comment.id)}
+                            sx={{ color: 'var(--neu-text-secondary)', p: 0.5 }}
+                          >
+                            <DeleteOutlined sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null;
+                    })()}
 
                     <IconButton
                       size="small"
@@ -350,43 +366,59 @@ export function CanvasComments({
                 )}
 
                 {/* Reply Input */}
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <TextField
-                    size="small"
-                    placeholder="Reply to thread..."
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handlePostReply(comment.id);
-                      }
-                    }}
-                    fullWidth
+                {!canComment ? (
+                  <Typography
+                    variant="caption"
                     sx={{
-                      '& .MuiOutlinedInput-root': {
-                        fontSize: '0.8rem',
-                        borderRadius: '8px',
-                        bgcolor: 'var(--neu-bg)',
-                      },
-                    }}
-                  />
-                  <IconButton
-                    size="small"
-                    disabled={!replyText.trim() || isSubmitting}
-                    onClick={() => handlePostReply(comment.id)}
-                    className="neu-btn-primary"
-                    sx={{
-                      bgcolor: 'var(--neu-primary)',
-                      color: '#ffffff',
-                      p: 1,
-                      borderRadius: '8px',
-                      '&:disabled': { opacity: 0.4 },
+                      color: 'var(--neu-text-muted)',
+                      fontStyle: 'italic',
+                      display: 'block',
+                      textAlign: 'center',
+                      py: 0.5,
+                      fontSize: '0.75rem',
                     }}
                   >
-                    <SendOutlined sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Box>
+                    Viewers cannot reply to comments.
+                  </Typography>
+                ) : (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <TextField
+                      size="small"
+                      placeholder="Reply to thread..."
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handlePostReply(comment.id);
+                        }
+                      }}
+                      fullWidth
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          fontSize: '0.8rem',
+                          borderRadius: '8px',
+                          bgcolor: 'var(--neu-bg)',
+                        },
+                      }}
+                    />
+                    <IconButton
+                      size="small"
+                      disabled={!replyText.trim() || isSubmitting}
+                      onClick={() => handlePostReply(comment.id)}
+                      className="neu-btn-primary"
+                      sx={{
+                        bgcolor: 'var(--neu-primary)',
+                        color: '#ffffff',
+                        p: 1,
+                        borderRadius: '8px',
+                        '&:disabled': { opacity: 0.4 },
+                      }}
+                    >
+                      <SendOutlined sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                )}
               </Paper>
             )}
           </Box>
@@ -505,3 +537,5 @@ export function CanvasComments({
     </Box>
   );
 }
+
+export const CanvasComments = React.memo(CanvasCommentsComponent);

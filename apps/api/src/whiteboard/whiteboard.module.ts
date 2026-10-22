@@ -7,8 +7,15 @@ import { WhiteboardController } from './whiteboard.controller';
 import { WhiteboardService } from './whiteboard.service';
 import { WhiteboardGateway } from './whiteboard.gateway';
 
+import { AuthModule } from '../auth/auth.module';
+import { ProjectModule } from '../project/project.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([DocumentEntity, CanvasElementEntity, CommentEntity])],
+  imports: [
+    TypeOrmModule.forFeature([DocumentEntity, CanvasElementEntity, CommentEntity]),
+    AuthModule,
+    ProjectModule,
+  ],
   controllers: [WhiteboardController],
   providers: [WhiteboardService, WhiteboardGateway],
   exports: [WhiteboardService],

@@ -9,6 +9,7 @@ import {
   AuthResponse,
   User,
   CanvasComment,
+  CommentAuthor,
 } from '@rea/shared-types';
 import { axiosClient } from './axiosClient';
 
@@ -164,18 +165,28 @@ class ApiService {
     return res.data;
   }
 
-  async createComment(documentId: string, x: number, y: number, content: string): Promise<CanvasComment> {
+  async createComment(
+    documentId: string,
+    x: number,
+    y: number,
+    content: string,
+    author?: CommentAuthor
+  ): Promise<CanvasComment> {
     const res = await axiosClient.post<CanvasComment>(`/documents/${documentId}/comments`, {
       documentId,
       x,
       y,
       content,
+      author,
     });
     return res.data;
   }
 
-  async replyComment(commentId: string, content: string): Promise<CanvasComment> {
-    const res = await axiosClient.post<CanvasComment>(`/documents/comments/${commentId}/reply`, { content });
+  async replyComment(commentId: string, content: string, author?: CommentAuthor): Promise<CanvasComment> {
+    const res = await axiosClient.post<CanvasComment>(`/documents/comments/${commentId}/reply`, {
+      content,
+      author,
+    });
     return res.data;
   }
 

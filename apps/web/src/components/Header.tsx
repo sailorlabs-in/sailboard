@@ -97,7 +97,7 @@ interface HeaderProps {
   onToggleComments?: () => void;
 }
 
-export function Header({
+function HeaderComponent({
   projectName = 'Sailboard Project',
   userRole = 'editor',
   title,
@@ -149,7 +149,8 @@ export function Header({
 
   const safeRole: ProjectRole = userRole || 'editor';
   const isDark = theme === 'dark';
-  const isViewer = safeRole === 'viewer';
+  const canEdit = safeRole === 'owner' || safeRole === 'editor';
+  const isViewer = !canEdit;
 
   const muiTheme = useTheme();
   const isTablet = useMediaQuery(muiTheme.breakpoints.down('md'));
@@ -405,7 +406,15 @@ export function Header({
           <Chip
             size="small"
             label={safeRole.toUpperCase()}
-            color={safeRole === 'owner' ? 'primary' : safeRole === 'editor' ? 'success' : 'warning'}
+            color={
+              safeRole === 'owner'
+                ? 'primary'
+                : safeRole === 'editor'
+                  ? 'success'
+                  : safeRole === 'commenter'
+                    ? 'info'
+                    : 'warning'
+            }
             variant="filled"
             sx={{
               height: 18,
@@ -437,42 +446,89 @@ export function Header({
 
         {/* Command Palette Trigger (Cmd+K) */}
         {onOpenCommandPalette && (
-          <Button
-            size="small"
-            onClick={onOpenCommandPalette}
-            className="neu-btn"
-            startIcon={<SearchOutlined sx={{ fontSize: '15px !important', color: 'var(--neu-primary)' }} />}
-            endIcon={
-              <Box
-                sx={{
-                  fontSize: '0.62rem',
-                  fontWeight: 700,
+          <Tooltip title="Quick Command Palette (⌘K / Ctrl+K)">
+            <Box
+              component="button"
+              type="button"
+              onClick={onOpenCommandPalette}
+              className="neu-inset"
+              sx={{
+                height: 30,
+                display: { xs: 'none', sm: 'inline-flex' },
+                alignItems: 'center',
+                gap: 0.8,
+                px: 1,
+                py: 0,
+                mr: { xs: 0.5, sm: 1 },
+                bgcolor: 'var(--neu-bg)',
+                border: '1px solid var(--neu-border-subtle)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                outline: 'none',
+                boxShadow: 'var(--neu-shadow-inset)',
+                transition: 'all 0.18s ease',
+                '&:hover': {
+                  borderColor: 'var(--neu-primary-light)',
                   bgcolor: 'var(--neu-surface)',
-                  border: 'var(--neu-border)',
-                  borderRadius: '4px',
-                  px: 0.6,
-                  py: 0.1,
+                  '& .cmd-text': { color: 'var(--neu-text-primary)' },
+                  '& .cmd-icon': { color: 'var(--neu-primary)' },
+                  '& .cmd-kbd': { borderColor: 'var(--neu-primary-light)', color: 'var(--neu-text-primary)' },
+                },
+                '&:active': {
+                  transform: 'scale(0.98)',
+                },
+              }}
+            >
+              <SearchOutlined
+                className="cmd-icon"
+                sx={{
+                  fontSize: 15,
                   color: 'var(--neu-text-secondary)',
-                  display: { xs: 'none', md: 'block' },
+                  transition: 'color 0.18s ease',
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                className="cmd-text"
+                variant="caption"
+                sx={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--neu-text-secondary)',
+                  transition: 'color 0.18s ease',
+                  lineHeight: 1,
+                  userSelect: 'none',
+                }}
+              >
+                Commands
+              </Typography>
+              <Box
+                className="cmd-kbd"
+                sx={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.5px',
+                  bgcolor: 'var(--neu-surface)',
+                  border: '1px solid var(--neu-border)',
+                  borderRadius: '5px',
+                  px: 0.7,
+                  height: 19,
+                  minWidth: 24,
+                  display: { xs: 'none', md: 'inline-flex' },
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--neu-text-muted)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+                  transition: 'all 0.18s ease',
+                  lineHeight: 1,
+                  flexShrink: 0,
                 }}
               >
                 ⌘K
               </Box>
-            }
-            sx={{
-              height: 28,
-              textTransform: 'none',
-              px: 1.2,
-              borderRadius: '8px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'var(--neu-text-secondary)',
-              mr: { xs: 0.5, sm: 1 },
-              display: { xs: 'none', sm: 'inline-flex' },
-            }}
-          >
-            Commands
-          </Button>
+            </Box>
+          </Tooltip>
         )}
 
         {/* View Mode Selector (Neumorphic Segmented Control) */}
@@ -1162,3 +1218,5 @@ export function Header({
     </AppBar>
   );
 }
+
+export const Header = React.memo(HeaderComponent);

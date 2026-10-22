@@ -180,7 +180,7 @@ export function App() {
   const [currentStyle, setCurrentStyle] = useState({
     strokeColor: "#6366f1",
     backgroundColor: "rgba(99, 102, 241, 0.15)",
-    textColor: "#f8fafc",
+    textColor: "contrast",
     fillStyle: "hachure" as const,
     strokeWidth: 2,
     strokeStyle: "solid" as const,
@@ -258,7 +258,12 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const isViewer = userRole === "viewer";
+  const isOwner = userRole === "owner";
+  const isEditor = userRole === "editor";
+  const isCommenter = userRole === "commenter";
+  const canEdit = isOwner || isEditor;
+  const canComment = isOwner || isEditor || isCommenter;
+  const isViewer = !canEdit;
 
   // Determine user's role on project
   const computeRoleForProject = useCallback(
@@ -547,8 +552,15 @@ export function App() {
   const handleCreateComment = useCallback(
     async (x: number, y: number, content: string) => {
       if (!doc.id) return;
+      if (!canComment) {
+        toast.error("Viewers cannot add comments. Ask for Commenter or Editor access.");
+        return;
+      }
       try {
-        const newComment = await api.createComment(doc.id, x, y, content);
+        const author = user
+          ? { id: user.id, name: user.name, color: user.color, email: user.email }
+          : undefined;
+        const newComment = await api.createComment(doc.id, x, y, content, author);
         setComments((prev) => [...prev, newComment]);
         setActiveCommentId(newComment.id);
         setPendingPinPos(null);
@@ -561,13 +573,20 @@ export function App() {
         toast.error(err.message || "Failed to post comment");
       }
     },
-    [doc.id, activeTool],
+    [doc.id, activeTool, canComment, user],
   );
 
   const handleReplyComment = useCallback(
     async (commentId: string, content: string) => {
+      if (!canComment) {
+        toast.error("Viewers cannot reply to comments.");
+        return;
+      }
       try {
-        const updated = await api.replyComment(commentId, content);
+        const author = user
+          ? { id: user.id, name: user.name, color: user.color, email: user.email }
+          : undefined;
+        const updated = await api.replyComment(commentId, content, author);
         setComments((prev) =>
           prev.map((c) => (c.id === commentId ? updated : c)),
         );
@@ -576,11 +595,15 @@ export function App() {
         toast.error(err.message || "Failed to post reply");
       }
     },
-    [],
+    [canComment, user],
   );
 
   const handleResolveComment = useCallback(
     async (commentId: string) => {
+      if (!canComment) {
+        toast.error("Viewers cannot resolve comments.");
+        return;
+      }
       try {
         const updated = await api.resolveComment(commentId);
         setComments((prev) =>
@@ -594,7 +617,7 @@ export function App() {
         toast.error(err.message || "Failed to update comment status");
       }
     },
-    [],
+    [canComment],
   );
 
   const handleDeleteComment = useCallback(
@@ -1052,46 +1075,46 @@ export function App() {
           setActiveTool("selection");
           break;
         case "C":
-          setActiveTool("comment");
+          if (canComment) setActiveTool("comment");
           break;
         case "H":
           setActiveTool("pan");
           break;
         case "R":
         case "2":
-          setActiveTool("rectangle");
+          if (canEdit) setActiveTool("rectangle");
           break;
         case "D":
         case "3":
-          setActiveTool("diamond");
+          if (canEdit) setActiveTool("diamond");
           break;
         case "O":
         case "4":
-          setActiveTool("ellipse");
+          if (canEdit) setActiveTool("ellipse");
           break;
         case "A":
         case "5":
-          setActiveTool("arrow");
+          if (canEdit) setActiveTool("arrow");
           break;
         case "L":
         case "6":
-          setActiveTool("line");
+          if (canEdit) setActiveTool("line");
           break;
         case "P":
         case "7":
-          setActiveTool("draw");
+          if (canEdit) setActiveTool("draw");
           break;
         case "T":
         case "8":
-          setActiveTool("text");
+          if (canEdit) setActiveTool("text");
           break;
         case "S":
         case "9":
-          setActiveTool("sticky");
+          if (canEdit) setActiveTool("sticky");
           break;
         case "E":
         case "0":
-          setActiveTool("eraser");
+          if (canEdit) setActiveTool("eraser");
           break;
         default:
           break;
@@ -1108,6 +1131,8 @@ export function App() {
     handleZoomOut,
     handleZoomReset,
     isViewer,
+    canEdit,
+    canComment,
   ]);
 
   // Element Actions (Duplicate, Delete, Reorder)
@@ -1140,6 +1165,19 @@ export function App() {
   const handleSelectElements = useCallback((ids: string[]) => {
     setSelectedElementIds(ids);
     socketService.emitSelectionChange(ids);
+  }, []);
+
+  const selectedElementIdsRef = useRef(selectedElementIds);
+  selectedElementIdsRef.current = selectedElementIds;
+
+  const handleCursorMove = useCallback((cursor: Point) => {
+    socketService.emitCursorMove(cursor, selectedElementIdsRef.current);
+  }, []);
+
+  const handleDropCommentPin = useCallback((worldPt: Point) => {
+    setPendingPinPos(worldPt);
+    setActiveCommentId(null);
+    setShowComments(true);
   }, []);
 
   const handleDeleteSelected = () => {
@@ -1732,6 +1770,7 @@ export function App() {
         {isViewer && (
           <ViewerNoticeBanner
             ownerName={currentProject?.ownerName || "Project Owner"}
+            userRole={userRole}
             onOpenShare={() => setShareOpen(true)}
             onOpenAuth={() => setAuthDialogOpen(true)}
             onOpenAccountManage={() => setAccountManageOpen(true)}
@@ -1843,6 +1882,7 @@ export function App() {
                 onToolSelect={setActiveTool}
                 theme={effectiveThemeMode}
                 isViewer={isViewer}
+                canComment={canComment}
               />
 
               {/* Floating Properties Inspector (Hidden for Viewers) */}
@@ -1868,11 +1908,7 @@ export function App() {
                 onSelectElements={handleSelectElements}
                 activeTool={activeTool}
                 onToolChange={setActiveTool}
-                onDropCommentPin={(worldPt) => {
-                  setPendingPinPos(worldPt);
-                  setActiveCommentId(null);
-                  setShowComments(true);
-                }}
+                onDropCommentPin={handleDropCommentPin}
                 theme={effectiveThemeMode}
                 styleMode={styleMode}
                 gridVisible={gridVisible}
@@ -1884,10 +1920,9 @@ export function App() {
                 onPanChange={setPan}
                 currentStyle={currentStyle}
                 remoteUsers={remoteUsers}
-                onCursorMove={(cursor) =>
-                  socketService.emitCursorMove(cursor, selectedElementIds)
-                }
+                onCursorMove={handleCursorMove}
                 isViewer={isViewer}
+                canComment={canComment}
               />
 
               {/* Figma-Style Canvas Comment Pins */}
@@ -1903,7 +1938,10 @@ export function App() {
                 pan={pan}
                 theme={effectiveThemeMode}
                 currentUser={user}
-                isViewer={isViewer}
+                isViewer={userRole === "viewer"}
+                canComment={canComment}
+                isOwner={isOwner}
+                isEditor={isEditor}
                 pendingPinPos={pendingPinPos}
                 onCancelPendingPin={() => {
                   setPendingPinPos(null);
@@ -1988,7 +2026,22 @@ export function App() {
           onCreateFile={handleCreateFile}
           onCreateProject={handleCreateProject}
           activeTool={activeTool}
-          onSelectTool={setActiveTool}
+          onSelectTool={(tool) => {
+            if (tool === "comment" && !canComment) {
+              toast.error("Viewers cannot add comments.");
+              return;
+            }
+            if (
+              tool !== "selection" &&
+              tool !== "pan" &&
+              tool !== "comment" &&
+              !canEdit
+            ) {
+              toast.error("Canvas elements are read-only.");
+              return;
+            }
+            setActiveTool(tool);
+          }}
           theme={effectiveThemeMode}
           themePreference={themePreference}
           onThemeChange={setThemePreference}

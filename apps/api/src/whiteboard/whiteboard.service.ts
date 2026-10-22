@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  ForbiddenException,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,6 +10,7 @@ import { DocumentEntity } from '../database/entities/document.entity';
 import { CanvasElementEntity } from '../database/entities/canvas-element.entity';
 import { CommentEntity } from '../database/entities/comment.entity';
 import { RedisService } from '../redis/redis.service';
+import { ProjectService } from '../project/project.service';
 import {
   WhiteboardDocument,
   CreateDocumentDto,
@@ -19,6 +21,8 @@ import {
   CreateCommentDto,
   ReplyCommentDto,
   CommentReply,
+  CommentAuthor,
+  User,
 } from '@rea/shared-types';
 
 @Injectable()
@@ -31,7 +35,9 @@ export class WhiteboardService {
     @InjectRepository(CommentEntity)
     private readonly commentRepo: Repository<CommentEntity>,
     @Inject(RedisService)
-    private readonly redisService: RedisService
+    private readonly redisService: RedisService,
+    @Inject(ProjectService)
+    private readonly projectService: ProjectService
   ) {}
 
   // --- Map Helper ---
@@ -316,14 +322,32 @@ export class WhiteboardService {
     return comments.map((c) => this.toCommentModel(c));
   }
 
-  async createComment(dto: CreateCommentDto, user?: any): Promise<CanvasComment> {
+  async createComment(dto: CreateCommentDto, user?: User | null): Promise<CanvasComment> {
+    if (user && dto.documentId) {
+      const doc = await this.docRepo.findOne({ where: { id: dto.documentId } });
+      if (doc?.projectId) {
+        const role = await this.projectService.getUserRole(doc.projectId, user.id);
+        if (role === 'viewer') {
+          throw new ForbiddenException('Viewers cannot comment. Ask for Commenter or Editor access.');
+        }
+      }
+    }
+
     const id = `cmt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const author = dto.author || {
-      id: user?.id || 'anonymous',
-      name: user?.name || 'Anonymous Peer',
-      color: user?.color || '#6366f1',
-      email: user?.email,
-    };
+    const author: CommentAuthor = user
+      ? {
+          id: user.id,
+          name: user.name,
+          color: user.color || '#6366f1',
+          email: user.email,
+        }
+      : dto.author && dto.author.id && dto.author.id !== 'anonymous'
+      ? dto.author
+      : {
+          id: 'anonymous',
+          name: 'Anonymous Peer',
+          color: '#6366f1',
+        };
 
     const entity = this.commentRepo.create({
       id,
@@ -340,19 +364,37 @@ export class WhiteboardService {
     return this.toCommentModel(saved);
   }
 
-  async replyComment(commentId: string, dto: ReplyCommentDto, user?: any): Promise<CanvasComment> {
+  async replyComment(commentId: string, dto: ReplyCommentDto, user?: User | null): Promise<CanvasComment> {
     const comment = await this.commentRepo.findOne({ where: { id: commentId } });
     if (!comment) {
       throw new NotFoundException(`Comment with ID ${commentId} not found`);
     }
 
+    if (user && comment.documentId) {
+      const doc = await this.docRepo.findOne({ where: { id: comment.documentId } });
+      if (doc?.projectId) {
+        const role = await this.projectService.getUserRole(doc.projectId, user.id);
+        if (role === 'viewer') {
+          throw new ForbiddenException('Viewers cannot reply to comments.');
+        }
+      }
+    }
+
     const replyId = `rep-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const author = dto.author || {
-      id: user?.id || 'anonymous',
-      name: user?.name || 'Anonymous Peer',
-      color: user?.color || '#6366f1',
-      email: user?.email,
-    };
+    const author: CommentAuthor = user
+      ? {
+          id: user.id,
+          name: user.name,
+          color: user.color || '#6366f1',
+          email: user.email,
+        }
+      : dto.author && dto.author.id && dto.author.id !== 'anonymous'
+      ? dto.author
+      : {
+          id: 'anonymous',
+          name: 'Anonymous Peer',
+          color: '#6366f1',
+        };
 
     const newReply: CommentReply = {
       id: replyId,
@@ -367,10 +409,20 @@ export class WhiteboardService {
     return this.toCommentModel(saved);
   }
 
-  async resolveComment(commentId: string): Promise<CanvasComment> {
+  async resolveComment(commentId: string, user?: User | null): Promise<CanvasComment> {
     const comment = await this.commentRepo.findOne({ where: { id: commentId } });
     if (!comment) {
       throw new NotFoundException(`Comment with ID ${commentId} not found`);
+    }
+
+    if (user && comment.documentId) {
+      const doc = await this.docRepo.findOne({ where: { id: comment.documentId } });
+      if (doc?.projectId) {
+        const role = await this.projectService.getUserRole(doc.projectId, user.id);
+        if (role === 'viewer') {
+          throw new ForbiddenException('Viewers cannot resolve comments.');
+        }
+      }
     }
 
     comment.resolved = !comment.resolved;
@@ -378,8 +430,42 @@ export class WhiteboardService {
     return this.toCommentModel(saved);
   }
 
-  async deleteComment(commentId: string): Promise<boolean> {
-    const res = await this.commentRepo.delete({ id: commentId });
-    return (res.affected || 0) > 0;
+  async deleteComment(commentId: string, user?: User | null): Promise<boolean> {
+    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    if (!comment) {
+      throw new NotFoundException(`Comment with ID ${commentId} not found`);
+    }
+
+    if (user) {
+      // 1. Comment author / owner can delete their own comment
+      if (comment.author?.id === user.id) {
+        const res = await this.commentRepo.delete({ id: commentId });
+        return (res.affected || 0) > 0;
+      }
+
+      // 2. Project owner or editor can delete any comment
+      const doc = await this.docRepo.findOne({ where: { id: comment.documentId } });
+      if (doc?.projectId) {
+        const role = await this.projectService.getUserRole(doc.projectId, user.id);
+        if (role === 'owner' || role === 'editor') {
+          const res = await this.commentRepo.delete({ id: commentId });
+          return (res.affected || 0) > 0;
+        }
+      }
+
+      throw new ForbiddenException(
+        'Only the comment author, editors, or project owners can delete this comment'
+      );
+    }
+
+    // Unauthenticated user
+    if (comment.author?.id === 'anonymous') {
+      const res = await this.commentRepo.delete({ id: commentId });
+      return (res.affected || 0) > 0;
+    }
+
+    throw new ForbiddenException(
+      'Only the comment author, editors, or project owners can delete this comment'
+    );
   }
 }

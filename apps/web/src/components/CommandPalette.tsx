@@ -32,7 +32,6 @@ import {
   GridOffOutlined,
   FileDownloadOutlined,
   PersonAddOutlined,
-  ManageAccountsOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
   FitScreenOutlined,
@@ -468,16 +467,6 @@ export function CommandPalette({
           (onToggleSnap || onGridSnapToggle)?.();
           onClose();
         },
-      },
-      {
-        id: 'pref-account-manage',
-        title: 'Switch Profile / Manage Accounts',
-        category: 'Preferences',
-        icon: <ManageAccountsOutlined sx={{ fontSize: 18 }} />,
-        action: () => {
-          onOpenAccountManage?.();
-          onClose();
-        },
       }
     );
 
@@ -505,7 +494,6 @@ export function CommandPalette({
     onGridSnapToggle,
     onExportClick,
     onOpenShare,
-    onOpenAccountManage,
     onZoomToFit,
     onZoomReset,
     onClose,
