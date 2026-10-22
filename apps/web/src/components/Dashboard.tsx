@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -44,6 +44,7 @@ import {
 import { Project, WhiteboardDocument, User } from "@rea/shared-types";
 import toast from "react-hot-toast";
 import { renderScene } from "../canvas/renderer";
+import { getGroupBounds } from "../canvas/math";
 import { ThemePreference } from "../theme/theme";
 import {
   ConfirmDeleteModal,
@@ -115,7 +116,7 @@ interface DashboardProps {
   onToggleTheme: () => void;
 }
 
-// Mini Canvas Thumbnail Preview for Figma File Cards
+// Mini Canvas Thumbnail Preview for Figma File Cards (Auto-centering low-res render)
 function FileThumbnail({
   file,
   themeMode,
@@ -124,28 +125,92 @@ function FileThumbnail({
   themeMode: "light" | "dark";
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const activeElements = file.elements?.filter((e) => !e.isDeleted) || [];
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const activeElements = useMemo(() => {
+    return file.elements?.filter((e) => !e.isDeleted) || [];
+  }, [file.elements]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-    // Render scaled mini preview
-    renderScene(canvas, activeElements, {
-      theme: themeMode,
-      gridVisible: true,
-      gridType: "dots",
-      zoom: 0.18,
-      pan: { x: 30, y: 25 },
-      selectedElementIds: [],
-      selectionBox: null,
-      remoteUsers: [],
-      activeStyleMode: "clean",
+    const render = () => {
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const clientW = container.clientWidth || 300;
+      const clientH = container.clientHeight || 140;
+      if (clientW === 0 || clientH === 0) return;
+
+      const targetW = Math.round(clientW * dpr);
+      const targetH = Math.round(clientH * dpr);
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      if (activeElements.length === 0) {
+        renderScene(canvas, [], {
+          theme: themeMode,
+          gridVisible: true,
+          gridType: "dots",
+          zoom: 1,
+          pan: { x: 0, y: 0 },
+          selectedElementIds: [],
+          selectionBox: null,
+          remoteUsers: [],
+          activeStyleMode: "clean",
+          isThumbnail: true,
+        });
+        return;
+      }
+
+      const bounds = getGroupBounds(activeElements);
+      if (!bounds) return;
+
+      const contentW = Math.max(40, bounds.width);
+      const contentH = Math.max(30, bounds.height);
+      const cx = bounds.minX + bounds.width / 2;
+      const cy = bounds.minY + bounds.height / 2;
+
+      const padX = 28;
+      const padY = 20;
+      const availW = Math.max(40, clientW - padX * 2);
+      const availH = Math.max(40, clientH - padY * 2);
+
+      // Auto-fit zoom ratio with balanced bounds matching Figma file cards
+      const fitZoom = Math.min(availW / contentW, availH / contentH);
+      const zoom = Math.min(Math.max(fitZoom, 0.04), 0.75);
+
+      // Center content perfectly inside thumbnail viewport
+      const panX = clientW / 2 - cx * zoom;
+      const panY = clientH / 2 - cy * zoom;
+
+      renderScene(canvas, activeElements, {
+        theme: themeMode,
+        gridVisible: true,
+        gridType: "dots",
+        zoom,
+        pan: { x: panX, y: panY },
+        selectedElementIds: [],
+        selectionBox: null,
+        remoteUsers: [],
+        activeStyleMode: "clean",
+        isThumbnail: true,
+      });
+    };
+
+    render();
+    const ro = new ResizeObserver(() => {
+      render();
     });
-  }, [file.elements, themeMode]);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [activeElements, themeMode]);
 
   return (
     <Box
+      ref={containerRef}
       className="neu-inset"
       sx={{
         width: "100%",
@@ -162,13 +227,10 @@ function FileThumbnail({
     >
       <canvas
         ref={canvasRef}
-        width={320}
-        height={160}
         style={{
           width: "100%",
           height: "100%",
           display: "block",
-          objectFit: "cover",
         }}
       />
       {activeElements.length === 0 && (
@@ -181,6 +243,7 @@ function FileThumbnail({
             gap: 0.5,
             color: "text.secondary",
             opacity: 0.7,
+            pointerEvents: "none",
           }}
         >
           <SpaceDashboardOutlined sx={{ fontSize: 28 }} />

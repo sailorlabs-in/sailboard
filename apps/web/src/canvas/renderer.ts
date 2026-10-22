@@ -19,6 +19,7 @@ export interface RenderOptions {
   activeStyleMode: 'rough' | 'clean'; // Sketchy hand-drawn vs Clean geometry
   activeSnapAnchor?: ShapeAnchor | null;
   candidateAnchors?: ShapeAnchor[];
+  isThumbnail?: boolean;
 }
 
 export function renderScene(
@@ -81,7 +82,7 @@ export function renderScene(
       continue; // Offscreen! Skip rough path calculation and canvas drawing
     }
 
-    renderElement(ctx, rc, el, activeStyleMode, isDark, elements);
+    renderElement(ctx, rc, el, activeStyleMode, isDark, elements, options.isThumbnail, zoom);
   }
 
   // Render Selection Bounds & Handles
@@ -268,7 +269,9 @@ function renderElement(
   el: CanvasElement,
   activeStyleMode: 'rough' | 'clean',
   isDark: boolean,
-  allElements?: CanvasElement[]
+  allElements?: CanvasElement[],
+  isThumbnail?: boolean,
+  zoom: number = 1
 ) {
   ctx.save();
   ctx.globalAlpha = (el.opacity ?? 100) / 100;
@@ -277,11 +280,11 @@ function renderElement(
   const effectiveFill = getEffectiveBackgroundColor(el.backgroundColor, el.fillOpacity, isDark);
 
   // Use element's roughness unless override or clean mode selected
-  const useRough = activeStyleMode === 'rough' && (el.roughness ?? 1) > 0;
+  const useRough = !isThumbnail && activeStyleMode === 'rough' && (el.roughness ?? 1) > 0;
   const roughOpts = {
     seed: el.seed || 1,
     stroke: effectiveStroke,
-    strokeWidth: el.strokeWidth || 2,
+    strokeWidth: isThumbnail ? Math.max(el.strokeWidth || 2, 2 / zoom) : (el.strokeWidth || 2),
     roughness: el.roughness ?? (useRough ? 1.2 : 0),
     fill: effectiveFill,
     fillStyle: el.fillStyle === 'none' ? undefined : el.fillStyle,
@@ -323,7 +326,7 @@ function renderElement(
         }
         rc.draw(cached.drawable);
       } else {
-        renderCleanRect(ctx, 0, 0, w, h, el, isDark);
+        renderCleanRect(ctx, 0, 0, w, h, el, isDark, isThumbnail, zoom);
       }
       renderElementText(ctx, el, isDark, allElements);
       break;
@@ -352,7 +355,7 @@ function renderElement(
         ctx.lineTo(bottom[0], bottom[1]);
         ctx.lineTo(left[0], left[1]);
         ctx.closePath();
-        applyCleanFillAndStroke(ctx, el, isDark);
+        applyCleanFillAndStroke(ctx, el, isDark, isThumbnail, zoom);
       }
       renderElementText(ctx, el, isDark, allElements);
       break;
@@ -374,14 +377,14 @@ function renderElement(
       } else {
         ctx.beginPath();
         ctx.ellipse(cx, cy, Math.abs(w) / 2, Math.abs(h) / 2, 0, 0, Math.PI * 2);
-        applyCleanFillAndStroke(ctx, el, isDark);
+        applyCleanFillAndStroke(ctx, el, isDark, isThumbnail, zoom);
       }
       renderElementText(ctx, el, isDark, allElements);
       break;
     }
 
     case 'sticky': {
-      renderStickyNote(ctx, rc, el, useRough, isDark, allElements);
+      renderStickyNote(ctx, rc, el, useRough, isDark, allElements, isThumbnail, zoom);
       break;
     }
 
@@ -422,14 +425,14 @@ function renderElement(
           for (let i = 1; i < el.points.length; i++) {
             ctx.lineTo(el.points[i].x, el.points[i].y);
           }
-          applyCleanStroke(ctx, el, isDark);
+          applyCleanStroke(ctx, el, isDark, isThumbnail, zoom);
         }
       }
       break;
     }
 
     case 'arrow': {
-      renderArrow(ctx, rc, el, useRough, isDark);
+      renderArrow(ctx, rc, el, useRough, isDark, isThumbnail, zoom);
       break;
     }
 
@@ -437,7 +440,7 @@ function renderElement(
       if (el.points && el.points.length > 0) {
         ctx.beginPath();
         const strokeColor = effectiveStroke;
-        const strokeWidth = el.strokeWidth || 2;
+        const strokeWidth = isThumbnail ? Math.max(el.strokeWidth || 2, 2 / zoom) : (el.strokeWidth || 2);
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = strokeWidth;
         ctx.lineCap = 'round';
@@ -484,26 +487,33 @@ function renderCleanRect(
   w: number,
   h: number,
   el: CanvasElement,
-  isDark: boolean
+  isDark: boolean,
+  isThumbnail?: boolean,
+  zoom: number = 1
 ) {
-  const r = 8; // rounded corners for clean modern look
+  const r = Math.min(8, Math.min(w, h) / 4); // rounded corners for clean modern look
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
-  applyCleanFillAndStroke(ctx, el, isDark);
+  applyCleanFillAndStroke(ctx, el, isDark, isThumbnail, zoom);
 }
 
 function applyCleanFillAndStroke(
   ctx: CanvasRenderingContext2D,
   el: CanvasElement,
-  isDark: boolean
+  isDark: boolean,
+  isThumbnail?: boolean,
+  zoom: number = 1
 ) {
-  const fill = getEffectiveBackgroundColor(el.backgroundColor, el.fillOpacity, isDark);
+  let fill = getEffectiveBackgroundColor(el.backgroundColor, el.fillOpacity, isDark);
+  if (isThumbnail && (!fill || fill === 'transparent' || el.fillStyle === 'none')) {
+    fill = isDark ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.15)';
+  }
   if (fill) {
     ctx.fillStyle = fill;
     ctx.fill();
   }
   ctx.strokeStyle = getEffectiveStrokeColor(el.strokeColor, isDark);
-  ctx.lineWidth = el.strokeWidth || 2;
+  ctx.lineWidth = isThumbnail ? Math.max(el.strokeWidth || 2, 1.8 / zoom) : (el.strokeWidth || 2);
   if (el.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
   else if (el.strokeStyle === 'dotted') ctx.setLineDash([3, 4]);
   else ctx.setLineDash([]);
@@ -513,10 +523,12 @@ function applyCleanFillAndStroke(
 function applyCleanStroke(
   ctx: CanvasRenderingContext2D,
   el: CanvasElement,
-  isDark: boolean
+  isDark: boolean,
+  isThumbnail?: boolean,
+  zoom: number = 1
 ) {
   ctx.strokeStyle = getEffectiveStrokeColor(el.strokeColor, isDark);
-  ctx.lineWidth = el.strokeWidth || 2;
+  ctx.lineWidth = isThumbnail ? Math.max(el.strokeWidth || 2, 1.8 / zoom) : (el.strokeWidth || 2);
   if (el.strokeStyle === 'dashed') ctx.setLineDash([8, 6]);
   else if (el.strokeStyle === 'dotted') ctx.setLineDash([3, 4]);
   else ctx.setLineDash([]);
@@ -612,7 +624,9 @@ function renderArrow(
   rc: any,
   el: CanvasElement,
   useRough: boolean,
-  isDark: boolean
+  isDark: boolean,
+  isThumbnail?: boolean,
+  zoom: number = 1
 ) {
   const points = el.points || [
     { x: 0, y: 0 },
@@ -629,7 +643,7 @@ function renderArrow(
   if (length < 4) return;
 
   const strokeColor = getEffectiveStrokeColor(el.strokeColor, isDark);
-  const strokeWidth = el.strokeWidth || 2;
+  const strokeWidth = isThumbnail ? Math.max(el.strokeWidth || 2, 2 / zoom) : (el.strokeWidth || 2);
 
   // Draw arrow shaft
   ctx.save();
