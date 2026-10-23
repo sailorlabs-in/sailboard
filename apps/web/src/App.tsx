@@ -4,6 +4,7 @@ import {
   ThemeProvider,
   CssBaseline,
   Box,
+  Button,
   CircularProgress,
   Typography,
   useMediaQuery,
@@ -65,6 +66,7 @@ export function App() {
     ? "editor"
     : "dashboard";
   const [isLoadingRouteFile, setIsLoadingRouteFile] = useState(false);
+  const [routeFileError, setRouteFileError] = useState<string | null>(null);
 
   // Theme Preference State: 'light' | 'dark' | 'system' (Persisted in localStorage)
   const [themePreference, setThemePreference] = useState<ThemePreference>(
@@ -284,7 +286,7 @@ export function App() {
       }
       return "editor";
     },
-    [user],
+    [user?.id, user?.email],
   );
 
   // Load Projects and Project Folders
@@ -296,11 +298,16 @@ export function App() {
       setProjects(list);
 
       if (list.length > 0) {
-        const targetProjId = currentProject?.id || routeProjectId || list[0].id;
+        // If on an editor route, do not hijack currentProject unless it is not yet loaded
+        const targetProjId = routeFileId
+          ? (currentProject?.id || list[0].id)
+          : (currentProject?.id || routeProjectId || list[0].id);
         const targetProj = list.find((p) => p.id === targetProjId) || list[0];
 
         const fullProj = await api.getProject(targetProj.id);
-        setCurrentProject(fullProj);
+        if (!routeFileId || !currentProject) {
+          setCurrentProject(fullProj);
+        }
 
         const role = computeRoleForProject(fullProj);
         setUserRole(role);
@@ -326,35 +333,46 @@ export function App() {
   ]);
 
   useEffect(() => {
-    setCurrentProject(null);
+    if (!routeFileId) {
+      setCurrentProject(null);
+    }
     setProjects([]);
     loadProjects();
-  }, [token, user?.id]);
+  }, [token, user?.id, routeFileId]);
 
   // Restore / Load Canvas directly from URL route (Figma Navigation & Refresh Persistence)
   useEffect(() => {
     if (!isAuthenticated || !routeFileId) return;
 
-    // Prevent redundant fetch if already active
-    if (doc.id === routeFileId && doc.elements && doc.elements.length > 0)
-      return;
+    // Prevent redundant fetch if document is already active for this route
+    if (doc.id === routeFileId) return;
 
-    let isCancelled = false;
+    let isSubscribed = true;
+    setRouteFileError(null);
+    setIsLoadingRouteFile(true);
 
     async function loadRouteCanvas() {
-      setIsLoadingRouteFile(true);
       try {
-        const freshDoc = await api.getDocument(routeFileId);
-        if (isCancelled) return;
+        // 10s timeout safeguard to prevent infinite hanging
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Canvas loading timed out (10s)")), 10000)
+        );
+        const freshDoc = await Promise.race([
+          api.getDocument(routeFileId!),
+          timeoutPromise,
+        ]);
+
+        if (!isSubscribed) return;
 
         setDoc(freshDoc);
         setHistory([freshDoc.elements || []]);
         setHistoryIndex(0);
+        setIsLoadingRouteFile(false);
 
         if (freshDoc.projectId) {
           try {
             const parentProj = await api.getProject(freshDoc.projectId);
-            if (!isCancelled) {
+            if (isSubscribed) {
               setCurrentProject(parentProj);
               const role = computeRoleForProject(parentProj);
               setUserRole(role);
@@ -371,13 +389,12 @@ export function App() {
           }
         }
       } catch (err: any) {
-        if (!isCancelled) {
-          toast.error("Canvas file not found");
-          navigate("/", { replace: true });
-        }
-      } finally {
-        if (!isCancelled) {
+        if (isSubscribed) {
+          const errMsg = err?.message || "Canvas file not found";
+          console.error("Failed to load route canvas:", err);
+          setRouteFileError(errMsg);
           setIsLoadingRouteFile(false);
+          toast.error(errMsg);
         }
       }
     }
@@ -385,9 +402,9 @@ export function App() {
     loadRouteCanvas();
 
     return () => {
-      isCancelled = true;
+      isSubscribed = false;
     };
-  }, [routeFileId, isAuthenticated, user?.id, computeRoleForProject, navigate]);
+  }, [routeFileId, isAuthenticated]);
 
   // Setup WebSocket Listeners for real-time multiplayer sync
   useEffect(() => {
@@ -1400,7 +1417,113 @@ export function App() {
     );
   }
 
-  // 3. Authenticated: If on editor route and loading route file or doc not populated yet:
+  // 3. Authenticated: Route File Error State (e.g., file not found, access denied, timeout)
+  if (isEditorRoute && routeFileError) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {appToaster}
+        <Box
+          sx={{
+            width: "100vw",
+            height: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: "var(--neu-bg)",
+            p: 2,
+          }}
+        >
+          <Box
+            className="neu-card"
+            sx={{
+              p: 4,
+              borderRadius: "24px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2.5,
+              bgcolor: "var(--neu-surface)",
+              boxShadow: "var(--neu-shadow-raised)",
+              border: "var(--neu-border)",
+              maxWidth: 420,
+              width: "100%",
+              textAlign: "center",
+            }}
+          >
+            <Box
+              sx={{
+                width: 60,
+                height: 60,
+                borderRadius: "18px",
+                background: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 8px 24px rgba(239, 68, 68, 0.35)",
+              }}
+            >
+              <SailingOutlined sx={{ fontSize: 32, color: "#ffffff" }} />
+            </Box>
+            <Box>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, color: "var(--neu-text-primary)", mb: 0.5 }}
+              >
+                Canvas Not Found
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: "var(--neu-text-secondary)", fontSize: "0.85rem" }}
+              >
+                {routeFileError || "The requested canvas could not be loaded or may have been deleted."}
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1.5, width: "100%", mt: 1 }}>
+              <Button
+                variant="outlined"
+                fullWidth
+                onClick={() => {
+                  setRouteFileError(null);
+                  navigate("/", { replace: true });
+                }}
+                className="neu-btn"
+                sx={{
+                  py: 1,
+                  borderRadius: "12px",
+                  fontWeight: 600,
+                  textTransform: "none",
+                }}
+              >
+                Dashboard
+              </Button>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => {
+                  setRouteFileError(null);
+                  setIsLoadingRouteFile(true);
+                  setDoc((prev) => ({ ...prev, id: "" }));
+                }}
+                className="neu-btn-primary"
+                sx={{
+                  py: 1,
+                  borderRadius: "12px",
+                  fontWeight: 600,
+                  textTransform: "none",
+                }}
+              >
+                Try Again
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // 4. Authenticated: If on editor route and loading route file or doc not populated yet:
   if (isEditorRoute && (isLoadingRouteFile || !doc.id)) {
     return (
       <ThemeProvider theme={theme}>
@@ -1465,6 +1588,20 @@ export function App() {
               size={26}
               sx={{ color: "var(--neu-primary)", mt: 0.5 }}
             />
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => navigate("/", { replace: true })}
+              sx={{
+                color: "var(--neu-text-secondary)",
+                fontSize: "0.75rem",
+                textTransform: "none",
+                mt: 1,
+                "&:hover": { color: "var(--neu-primary)" },
+              }}
+            >
+              Cancel & Return to Dashboard
+            </Button>
           </Box>
         </Box>
       </ThemeProvider>
