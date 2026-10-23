@@ -1,96 +1,29 @@
 services:
-  # ----------------------------------------------------
-  # PostgreSQL 16 Database
-  # ----------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    container_name: sailboard-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sailboard}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sailboard_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-sailboard}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sailboard} -d ${POSTGRES_DB:-sailboard}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - sailboard-net
-
-  # ----------------------------------------------------
-  # Redis 7 (Cache, Presence, & Collaborative Pub/Sub)
-  # ----------------------------------------------------
-  redis:
-    image: redis:7-alpine
-    container_name: sailboard-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - sailboard-net
-
-  # ----------------------------------------------------
-  # Sailboard Backend NestJS API & WebSocket Gateway
-  # ----------------------------------------------------
-  api:
+  # ====================================================
+  # Sailboard Unified Application (Frontend & Backend)
+  # Route-based routing through ONE single host port (3250):
+  #   - http://<host>:3250/           -> React Frontend Web UI
+  #   - http://<host>:3250/api        -> NestJS Backend API
+  #   - http://<host>:3250/whiteboard -> WebSocket Gateway
+  # ====================================================
+  sailboard:
     build:
       context: .
-      dockerfile: Dockerfile.api
-    container_name: sailboard-api
+      dockerfile: Dockerfile
+    container_name: sailboard-app
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3333
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sailboard}:${POSTGRES_PASSWORD:-sailboard_secret}@postgres:5432/${POSTGRES_DB:-sailboard}?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      PORT: 3333 # Internal backend API port
+      DATABASE_URL: ${DATABASE_URL:-postgresql://umangsailor:Umang6Sailor@postgres.sailorlabs.in/sailboard?schema=public}
+      REDIS_HOST: ${REDIS_HOST:-host.docker.internal}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET:-sailboard_super_secret_jwt_key_2026}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "${API_PORT:-3333}:3333"
-    networks:
-      - sailboard-net
-
-  # ----------------------------------------------------
-  # Sailboard Frontend Web UI & Nginx Reverse Proxy
-  # ----------------------------------------------------
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    container_name: sailboard-web
-    restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-80}:80"
-    depends_on:
-      - api
-    networks:
-      - sailboard-net
-
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-
-networks:
-  sailboard-net:
-    driver: bridge
+      # Single entrypoint port on the host:
+      - "${APP_PORT:-3250}:80"
