@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Paper, IconButton, Tooltip, Divider, Box } from '@mui/material';
 import { ElementType } from '@rea/shared-types';
-import { animateDockIn, animateTactileClick } from '../utils/animations';
+import { animateDockIn, animateTactileClick, animateHoverSpring, animateHoverLeave } from '../utils/animations';
 
 interface ToolbarProps {
   activeTool: ElementType | 'eraser' | 'pan' | 'comment';
@@ -208,6 +208,12 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
                 <IconButton
                   size="small"
                   disabled={isDisabled}
+                  onMouseEnter={(e) => {
+                    if (!isDisabled) animateHoverSpring(e.currentTarget, 1.12, -2.5);
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDisabled) animateHoverLeave(e.currentTarget);
+                  }}
                   onClick={(e) => {
                     animateTactileClick(e.currentTarget);
                     onToolSelect(item.id);
@@ -225,9 +231,8 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
                       bgcolor: isActive ? 'var(--neu-bg)' : 'var(--neu-surface-hover)',
                       boxShadow: isActive ? 'var(--neu-shadow-pressed)' : 'var(--neu-shadow-btn-hover)',
                       color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-primary)',
-                      transform: isDisabled ? 'none' : 'translateY(-1px)',
                     },
-                    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transition: 'background-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease',
                   }}
                 >
                   {item.icon}

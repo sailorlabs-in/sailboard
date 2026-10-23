@@ -50,7 +50,8 @@ import {
 } from '@mui/icons-material';
 import { UserPresence, ProjectRole, User } from '@rea/shared-types';
 import { ThemePreference } from '../theme/theme';
-import { animateHeaderIn } from '../utils/animations';
+import { animateHeaderIn, animateTactileClick } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 interface HeaderProps {
   projectName: string;
@@ -531,89 +532,58 @@ function HeaderComponent({
           </Tooltip>
         )}
 
-        {/* View Mode Selector (Neumorphic Segmented Control) */}
-        <Box
-          className="neu-segmented"
-          sx={{
-            display: 'inline-flex',
-            mr: { xs: 0.3, sm: 0.8 },
-            flexShrink: 0,
-          }}
-        >
-          {/* Split View only on desktop >= 1200px */}
-          <Tooltip title="Split View: Docs + Canvas (Desktop)">
-            <Box sx={{ display: { xs: 'none', lg: 'inline-flex' } }}>
-              <button
-                type="button"
-                className={`neu-segmented-item ${viewMode === 'split' ? 'active' : ''}`}
-                onClick={() => onViewModeChange('split')}
-                style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-              >
-                <ViewSidebarOutlined sx={{ fontSize: 15 }} />
-                <span>Split</span>
-              </button>
-            </Box>
-          </Tooltip>
-
-          {/* Canvas View */}
-          <Tooltip title="Canvas Only (Whiteboard)">
-            <button
-              type="button"
-              className={`neu-segmented-item ${viewMode === 'canvas' ? 'active' : ''}`}
-              onClick={() => onViewModeChange('canvas')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              <SpaceDashboardOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Canvas</Box>
-            </button>
-          </Tooltip>
-
-          {/* Notes View */}
-          <Tooltip title="Notes Only (Markdown Docs)">
-            <button
-              type="button"
-              className={`neu-segmented-item ${viewMode === 'notes' ? 'active' : ''}`}
-              onClick={() => onViewModeChange('notes')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              <DescriptionOutlined sx={{ fontSize: 15 }} />
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Notes</Box>
-            </button>
-          </Tooltip>
-        </Box>
+        {/* View Mode Selector (Sliding Pill Neumorphic Segmented Control) */}
+        <NeuSegmentedControl
+          value={viewMode}
+          onChange={onViewModeChange}
+          sx={{ mr: { xs: 0.3, sm: 0.8 }, flexShrink: 0 }}
+          ariaLabel="Workspace View Mode"
+          options={[
+            {
+              value: 'split',
+              label: 'Split',
+              icon: <ViewSidebarOutlined sx={{ fontSize: 15 }} />,
+              tooltip: 'Split View: Docs + Canvas (Desktop)',
+              hideBelowLg: true,
+            },
+            {
+              value: 'canvas',
+              label: 'Canvas',
+              icon: <SpaceDashboardOutlined sx={{ fontSize: 15 }} />,
+              tooltip: 'Canvas Only (Whiteboard)',
+              hideOnMobile: true,
+            },
+            {
+              value: 'notes',
+              label: 'Notes',
+              icon: <DescriptionOutlined sx={{ fontSize: 15 }} />,
+              tooltip: 'Notes Only (Markdown Docs)',
+              hideOnMobile: true,
+            },
+          ]}
+        />
 
         {/* Style Mode (Sketch / Clean): Visible as segmented control on desktop >= 1200px */}
-        <Box
-          className="neu-segmented"
-          sx={{
-            display: { xs: 'none', lg: 'inline-flex' },
-            mr: 0.8,
-            flexShrink: 0,
-          }}
-        >
-          <Tooltip title="Hand-drawn Rough.js Style">
-            <button
-              type="button"
-              className={`neu-segmented-item ${styleMode === 'rough' ? 'active' : ''}`}
-              onClick={() => onStyleModeChange('rough')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              <BrushOutlined sx={{ fontSize: 15 }} />
-              <span>Sketch</span>
-            </button>
-          </Tooltip>
-          <Tooltip title="Clean Geometric Mode">
-            <button
-              type="button"
-              className={`neu-segmented-item ${styleMode === 'clean' ? 'active' : ''}`}
-              onClick={() => onStyleModeChange('clean')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-            >
-              <ArchitectureOutlined sx={{ fontSize: 15 }} />
-              <span>Clean</span>
-            </button>
-          </Tooltip>
-        </Box>
+        <NeuSegmentedControl
+          value={styleMode}
+          onChange={onStyleModeChange}
+          sx={{ display: { xs: 'none', lg: 'inline-flex' }, mr: 0.8, flexShrink: 0 }}
+          ariaLabel="Canvas Drawing Style Mode"
+          options={[
+            {
+              value: 'rough',
+              label: 'Sketch',
+              icon: <BrushOutlined sx={{ fontSize: 15 }} />,
+              tooltip: 'Hand-drawn Rough.js Style',
+            },
+            {
+              value: 'clean',
+              label: 'Clean',
+              icon: <ArchitectureOutlined sx={{ fontSize: 15 }} />,
+              tooltip: 'Clean Geometric Mode',
+            },
+          ]}
+        />
 
         {/* Undo / Redo: Visible on tablets and up (>= sm) */}
         {!isViewer && (
@@ -622,7 +592,10 @@ function HeaderComponent({
               <span>
                 <IconButton
                   size="small"
-                  onClick={onUndo}
+                  onClick={(e) => {
+                    animateTactileClick(e.currentTarget);
+                    onUndo();
+                  }}
                   disabled={!canUndo}
                   className="neu-icon-btn"
                   sx={{ width: 30, height: 30 }}
@@ -635,7 +608,10 @@ function HeaderComponent({
               <span>
                 <IconButton
                   size="small"
-                  onClick={onRedo}
+                  onClick={(e) => {
+                    animateTactileClick(e.currentTarget);
+                    onRedo();
+                  }}
                   disabled={!canRedo}
                   className="neu-icon-btn"
                   sx={{ width: 30, height: 30 }}
@@ -650,14 +626,25 @@ function HeaderComponent({
         {/* Full Zoom Controls (Desktop >= 1350px) */}
         <Box sx={{ display: { xs: 'none', xl: 'flex' }, alignItems: 'center', gap: 0.5, mr: 0.8, flexShrink: 0 }}>
           <Tooltip title="Zoom Out (-)">
-            <IconButton size="small" onClick={onZoomOut} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                onZoomOut();
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 30, height: 30 }}
+            >
               <ZoomOutOutlined fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Click to Reset Zoom (100%)">
             <Typography
               variant="caption"
-              onClick={onZoomReset}
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget as HTMLElement);
+                onZoomReset();
+              }}
               className="neu-inset"
               sx={{
                 cursor: 'pointer',
@@ -675,7 +662,15 @@ function HeaderComponent({
             </Typography>
           </Tooltip>
           <Tooltip title="Zoom In (+)">
-            <IconButton size="small" onClick={onZoomIn} className="neu-icon-btn" sx={{ width: 30, height: 30 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                onZoomIn();
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 30, height: 30 }}
+            >
               <ZoomInOutlined fontSize="small" />
             </IconButton>
           </Tooltip>

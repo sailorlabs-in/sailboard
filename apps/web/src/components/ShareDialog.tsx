@@ -42,6 +42,7 @@ import toast from 'react-hot-toast';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDeleteModal } from './modals';
+import { animateModalIn } from '../utils/animations';
 
 interface ShareDialogProps {
   open: boolean;
@@ -131,6 +132,11 @@ export function ShareDialog({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
+      TransitionProps={{
+        onEnter: (node) => {
+          animateModalIn(node);
+        },
+      }}
       slotProps={{
         paper: {
           className: 'neu-floating',

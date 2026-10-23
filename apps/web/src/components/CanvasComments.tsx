@@ -20,6 +20,7 @@ import {
   ChatBubbleOutlined,
 } from '@mui/icons-material';
 import { CanvasComment, User, Point } from '@rea/shared-types';
+import { animatePinDrop, animateTactileClick } from '../utils/animations';
 
 export interface CanvasCommentsProps {
   comments: CanvasComment[];
@@ -44,6 +45,105 @@ export interface CanvasCommentsProps {
   isInteracting?: boolean;
   viewportWidth?: number;
   viewportHeight?: number;
+}
+
+function CommentPin({
+  comment,
+  isOpen,
+  replyCount,
+  authorInitial,
+  screenX,
+  screenY,
+  onSelect,
+}: {
+  comment: CanvasComment;
+  isOpen: boolean;
+  replyCount: number;
+  authorInitial: string;
+  screenX: number;
+  screenY: number;
+  onSelect: () => void;
+}) {
+  const pinRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (pinRef.current) {
+      animatePinDrop(pinRef.current);
+    }
+  }, []);
+
+  return (
+    <Box
+      ref={pinRef}
+      sx={{
+        position: 'absolute',
+        left: screenX,
+        top: screenY,
+        transform: 'translate(-50%, -100%)',
+        pointerEvents: 'auto',
+      }}
+    >
+      <Tooltip
+        title={`${comment.author?.name || 'Peer'}: "${comment.content.slice(0, 36)}..."`}
+        placement="top"
+        arrow
+      >
+        <Box
+          onClick={(e) => {
+            e.stopPropagation();
+            animateTactileClick(e.currentTarget);
+            onSelect();
+          }}
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: '50% 50% 50% 4px',
+            bgcolor: comment.author?.color || '#6366f1',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: isOpen
+              ? '0 0 0 3px rgba(99, 102, 241, 0.45), 0 8px 18px rgba(0,0,0,0.35)'
+              : '0 4px 12px rgba(0,0,0,0.25)',
+            transform: isOpen ? 'scale(1.15) translateY(-4px)' : 'scale(1)',
+            transition: 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s',
+            border: '2px solid #ffffff',
+            opacity: comment.resolved ? 0.6 : 1,
+            filter: comment.resolved ? 'grayscale(0.5)' : 'none',
+          }}
+        >
+          {comment.resolved ? (
+            <CheckCircle sx={{ fontSize: 18 }} />
+          ) : replyCount > 0 ? (
+            <Badge
+              badgeContent={replyCount}
+              color="primary"
+              sx={{
+                '& .MuiBadge-badge': {
+                  fontSize: '0.62rem',
+                  height: 16,
+                  minWidth: 16,
+                  top: -4,
+                  right: -4,
+                  bgcolor: '#10b981',
+                },
+              }}
+            >
+              <Typography sx={{ fontSize: '0.82rem', fontWeight: 800 }}>
+                {authorInitial}
+              </Typography>
+            </Badge>
+          ) : (
+            <Typography sx={{ fontSize: '0.82rem', fontWeight: 800 }}>
+              {authorInitial}
+            </Typography>
+          )}
+        </Box>
+      </Tooltip>
+    </Box>
+  );
 }
 
 function CanvasCommentsComponent({
@@ -184,76 +284,16 @@ function CanvasCommentsComponent({
         const authorInitial = (comment.author?.name || 'U').charAt(0).toUpperCase();
 
         return (
-          <Box
+          <CommentPin
             key={comment.id}
-            sx={{
-              position: 'absolute',
-              left: screenX,
-              top: screenY,
-              transform: 'translate(-50%, -100%)',
-              pointerEvents: 'auto',
-            }}
-          >
-            {/* Tactile Pin Icon */}
-            <Tooltip
-              title={`${comment.author?.name || 'Peer'}: "${comment.content.slice(0, 36)}..."`}
-              placement="top"
-              arrow
-            >
-              <Box
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectComment(isOpen ? null : comment.id);
-                }}
-                sx={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: '50% 50% 50% 4px',
-                  bgcolor: comment.author?.color || '#6366f1',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: isOpen
-                    ? '0 0 0 3px rgba(99, 102, 241, 0.45), 0 8px 18px rgba(0,0,0,0.35)'
-                    : '0 4px 12px rgba(0,0,0,0.25)',
-                  transform: isOpen ? 'scale(1.15) translateY(-4px)' : 'scale(1)',
-                  transition: 'transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s',
-                  border: '2px solid #ffffff',
-                  opacity: comment.resolved ? 0.6 : 1,
-                  filter: comment.resolved ? 'grayscale(0.5)' : 'none',
-                }}
-              >
-                {comment.resolved ? (
-                  <CheckCircle sx={{ fontSize: 18 }} />
-                ) : replyCount > 0 ? (
-                  <Badge
-                    badgeContent={replyCount}
-                    color="primary"
-                    sx={{
-                      '& .MuiBadge-badge': {
-                        fontSize: '0.62rem',
-                        height: 16,
-                        minWidth: 16,
-                        top: -4,
-                        right: -4,
-                        bgcolor: '#10b981',
-                      },
-                    }}
-                  >
-                    <Typography sx={{ fontSize: '0.82rem', fontWeight: 800 }}>
-                      {authorInitial}
-                    </Typography>
-                  </Badge>
-                ) : (
-                  <Typography sx={{ fontSize: '0.82rem', fontWeight: 800 }}>
-                    {authorInitial}
-                  </Typography>
-                )}
-              </Box>
-            </Tooltip>
-          </Box>
+            comment={comment}
+            isOpen={isOpen}
+            replyCount={replyCount}
+            authorInitial={authorInitial}
+            screenX={screenX}
+            screenY={screenY}
+            onSelect={() => onSelectComment(isOpen ? null : comment.id)}
+          />
         );
       })}
 

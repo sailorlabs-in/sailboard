@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { animateTabTransition } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 interface AuthDialogProps {
   open: boolean;
@@ -38,13 +39,6 @@ interface AuthDialogProps {
 export function AuthDialog({ open, onClose, onSuccess, title, subtitle }: AuthDialogProps) {
   const { login, register } = useAuth();
   const [tabIndex, setTabIndex] = useState<number>(0); // 0 = Sign In, 1 = Create Account, 2 = Reset Password
-  const formContainerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (formContainerRef.current) {
-      animateTabTransition(formContainerRef.current, 'right');
-    }
-  }, [tabIndex]);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -55,6 +49,19 @@ export function AuthDialog({ open, onClose, onSuccess, title, subtitle }: AuthDi
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const formContainerRef = useRef<HTMLDivElement | null>(null);
+  const isFirstTabRender = useRef(true);
+
+  // Smooth slide/crossfade transition when switching between Auth tabs
+  useEffect(() => {
+    if (isFirstTabRender.current) {
+      isFirstTabRender.current = false;
+      return;
+    }
+    if (formContainerRef.current) {
+      animateTabTransition(formContainerRef.current, tabIndex === 1 ? 'right' : 'left');
+    }
+  }, [tabIndex]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,39 +212,20 @@ export function AuthDialog({ open, onClose, onSuccess, title, subtitle }: AuthDi
       </DialogTitle>
 
       <Box sx={{ px: 3, pt: 1 }}>
-        <Box className="neu-segmented" sx={{ width: '100%', display: 'flex' }}>
-          <button
-            type="button"
-            className={`neu-segmented-item ${tabIndex === 0 ? 'active' : ''}`}
-            onClick={() => {
-              setTabIndex(0);
-              setErrorMsg(null);
-            }}
-            style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            className={`neu-segmented-item ${tabIndex === 1 ? 'active' : ''}`}
-            onClick={() => {
-              setTabIndex(1);
-              setErrorMsg(null);
-            }}
-            style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
-          >
-            Create Account
-          </button>
-          {tabIndex === 2 && (
-            <button
-              type="button"
-              className="neu-segmented-item active"
-              style={{ flex: 1, padding: '8px', fontSize: '0.85rem' }}
-            >
-              Reset Password
-            </button>
-          )}
-        </Box>
+        <NeuSegmentedControl
+          value={String(tabIndex)}
+          onChange={(val) => {
+            setTabIndex(Number(val));
+            setErrorMsg(null);
+          }}
+          sx={{ width: '100%', display: 'flex' }}
+          ariaLabel="Authentication Mode"
+          options={[
+            { value: '0', label: 'Sign In' },
+            { value: '1', label: 'Create Account' },
+            ...(tabIndex === 2 ? [{ value: '2', label: 'Reset Password' }] : []),
+          ]}
+        />
       </Box>
 
       <DialogContent ref={formContainerRef} sx={{ pt: 2.5, pb: 2 }}>

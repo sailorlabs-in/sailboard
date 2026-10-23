@@ -38,6 +38,7 @@ import {
   parseDocToGraph,
   generateDiagramElements,
 } from '../../utils/docToDiagramParser';
+import { animateModalIn } from '../../utils/animations';
 
 export interface DocToDiagramModalProps {
   open: boolean;
@@ -170,6 +171,11 @@ export function DocToDiagramModal({
       onClose={onClose}
       maxWidth="md"
       fullWidth
+      TransitionProps={{
+        onEnter: (node) => {
+          animateModalIn(node);
+        },
+      }}
       slotProps={{
         paper: {
           sx: {

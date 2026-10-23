@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { ElementType, Project, WhiteboardDocument } from '@rea/shared-types';
 import { ThemePreference } from '../theme/theme';
+import { animateModalIn } from '../utils/animations';
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -537,6 +538,11 @@ export function CommandPalette({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
+      TransitionProps={{
+        onEnter: (node) => {
+          animateModalIn(node);
+        },
+      }}
       slotProps={{
         backdrop: {
           sx: {

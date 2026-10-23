@@ -32,6 +32,8 @@ import {
   applyFillOpacity,
   isColorMatchingSwatch,
 } from '../utils/colorUtils';
+import { animateTactileClick } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 interface PropertiesPanelProps {
   selectedElements: CanvasElement[];
@@ -639,19 +641,17 @@ function PropertiesPanelComponent({
                 '& .MuiSlider-rail': { height: 3 },
               }}
             />
-            <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25, mt: 0.2 }}>
-              {[0, 25, 50, 75, 100].map((pct) => (
-                <button
-                  key={pct}
-                  type="button"
-                  className={`neu-segmented-item ${activeFillOpacity === pct ? 'active' : ''}`}
-                  onClick={() => handleFillOpacityChange(pct)}
-                  style={{ flex: 1, padding: '2px 0', fontSize: '0.6rem', textAlign: 'center' }}
-                >
-                  {pct}%
-                </button>
-              ))}
-            </Box>
+            <NeuSegmentedControl
+              size="small"
+              value={String(activeFillOpacity)}
+              onChange={(val) => handleFillOpacityChange(Number(val))}
+              sx={{ width: '100%', mt: 0.2 }}
+              ariaLabel="Fill Opacity"
+              options={[0, 25, 50, 75, 100].map((pct) => ({
+                value: String(pct),
+                label: `${pct}%`,
+              }))}
+            />
           </Box>
         </Box>
       )}
@@ -686,19 +686,17 @@ function PropertiesPanelComponent({
           >
             Font Size
           </Typography>
-          <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25 }}>
-            {[14, 18, 24, 32].map((fs) => (
-              <button
-                key={fs}
-                type="button"
-                className={`neu-segmented-item ${activeFontSize === fs ? 'active' : ''}`}
-                onClick={() => onUpdateStyle({ fontSize: fs })}
-                style={{ flex: 1, padding: '3px 1px', fontSize: '0.65rem', textAlign: 'center' }}
-              >
-                {fs}px
-              </button>
-            ))}
-          </Box>
+          <NeuSegmentedControl
+            size="small"
+            value={String(activeFontSize)}
+            onChange={(fs) => onUpdateStyle({ fontSize: Number(fs) })}
+            sx={{ width: '100%' }}
+            ariaLabel="Font Size"
+            options={[14, 18, 24, 32].map((fs) => ({
+              value: String(fs),
+              label: `${fs}px`,
+            }))}
+          />
         </Box>
       )}
 
@@ -711,19 +709,19 @@ function PropertiesPanelComponent({
           >
             Fill Style
           </Typography>
-          <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25 }}>
-            {(['none', 'solid', 'hachure', 'cross-hatch'] as FillStyle[]).map((style) => (
-              <button
-                key={style}
-                type="button"
-                className={`neu-segmented-item ${activeFillStyle === style ? 'active' : ''}`}
-                onClick={() => onUpdateStyle({ fillStyle: style })}
-                style={{ flex: 1, padding: '3px 1px', fontSize: '0.62rem', textAlign: 'center' }}
-              >
-                {style === 'none' ? 'None' : style === 'cross-hatch' ? 'Cross' : style}
-              </button>
-            ))}
-          </Box>
+          <NeuSegmentedControl
+            size="small"
+            value={activeFillStyle}
+            onChange={(style) => onUpdateStyle({ fillStyle: style as FillStyle })}
+            sx={{ width: '100%' }}
+            ariaLabel="Fill Style"
+            options={[
+              { value: 'none', label: 'None' },
+              { value: 'solid', label: 'Solid' },
+              { value: 'hachure', label: 'Hachure' },
+              { value: 'cross-hatch', label: 'Cross' },
+            ]}
+          />
         </Box>
       )}
 
@@ -744,19 +742,17 @@ function PropertiesPanelComponent({
           >
             <LineWeightOutlined sx={{ fontSize: 12 }} /> Stroke Width
           </Typography>
-          <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25 }}>
-            {[1, 2, 4, 6].map((w) => (
-              <button
-                key={w}
-                type="button"
-                className={`neu-segmented-item ${activeWidth === w ? 'active' : ''}`}
-                onClick={() => onUpdateStyle({ strokeWidth: w })}
-                style={{ flex: 1, padding: '3px 1px', fontSize: '0.65rem', textAlign: 'center' }}
-              >
-                {w}px
-              </button>
-            ))}
-          </Box>
+          <NeuSegmentedControl
+            size="small"
+            value={String(activeWidth)}
+            onChange={(w) => onUpdateStyle({ strokeWidth: Number(w) })}
+            sx={{ width: '100%' }}
+            ariaLabel="Stroke Width"
+            options={[1, 2, 4, 6].map((w) => ({
+              value: String(w),
+              label: `${w}px`,
+            }))}
+          />
         </Box>
       )}
 
@@ -769,19 +765,18 @@ function PropertiesPanelComponent({
           >
             Stroke Pattern
           </Typography>
-          <Box className="neu-segmented" sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', p: 0.25 }}>
-            {(['solid', 'dashed', 'dotted'] as StrokeStyle[]).map((st) => (
-              <button
-                key={st}
-                type="button"
-                className={`neu-segmented-item ${activeStrokeStyle === st ? 'active' : ''}`}
-                onClick={() => onUpdateStyle({ strokeStyle: st })}
-                style={{ flex: 1, padding: '3px 1px', fontSize: '0.62rem', textAlign: 'center' }}
-              >
-                {st}
-              </button>
-            ))}
-          </Box>
+          <NeuSegmentedControl
+            size="small"
+            value={activeStrokeStyle}
+            onChange={(st) => onUpdateStyle({ strokeStyle: st as StrokeStyle })}
+            sx={{ width: '100%' }}
+            ariaLabel="Stroke Pattern"
+            options={[
+              { value: 'solid', label: 'Solid' },
+              { value: 'dashed', label: 'Dashed' },
+              { value: 'dotted', label: 'Dotted' },
+            ]}
+          />
         </Box>
       )}
 

@@ -21,6 +21,7 @@ import {
 } from "@rea/shared-types";
 import toast, { Toaster } from "react-hot-toast";
 import { SailingOutlined } from "@mui/icons-material";
+import gsap from "gsap";
 import { ThemePreference, getAppTheme } from "./theme/theme";
 import { Header } from "./components/Header";
 import { Toolbar } from "./components/Toolbar";
@@ -261,6 +262,132 @@ export function App() {
   const [remoteUsers, setRemoteUsers] = useState<UserPresence[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const notesPanelRef = useRef<HTMLDivElement | null>(null);
+  const dividerRef = useRef<HTMLDivElement | null>(null);
+  const isFirstLayoutMount = useRef(true);
+
+  // Seamless GSAP View Mode Layout Transition (Split <-> Canvas <-> Notes)
+  useEffect(() => {
+    const notesEl = notesPanelRef.current;
+    const canvasEl = canvasContainerRef.current;
+    const dividerEl = dividerRef.current;
+    if (!notesEl || !canvasEl) return;
+
+    if (isFirstLayoutMount.current) {
+      isFirstLayoutMount.current = false;
+      if (viewMode === "split") {
+        gsap.set(notesEl, { width: splitWidth, opacity: 1, display: "flex" });
+        gsap.set(canvasEl, { flexGrow: 1, opacity: 1, display: "block" });
+        if (dividerEl) gsap.set(dividerEl, { width: 6, opacity: 1, display: "block" });
+      } else if (viewMode === "canvas") {
+        gsap.set(notesEl, { width: 0, opacity: 0, display: "none" });
+        gsap.set(canvasEl, { flexGrow: 1, width: "100%", opacity: 1, display: "block" });
+        if (dividerEl) gsap.set(dividerEl, { width: 0, opacity: 0, display: "none" });
+      } else if (viewMode === "notes") {
+        gsap.set(notesEl, { width: "100%", flexGrow: 1, opacity: 1, display: "flex" });
+        gsap.set(canvasEl, { width: 0, opacity: 0, display: "none" });
+        if (dividerEl) gsap.set(dividerEl, { width: 0, opacity: 0, display: "none" });
+      }
+      return;
+    }
+
+    gsap.killTweensOf([notesEl, canvasEl, dividerEl]);
+
+    if (viewMode === "split") {
+      gsap.set(notesEl, { display: "flex" });
+      gsap.set(canvasEl, { display: "block" });
+      if (dividerEl) gsap.set(dividerEl, { display: "block" });
+
+      gsap.to(notesEl, {
+        width: splitWidth,
+        flexGrow: 0,
+        opacity: 1,
+        duration: 0.35,
+        ease: "power3.out",
+      });
+
+      gsap.to(canvasEl, {
+        opacity: 1,
+        duration: 0.35,
+        ease: "power3.out",
+      });
+
+      if (dividerEl) {
+        gsap.to(dividerEl, {
+          width: 6,
+          opacity: 1,
+          duration: 0.28,
+          ease: "power2.out",
+        });
+      }
+    } else if (viewMode === "canvas") {
+      gsap.to(notesEl, {
+        width: 0,
+        opacity: 0,
+        duration: 0.32,
+        ease: "power3.out",
+        onComplete: () => {
+          if (notesPanelRef.current) notesPanelRef.current.style.display = "none";
+        },
+      });
+
+      if (dividerEl) {
+        gsap.to(dividerEl, {
+          width: 0,
+          opacity: 0,
+          duration: 0.25,
+          ease: "power2.out",
+          onComplete: () => {
+            if (dividerRef.current) dividerRef.current.style.display = "none";
+          },
+        });
+      }
+
+      gsap.set(canvasEl, { display: "block" });
+      gsap.to(canvasEl, {
+        opacity: 1,
+        duration: 0.32,
+        ease: "power3.out",
+      });
+    } else if (viewMode === "notes") {
+      gsap.set(notesEl, { display: "flex" });
+      gsap.to(notesEl, {
+        width: "100%",
+        flexGrow: 1,
+        opacity: 1,
+        duration: 0.35,
+        ease: "power3.out",
+      });
+
+      if (dividerEl) {
+        gsap.to(dividerEl, {
+          width: 0,
+          opacity: 0,
+          duration: 0.25,
+          ease: "power2.out",
+          onComplete: () => {
+            if (dividerRef.current) dividerRef.current.style.display = "none";
+          },
+        });
+      }
+
+      gsap.to(canvasEl, {
+        opacity: 0,
+        duration: 0.25,
+        ease: "power2.out",
+        onComplete: () => {
+          if (canvasContainerRef.current) canvasContainerRef.current.style.display = "none";
+        },
+      });
+    }
+  }, [viewMode]);
+
+  // Synchronize width when user actively drags split resize handle
+  useEffect(() => {
+    if (viewMode === "split" && notesPanelRef.current && isDraggingSplit) {
+      notesPanelRef.current.style.width = `${splitWidth}px`;
+    }
+  }, [splitWidth, viewMode, isDraggingSplit]);
 
   const isOwner = userRole === "owner";
   const isEditor = userRole === "editor";
@@ -1860,67 +1987,62 @@ export function App() {
           />
 
           {/* Left Split: Markdown Documentation */}
-          {(viewMode === "split" || viewMode === "notes") && (
-            <Box
-              sx={{
-                flexGrow: viewMode === "notes" ? 1 : 0,
-                flexShrink: viewMode === "notes" ? 1 : 0,
-                width: viewMode === "notes" ? "auto" : `${splitWidth}px`,
-                minWidth: 0,
-                height: "100%",
-                bgcolor: "var(--neu-bg)",
-                borderRight:
-                  viewMode === "split" ? "var(--neu-border)" : "none",
-                display: "flex",
-                flexDirection: "column",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <NotesEditor
-                key={doc.id}
-                notes={doc.notes}
-                onChange={handleNotesChange}
-                onGenerateDiagramFromNotes={handleGenerateDiagramFromNotes}
-                theme={effectiveThemeMode}
-                isViewer={isViewer}
-              />
-            </Box>
-          )}
+          <Box
+            ref={notesPanelRef}
+            sx={{
+              flexShrink: 0,
+              minWidth: 0,
+              height: "100%",
+              bgcolor: "var(--neu-bg)",
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <NotesEditor
+              key={doc.id}
+              notes={doc.notes}
+              onChange={handleNotesChange}
+              onGenerateDiagramFromNotes={handleGenerateDiagramFromNotes}
+              theme={effectiveThemeMode}
+              isViewer={isViewer}
+            />
+          </Box>
 
           {/* Resizable Divider Handle between Docs and Canvas */}
-          {viewMode === "split" && (
-            <Box
-              onMouseDown={handleSplitMouseDown}
-              sx={{
-                width: 6,
-                cursor: "col-resize",
-                bgcolor: isDraggingSplit
-                  ? "var(--neu-primary)"
-                  : "var(--neu-surface)",
-                borderLeft: "var(--neu-border-subtle)",
-                borderRight: "var(--neu-border-subtle)",
-                boxShadow: "var(--neu-shadow-raised-sm)",
-                zIndex: 35,
-                transition: "background-color 0.15s ease",
-                "&:hover": { bgcolor: "var(--neu-primary)" },
-              }}
-            />
-          )}
+          <Box
+            ref={dividerRef}
+            onMouseDown={handleSplitMouseDown}
+            sx={{
+              width: 6,
+              cursor: "col-resize",
+              bgcolor: isDraggingSplit
+                ? "var(--neu-primary)"
+                : "var(--neu-surface)",
+              borderLeft: "var(--neu-border-subtle)",
+              borderRight: "var(--neu-border-subtle)",
+              boxShadow: "var(--neu-shadow-raised-sm)",
+              zIndex: 35,
+              overflow: "hidden",
+              boxSizing: "border-box",
+              transition: "background-color 0.15s ease",
+              "&:hover": { bgcolor: "var(--neu-primary)" },
+            }}
+          />
 
           {/* Right Split: Infinite Vector Canvas */}
-          {(viewMode === "split" || viewMode === "canvas") && (
-            <Box
-              ref={canvasContainerRef}
-              sx={{
-                flexGrow: 1,
-                flexShrink: 1,
-                minWidth: 0,
-                height: "100%",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
+          <Box
+            ref={canvasContainerRef}
+            sx={{
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0,
+              height: "100%",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
               {/* Floating Toolbar */}
               <Toolbar
                 activeTool={activeTool}
@@ -2015,7 +2137,6 @@ export function App() {
                 theme={effectiveThemeMode}
               />
             </Box>
-          )}
         </Box>
 
         {/* Share & Permissions Dialog */}

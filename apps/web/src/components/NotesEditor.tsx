@@ -17,6 +17,8 @@ import {
   VisibilityOutlined,
   EditOutlined,
 } from '@mui/icons-material';
+import { animateTabTransition, animateTactileClick } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 interface NotesEditorProps {
   notes: string;
@@ -45,6 +47,19 @@ function NotesEditorComponent({
   const isFocusedRef = useRef(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const contentContainerRef = useRef<HTMLDivElement | null>(null);
+  const isFirstTabRender = useRef(true);
+
+  // Smooth slide/crossfade transition when switching between Edit and Preview
+  useEffect(() => {
+    if (isFirstTabRender.current) {
+      isFirstTabRender.current = false;
+      return;
+    }
+    if (contentContainerRef.current) {
+      animateTabTransition(contentContainerRef.current, tab === 'preview' ? 'right' : 'left');
+    }
+  }, [tab]);
 
   // Sync with incoming external notes (e.g. initial load, file switch or remote peer sync) when not actively editing
   useEffect(() => {
@@ -304,26 +319,25 @@ function NotesEditorComponent({
           <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: -0.2, color: 'var(--neu-text-primary)' }} noWrap>
             Engineering Spec
           </Typography>
-          <Box className="neu-segmented" sx={{ flexShrink: 0 }}>
-            <button
-              type="button"
-              className={`neu-segmented-item ${tab === 'edit' ? 'active' : ''}`}
-              onClick={() => setTab('edit')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: '0.68rem' }}
-            >
-              <EditOutlined sx={{ fontSize: 13 }} />
-              Edit
-            </button>
-            <button
-              type="button"
-              className={`neu-segmented-item ${tab === 'preview' ? 'active' : ''}`}
-              onClick={() => setTab('preview')}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: '0.68rem' }}
-            >
-              <VisibilityOutlined sx={{ fontSize: 13 }} />
-              Preview
-            </button>
-          </Box>
+          <NeuSegmentedControl
+            size="small"
+            value={tab}
+            onChange={(val) => setTab(val as 'edit' | 'preview')}
+            sx={{ flexShrink: 0 }}
+            ariaLabel="Markdown Editor / Preview"
+            options={[
+              {
+                value: 'edit',
+                label: 'Edit',
+                icon: <EditOutlined sx={{ fontSize: 13 }} />,
+              },
+              {
+                value: 'preview',
+                label: 'Preview',
+                icon: <VisibilityOutlined sx={{ fontSize: 13 }} />,
+              },
+            ]}
+          />
         </Box>
 
         {/* Generate Diagram from Markdown Studio */}
@@ -383,40 +397,91 @@ function NotesEditorComponent({
           }}
         >
           <Tooltip title="Heading 1 (#)">
-            <IconButton size="small" onClick={() => insertText('# ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('# ');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <TitleOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Bold (**text**)">
-            <IconButton size="small" onClick={() => insertText('**', '**')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('**', '**');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <FormatBoldOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Italic (*text*)">
-            <IconButton size="small" onClick={() => insertText('*', '*')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('*', '*');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <FormatItalicOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Code Block (```)">
-            <IconButton size="small" onClick={() => insertText('```\n', '\n```')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('```\n', '\n```');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <CodeOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Bullet List (- )">
-            <IconButton size="small" onClick={() => insertText('- ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('- ');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <FormatListBulletedOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Task Checklist (- [ ] )">
-            <IconButton size="small" onClick={() => insertText('- [ ] ')} className="neu-icon-btn" sx={{ width: 28, height: 28 }}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                animateTactileClick(e.currentTarget);
+                insertText('- [ ] ');
+              }}
+              className="neu-icon-btn"
+              sx={{ width: 28, height: 28 }}
+            >
               <CheckCircleOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
         </Box>
       )}
 
-      {/* Editor Body or Preview Body */}
-      <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0, overflow: 'auto', p: 1, boxSizing: 'border-box' }}>
+      {/* Editor Body or Preview Body with Smooth GSAP Tab Slide Transition */}
+      <Box
+        ref={contentContainerRef}
+        sx={{ flexGrow: 1, minHeight: 0, minWidth: 0, overflow: 'auto', p: 1, boxSizing: 'border-box' }}
+      >
         {tab === 'edit' ? (
           <textarea
             ref={textareaRef}

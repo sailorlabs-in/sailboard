@@ -39,6 +39,7 @@
   --neu-primary-light: #6366f1;
   --neu-primary-glow: rgba(79, 70, 229, 0.3);
   --neu-input-bg: #dce3ed;
+  --neu-hover-pill: rgba(0, 0, 0, 0.05);
 }
 
 [data-theme='dark'] {
@@ -76,6 +77,7 @@
   --neu-primary-light: #818cf8;
   --neu-primary-glow: rgba(99, 102, 241, 0.4);
   --neu-input-bg: #0f131f;
+  --neu-hover-pill: rgba(255, 255, 255, 0.07);
 }
 
 /* Base Body Styles */
@@ -225,6 +227,7 @@ body {
 
 /* Segmented Control / Pill Bar Container */
 .neu-segmented {
+  position: relative;
   background: var(--neu-bg) !important;
   box-shadow: var(--neu-shadow-inset) !important;
   border: var(--neu-border-inset) !important;
@@ -233,18 +236,55 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+/* Vercel-Style Hover Glider Pill */
+.neu-segmented-hover-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 8px;
+  background: var(--neu-hover-pill, rgba(255, 255, 255, 0.06));
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  will-change: transform, width, height, opacity;
+  box-sizing: border-box;
+}
+
+/* Sliding Pill Active Indicator for GSAP animated tabs (Vercel Style) */
+.neu-segmented-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 8px;
+  background: var(--neu-surface) !important;
+  box-shadow: var(--neu-shadow-btn) !important;
+  border: var(--neu-border) !important;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  will-change: transform, width, height;
+  box-sizing: border-box;
 }
 
 .neu-segmented-item {
+  position: relative;
+  z-index: 3;
   border-radius: 8px;
   padding: 6px 12px;
   font-weight: 600;
   font-size: 0.8rem;
   color: var(--neu-text-secondary);
-  transition: all 0.18s ease;
+  transition: color 0.18s ease;
   cursor: pointer;
   border: none;
   background: transparent;
+  user-select: none;
+  outline: none;
+  box-sizing: border-box;
 }
 
 .neu-segmented-item:hover {
@@ -252,6 +292,18 @@ body {
 }
 
 .neu-segmented-item.active {
+  color: var(--neu-primary-light) !important;
+}
+
+/* If container has sliding indicator, active item doesn't need hard background */
+.neu-segmented.has-indicator .neu-segmented-item.active {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Fallback for static items without dynamic indicator */
+.neu-segmented:not(.has-indicator) .neu-segmented-item.active {
   background: var(--neu-surface) !important;
   box-shadow: var(--neu-shadow-btn) !important;
   border: var(--neu-border) !important;

@@ -34,6 +34,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { animateTabTransition } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 interface AccountManageDialogProps {
   open: boolean;
@@ -82,6 +83,19 @@ export function AccountManageDialog({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const dialogContentRef = useRef<HTMLDivElement | null>(null);
+  const isFirstTabRender = useRef(true);
+
+  // Smooth slide/crossfade transition when switching tabs
+  useEffect(() => {
+    if (isFirstTabRender.current) {
+      isFirstTabRender.current = false;
+      return;
+    }
+    if (dialogContentRef.current) {
+      animateTabTransition(dialogContentRef.current, activeTab === 'switch' ? 'left' : 'right');
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (user) {
@@ -161,13 +175,7 @@ export function AccountManageDialog({
   };
 
   const otherAccounts = accounts.filter((a) => a.user.id !== user?.id);
-  const dialogContentRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (dialogContentRef.current) {
-      animateTabTransition(dialogContentRef.current, 'right');
-    }
-  }, [activeTab]);
 
   return (
     <Dialog
@@ -231,32 +239,17 @@ export function AccountManageDialog({
 
       {/* Segmented Control Navigation */}
       <Box sx={{ px: 3, pt: 2 }}>
-        <Box className="neu-segmented" sx={{ width: '100%', display: 'flex' }}>
-          <button
-            type="button"
-            className={`neu-segmented-item ${activeTab === 'switch' ? 'active' : ''}`}
-            onClick={() => setActiveTab('switch')}
-            style={{ flex: 1, padding: '9px', fontSize: '0.85rem', fontWeight: 600 }}
-          >
-            Switch Account ({accounts.length})
-          </button>
-          <button
-            type="button"
-            className={`neu-segmented-item ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-            style={{ flex: 1, padding: '9px', fontSize: '0.85rem', fontWeight: 600 }}
-          >
-            Edit Profile
-          </button>
-          <button
-            type="button"
-            className={`neu-segmented-item ${activeTab === 'security' ? 'active' : ''}`}
-            onClick={() => setActiveTab('security')}
-            style={{ flex: 1, padding: '9px', fontSize: '0.85rem', fontWeight: 600 }}
-          >
-            Security & Password
-          </button>
-        </Box>
+        <NeuSegmentedControl
+          value={activeTab}
+          onChange={(val) => setActiveTab(val as 'switch' | 'profile' | 'security')}
+          sx={{ width: '100%', display: 'flex' }}
+          ariaLabel="Account Management Tab"
+          options={[
+            { value: 'switch', label: `Switch Account (${accounts.length})` },
+            { value: 'profile', label: 'Edit Profile' },
+            { value: 'security', label: 'Security & Password' },
+          ]}
+        />
       </Box>
 
       {/* Content Area */}

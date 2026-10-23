@@ -24,6 +24,7 @@ import {
 import { WhiteboardDocument } from "@rea/shared-types";
 import { getGroupBounds } from "../canvas/math";
 import { renderScene } from "../canvas/renderer";
+import { NeuSegmentedControl } from "./NeuSegmentedControl";
 
 interface ExportDialogProps {
   open: boolean;
@@ -481,24 +482,16 @@ export function ExportDialog({
                 >
                   Resolution Scale
                 </Typography>
-                <Box className="neu-segmented" sx={{ p: 0.3 }}>
-                  {[1, 2, 3].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={`neu-segmented-item ${scale === s ? "active" : ""}`}
-                      onClick={() => setScale(s)}
-                      style={{
-                        minWidth: 32,
-                        padding: "3px 8px",
-                        fontSize: "0.75rem",
-                        textAlign: "center",
-                      }}
-                    >
-                      {s}x
-                    </button>
-                  ))}
-                </Box>
+                <NeuSegmentedControl
+                  size="small"
+                  value={String(scale)}
+                  onChange={(val) => setScale(Number(val))}
+                  ariaLabel="Resolution Scale"
+                  options={[1, 2, 3].map((s) => ({
+                    value: String(s),
+                    label: `${s}x`,
+                  }))}
+                />
               </Box>
             )}
           </Box>

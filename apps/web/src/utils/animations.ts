@@ -242,4 +242,141 @@ export const animateModalIn = (target: gsap.TweenTarget) => {
   );
 };
 
+/**
+ * Slide a pill indicator element dynamically behind an active tab item (Vercel style).
+ */
+export const animatePillSlide = (
+  pill: HTMLElement | null,
+  target: HTMLElement | null,
+  container: HTMLElement | null,
+  options?: { immediate?: boolean; duration?: number; ease?: string }
+) => {
+  if (!pill || !target || !container) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+
+  if (targetRect.width === 0 || targetRect.height === 0) {
+    gsap.to(pill, { opacity: 0, duration: 0.15, overwrite: 'auto' });
+    return;
+  }
+
+  const clientLeft = container.clientLeft || 0;
+  const clientTop = container.clientTop || 0;
+  const x = targetRect.left - containerRect.left - clientLeft;
+  const y = targetRect.top - containerRect.top - clientTop;
+  const width = targetRect.width;
+  const height = targetRect.height;
+
+  const {
+    immediate = false,
+    duration = 0.32,
+    ease = 'power3.out',
+  } = options || {};
+
+  if (immediate || prefersReducedMotion()) {
+    gsap.set(pill, { x, y, width, height, opacity: 1 });
+  } else {
+    gsap.killTweensOf(pill);
+    gsap.to(pill, {
+      x,
+      y,
+      width,
+      height,
+      opacity: 1,
+      duration,
+      ease,
+      overwrite: 'auto',
+    });
+  }
+};
+
+/**
+ * Canvas Comment Pin Drop animation with physics bounce.
+ */
+export const animatePinDrop = (
+  target: gsap.TweenTarget,
+  options?: { delay?: number; onComplete?: () => void }
+) => {
+  if (prefersReducedMotion()) {
+    gsap.set(target, { opacity: 1, y: 0, scale: 1 });
+    options?.onComplete?.();
+    return;
+  }
+
+  return gsap.fromTo(
+    target,
+    { opacity: 0, y: -24, scale: 0.6 },
+    {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.45,
+      delay: options?.delay || 0,
+      ease: 'back.out(2)',
+      onComplete: options?.onComplete,
+    }
+  );
+};
+
+/**
+ * General punchy Pop-in scale animation for badges, indicators, and tooltips.
+ */
+export const animatePopIn = (
+  target: gsap.TweenTarget,
+  options?: { duration?: number; scale?: number }
+) => {
+  if (prefersReducedMotion()) {
+    gsap.set(target, { opacity: 1, scale: 1 });
+    return;
+  }
+
+  const { duration = 0.3, scale = 0.8 } = options || {};
+
+  return gsap.fromTo(
+    target,
+    { opacity: 0, scale },
+    {
+      opacity: 1,
+      scale: 1,
+      duration,
+      ease: 'back.out(1.8)',
+      clearProps: 'transform,opacity',
+    }
+  );
+};
+
+/**
+ * Interactive macOS Dock-style spring magnification on hover.
+ */
+export const animateHoverSpring = (
+  element: HTMLElement | null,
+  scale = 1.12,
+  y = -2
+) => {
+  if (!element || prefersReducedMotion()) return;
+  gsap.to(element, {
+    scale,
+    y,
+    duration: 0.22,
+    ease: 'power2.out',
+    overwrite: 'auto',
+  });
+};
+
+/**
+ * Interactive hover release reset.
+ */
+export const animateHoverLeave = (element: HTMLElement | null) => {
+  if (!element || prefersReducedMotion()) return;
+  gsap.to(element, {
+    scale: 1,
+    y: 0,
+    duration: 0.3,
+    ease: 'back.out(2)',
+    overwrite: 'auto',
+  });
+};
+
 export default gsap;
+

@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import gsap, { animateHeaderIn, animateStaggerIn, animateTabTransition } from '../utils/animations';
+import { NeuSegmentedControl } from './NeuSegmentedControl';
 
 export function AuthScreen() {
   const { login, register } = useAuth();
@@ -235,83 +236,20 @@ export function AuthScreen() {
       >
         {/* Segmented Control Tabs */}
         <Box sx={{ p: 2.5, pb: 0 }}>
-          <Box
-            className="neu-segmented"
-            sx={{
-              display: 'flex',
-              bgcolor: 'var(--neu-bg)',
-              boxShadow: 'var(--neu-shadow-inset)',
-              border: 'var(--neu-border-inset)',
-              p: '5px',
-              borderRadius: '14px',
-              gap: '6px',
+          <NeuSegmentedControl
+            value={String(tabIndex)}
+            onChange={(val) => {
+              setTabIndex(Number(val));
+              setErrorMessage(null);
             }}
-          >
-            <Button
-              fullWidth
-              size="small"
-              onClick={() => {
-                setTabIndex(0);
-                setErrorMessage(null);
-              }}
-              sx={{
-                py: 0.9,
-                borderRadius: '10px',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                textTransform: 'none',
-                color: tabIndex === 0 ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
-                bgcolor: tabIndex === 0 ? 'var(--neu-surface)' : 'transparent',
-                border: tabIndex === 0 ? 'var(--neu-border)' : '1px solid transparent',
-                boxShadow: tabIndex === 0 ? 'var(--neu-shadow-btn)' : 'none',
-                transition: 'all 0.18s ease',
-              }}
-            >
-              Sign In
-            </Button>
-            <Button
-              fullWidth
-              size="small"
-              onClick={() => {
-                setTabIndex(1);
-                setErrorMessage(null);
-              }}
-              sx={{
-                py: 0.9,
-                borderRadius: '10px',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                textTransform: 'none',
-                color: tabIndex === 1 ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
-                bgcolor: tabIndex === 1 ? 'var(--neu-surface)' : 'transparent',
-                border: tabIndex === 1 ? 'var(--neu-border)' : '1px solid transparent',
-                boxShadow: tabIndex === 1 ? 'var(--neu-shadow-btn)' : 'none',
-                transition: 'all 0.18s ease',
-              }}
-            >
-              Create Account
-            </Button>
-            {tabIndex === 2 && (
-              <Button
-                fullWidth
-                size="small"
-                sx={{
-                  py: 0.9,
-                  borderRadius: '10px',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  textTransform: 'none',
-                  color: 'var(--neu-primary-light)',
-                  bgcolor: 'var(--neu-surface)',
-                  border: 'var(--neu-border)',
-                  boxShadow: 'var(--neu-shadow-btn)',
-                  transition: 'all 0.18s ease',
-                }}
-              >
-                Reset Password
-              </Button>
-            )}
-          </Box>
+            sx={{ width: '100%', display: 'flex' }}
+            ariaLabel="Authentication Tabs"
+            options={[
+              { value: '0', label: 'Sign In' },
+              { value: '1', label: 'Create Account' },
+              ...(tabIndex === 2 ? [{ value: '2', label: 'Reset Password' }] : []),
+            ]}
+          />
         </Box>
 
         <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
