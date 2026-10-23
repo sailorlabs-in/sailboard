@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ForbiddenException,
   Inject,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,7 +28,9 @@ import {
 } from '@rea/shared-types';
 
 @Injectable()
-export class WhiteboardService {
+export class WhiteboardService implements OnModuleInit {
+  private readonly logger = new Logger(WhiteboardService.name);
+
   constructor(
     @InjectRepository(DocumentEntity)
     private readonly docRepo: Repository<DocumentEntity>,
@@ -39,6 +43,22 @@ export class WhiteboardService {
     @Inject(ProjectService)
     private readonly projectService: ProjectService
   ) {}
+
+  async onModuleInit() {
+    try {
+      // Purge any lingering soft-deleted elements from PostgreSQL on startup
+      const res = await this.elementRepo
+        .createQueryBuilder()
+        .delete()
+        .where('isDeleted = :isDeleted', { isDeleted: true })
+        .execute();
+      if (res.affected && res.affected > 0) {
+        this.logger.log(`Purged ${res.affected} garbage soft-deleted element(s) from database.`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Could not purge soft-deleted elements on init: ${err?.message}`);
+    }
+  }
 
   // --- Map Helper ---
   private toModel(entity: DocumentEntity): WhiteboardDocument {
@@ -55,38 +75,40 @@ export class WhiteboardService {
       version: entity.version || 1,
       createdAt: entity.createdAt ? entity.createdAt.toISOString() : new Date().toISOString(),
       updatedAt: entity.updatedAt ? entity.updatedAt.toISOString() : new Date().toISOString(),
-      elements: (entity.elements || []).map((el) => ({
-        id: el.id,
-        type: el.type,
-        x: el.x,
-        y: el.y,
-        width: el.width,
-        height: el.height,
-        angle: el.angle,
-        strokeColor: el.strokeColor,
-        backgroundColor: el.backgroundColor,
-        fillStyle: el.fillStyle,
-        strokeWidth: el.strokeWidth,
-        strokeStyle: el.strokeStyle,
-        roughness: el.roughness,
-        opacity: el.opacity,
-        seed: el.seed,
-        version: el.version,
-        versionNonce: el.versionNonce,
-        isDeleted: el.isDeleted,
-        text: el.text,
-        fontSize: el.fontSize,
-        textAlign: el.textAlign as any,
-        textColor: el.textColor,
-        points: el.points,
-        boundElements: el.boundElements,
-        startBinding: el.startBinding,
-        endBinding: el.endBinding,
-        startArrowhead: el.startArrowhead as any,
-        endArrowhead: el.endArrowhead as any,
-        zIndex: el.zIndex,
-        updatedAt: Number(el.updatedAt) || Date.now(),
-      })),
+      elements: (entity.elements || [])
+        .filter((el) => !el.isDeleted)
+        .map((el) => ({
+          id: el.id,
+          type: el.type,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          angle: el.angle,
+          strokeColor: el.strokeColor,
+          backgroundColor: el.backgroundColor,
+          fillStyle: el.fillStyle,
+          strokeWidth: el.strokeWidth,
+          strokeStyle: el.strokeStyle,
+          roughness: el.roughness,
+          opacity: el.opacity,
+          seed: el.seed,
+          version: el.version,
+          versionNonce: el.versionNonce,
+          isDeleted: false,
+          text: el.text,
+          fontSize: el.fontSize,
+          textAlign: el.textAlign as any,
+          textColor: el.textColor,
+          points: el.points,
+          boundElements: el.boundElements,
+          startBinding: el.startBinding,
+          endBinding: el.endBinding,
+          startArrowhead: el.startArrowhead as any,
+          endArrowhead: el.endArrowhead as any,
+          zIndex: el.zIndex,
+          updatedAt: Number(el.updatedAt) || Date.now(),
+        })),
     };
   }
 
@@ -138,13 +160,17 @@ export class WhiteboardService {
     await this.docRepo.save(entity);
 
     if (dto.elements && dto.elements.length > 0) {
-      const elementEntities = dto.elements.map((el) =>
-        this.elementRepo.create({
-          ...el,
-          documentId: id,
-        })
-      );
-      await this.elementRepo.save(elementEntities);
+      const activeElements = dto.elements.filter((el) => !el.isDeleted);
+      if (activeElements.length > 0) {
+        const elementEntities = activeElements.map((el) =>
+          this.elementRepo.create({
+            ...el,
+            documentId: id,
+            isDeleted: false,
+          })
+        );
+        await this.elementRepo.save(elementEntities);
+      }
     }
 
     const created = await this.findOne(id);
@@ -182,9 +208,44 @@ export class WhiteboardService {
     return { success: (res.affected || 0) > 0 };
   }
 
+  async deleteElement(documentId: string, elementId: string): Promise<{ success: boolean }> {
+    const res = await this.elementRepo.delete({ documentId, id: elementId });
+    await this.redisService.invalidateDocument(documentId);
+    return { success: (res.affected || 0) > 0 };
+  }
+
   async syncElements(documentId: string, elements: CanvasElement[]): Promise<CanvasElement[]> {
-    if (elements.length > 0) {
-      const entities = elements.map((el) =>
+    const activeElements = (elements || []).filter((el) => !el.isDeleted);
+    const activeIds = activeElements.map((e) => e.id);
+    const deletedIds = (elements || [])
+      .filter((el) => el.isDeleted)
+      .map((e) => e.id);
+
+    // 1. Immediately delete any elements explicitly marked as isDeleted
+    if (deletedIds.length > 0) {
+      await this.elementRepo
+        .createQueryBuilder()
+        .delete()
+        .where('documentId = :documentId AND id IN (:...deletedIds)', {
+          documentId,
+          deletedIds,
+        })
+        .execute();
+    }
+
+    // 2. Also clean up any lingering soft-deleted elements for this document in DB
+    await this.elementRepo
+      .createQueryBuilder()
+      .delete()
+      .where('documentId = :documentId AND isDeleted = :isDeleted', {
+        documentId,
+        isDeleted: true,
+      })
+      .execute();
+
+    // 3. Upsert active elements and hard delete elements no longer in activeIds
+    if (activeElements.length > 0) {
+      const entities = activeElements.map((el) =>
         this.elementRepo.create({
           id: el.id,
           documentId,
@@ -204,7 +265,7 @@ export class WhiteboardService {
           seed: el.seed || 1,
           version: el.version || 1,
           versionNonce: el.versionNonce || 1,
-          isDeleted: el.isDeleted || false,
+          isDeleted: false,
           text: el.text,
           fontSize: el.fontSize,
           textAlign: el.textAlign,
@@ -220,22 +281,25 @@ export class WhiteboardService {
         })
       );
 
-      // Atomic PostgreSQL upsert (ON CONFLICT (id) DO UPDATE)
+      // Atomic PostgreSQL upsert (ON CONFLICT (id) DO UPDATE) for active elements
       await this.elementRepo.upsert(entities, ['id']);
 
-      // Clean up any removed elements that are no longer in this document
-      const activeIds = elements.map((e) => e.id);
+      // Hard delete any elements in this document that are not in activeIds
       await this.elementRepo
         .createQueryBuilder()
         .delete()
-        .where('documentId = :documentId AND id NOT IN (:...activeIds)', { documentId, activeIds })
+        .where('documentId = :documentId AND id NOT IN (:...activeIds)', {
+          documentId,
+          activeIds,
+        })
         .execute();
     } else {
+      // If no active elements remain, hard delete all elements for this document from the database
       await this.elementRepo.delete({ documentId });
     }
 
     await this.redisService.invalidateDocument(documentId);
-    return elements;
+    return activeElements;
   }
 
   async exportDocument(id: string): Promise<DocumentExportData> {
@@ -263,30 +327,32 @@ export class WhiteboardService {
     }
 
     if (Array.isArray(data.elements)) {
-      elements = data.elements.map((el: any, index: number) => ({
-        id: el.id || `el-imp-${index}`,
-        type: el.type || 'rectangle',
-        x: el.x || 100,
-        y: el.y || 100,
-        width: el.width || 120,
-        height: el.height || 80,
-        angle: el.angle || 0,
-        strokeColor: el.strokeColor || '#1e293b',
-        backgroundColor: el.backgroundColor || 'transparent',
-        fillStyle: el.fillStyle || 'none',
-        strokeWidth: el.strokeWidth || 2,
-        strokeStyle: el.strokeStyle || 'solid',
-        roughness: el.roughness ?? 1,
-        opacity: el.opacity ?? 100,
-        seed: el.seed || Math.floor(Math.random() * 100000),
-        version: el.version || 1,
-        versionNonce: el.versionNonce || Math.floor(Math.random() * 100000),
-        isDeleted: el.isDeleted ?? false,
-        updatedAt: Date.now(),
-        text: el.text,
-        textColor: el.textColor,
-        points: el.points,
-      }));
+      elements = data.elements
+        .filter((el: any) => !el.isDeleted)
+        .map((el: any, index: number) => ({
+          id: el.id || `el-imp-${index}`,
+          type: el.type || 'rectangle',
+          x: el.x || 100,
+          y: el.y || 100,
+          width: el.width || 120,
+          height: el.height || 80,
+          angle: el.angle || 0,
+          strokeColor: el.strokeColor || '#1e293b',
+          backgroundColor: el.backgroundColor || 'transparent',
+          fillStyle: el.fillStyle || 'none',
+          strokeWidth: el.strokeWidth || 2,
+          strokeStyle: el.strokeStyle || 'solid',
+          roughness: el.roughness ?? 1,
+          opacity: el.opacity ?? 100,
+          seed: el.seed || Math.floor(Math.random() * 100000),
+          version: el.version || 1,
+          versionNonce: el.versionNonce || Math.floor(Math.random() * 100000),
+          isDeleted: false,
+          updatedAt: Date.now(),
+          text: el.text,
+          textColor: el.textColor,
+          points: el.points,
+        }));
     }
 
     return this.create({

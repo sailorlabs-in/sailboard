@@ -3,10 +3,14 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
+    "dev": "npm run start:web",
     "start:web": "nx run web:dev",
     "start:api": "nx run api:start",
-    "dev": "npm run start:web",
     "build": "nx run-many -t build",
+    "build:web": "nx run web:build",
+    "build:api": "nx run api:build",
+    "preview": "nx run web:preview",
+    "preview:web": "nx run web:preview",
     "test": "nx run-many -t test"
   },
   "private": true,

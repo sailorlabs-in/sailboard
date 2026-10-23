@@ -1213,8 +1213,8 @@ export function App() {
 
   const handleDeleteSelected = () => {
     if (isViewer || selectedElementIds.length === 0) return;
-    const updated = doc.elements.map((el) =>
-      selectedElementIds.includes(el.id) ? { ...el, isDeleted: true } : el,
+    const updated = doc.elements.filter(
+      (el) => !selectedElementIds.includes(el.id),
     );
     handleElementsChange(updated);
     handleSelectElements([]);

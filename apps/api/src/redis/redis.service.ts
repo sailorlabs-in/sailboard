@@ -1,6 +1,7 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Inject } from '@nestjs/common';
 import Redis from 'ioredis';
 import { WhiteboardDocument, UserPresence } from '@rea/shared-types';
+import { AppConfigService } from '../config/config.service';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -10,10 +11,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private subClient: Redis | null = null;
   private isConnected = false;
 
+  constructor(
+    @Inject(AppConfigService)
+    private readonly configService: AppConfigService
+  ) {}
+
   onModuleInit() {
-    const host = process.env.REDIS_HOST || 'localhost';
-    const port = parseInt(process.env.REDIS_PORT || '6379', 10);
-    const password = process.env.REDIS_PASSWORD || undefined;
+    const host = this.configService.redisHost;
+    const port = this.configService.redisPort;
+    const password = this.configService.redisPassword;
 
     const redisOptions: any = {
       host,

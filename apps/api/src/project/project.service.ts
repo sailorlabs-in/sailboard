@@ -85,7 +85,9 @@ export class ProjectService {
         })),
         files: files.map((f) => ({
           ...f,
-          elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
+          elements: (f.elements || [])
+            .filter((el) => !el.isDeleted)
+            .map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
           createdAt: f.createdAt.toISOString(),
           updatedAt: f.updatedAt.toISOString(),
         })) as unknown as WhiteboardDocument[],
@@ -121,7 +123,9 @@ export class ProjectService {
           })),
           files: files.map((f) => ({
             ...f,
-            elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
+            elements: (f.elements || [])
+              .filter((el) => !el.isDeleted)
+              .map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
             createdAt: f.createdAt.toISOString(),
             updatedAt: f.updatedAt.toISOString(),
           })) as unknown as WhiteboardDocument[],
@@ -171,7 +175,9 @@ export class ProjectService {
       })),
       files: files.map((f) => ({
         ...f,
-        elements: (f.elements || []).map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
+        elements: (f.elements || [])
+          .filter((el) => !el.isDeleted)
+          .map((el) => ({ ...el, updatedAt: Number(el.updatedAt) || Date.now() })),
         createdAt: f.createdAt.toISOString(),
         updatedAt: f.updatedAt.toISOString(),
       })) as unknown as WhiteboardDocument[],

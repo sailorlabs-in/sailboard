@@ -15,6 +15,12 @@
       "options": {
         "command": "npx vite build apps/web"
       }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx vite preview apps/web"
+      }
     }
   }
 }

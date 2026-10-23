@@ -2,18 +2,16 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Look for .env files in order of priority:
-// 1. Root directory .env
-// 2. apps/api/.env
-const candidatePaths = [
-  path.resolve(process.cwd(), '.env'),
-  path.resolve(process.cwd(), 'apps/api/.env'),
+// Root directory .env is the single source of truth for all monorepo applications
+const rootEnvCandidates = [
   path.resolve(__dirname, '../../../.env'),
-  path.resolve(__dirname, '../.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(process.cwd(), '.env'),
 ];
 
-for (const envPath of candidatePaths) {
+for (const envPath of rootEnvCandidates) {
   if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
+    dotenv.config({ path: envPath, override: true });
+    break;
   }
 }

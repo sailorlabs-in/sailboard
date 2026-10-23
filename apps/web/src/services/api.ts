@@ -148,6 +148,11 @@ class ApiService {
     return res.data;
   }
 
+  async deleteElement(documentId: string, elementId: string): Promise<boolean> {
+    const res = await axiosClient.delete<{ success: boolean }>(`/documents/${documentId}/elements/${elementId}`);
+    return res.data?.success ?? true;
+  }
+
   async exportDocument(id: string): Promise<DocumentExportData> {
     const res = await axiosClient.get<DocumentExportData>(`/documents/${id}/export`);
     return res.data;

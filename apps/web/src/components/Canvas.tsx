@@ -625,7 +625,7 @@ function CanvasComponent({
       const hit = [...elements].reverse().find((el) => !el.isDeleted && isPointInElement(worldPoint, el));
       if (hit) {
         onElementsChange(
-          elements.map((el) => (el.id === hit.id ? { ...el, isDeleted: true } : el)),
+          elements.filter((el) => el.id !== hit.id),
           true
         );
       }

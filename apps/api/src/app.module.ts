@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppConfigModule } from './config/config.module';
+import { AppConfigService } from './config/config.service';
 import { UserEntity } from './database/entities/user.entity';
 import { ProjectEntity } from './database/entities/project.entity';
 import { ProjectMemberEntity } from './database/entities/project-member.entity';
@@ -13,12 +15,14 @@ import { WhiteboardModule } from './whiteboard/whiteboard.module';
 
 @Module({
   imports: [
+    AppConfigModule,
     TypeOrmModule.forRootAsync({
-      useFactory: () => ({
+      imports: [AppConfigModule],
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService) => ({
         type: 'postgres',
-        url:
-          process.env.DATABASE_URL ||
-          'postgresql://umang:secret123@localhost:5432/sailboard?schema=public',
+        url: config.databaseUrl,
+        ssl: config.databaseSsl,
         entities: [
           UserEntity,
           ProjectEntity,
@@ -28,7 +32,7 @@ import { WhiteboardModule } from './whiteboard/whiteboard.module';
           CommentEntity,
         ],
         synchronize: true, // Auto synchronize TypeORM entity tables in PostgreSQL
-        logging: false,
+        logging: config.isProduction ? false : ['error', 'warn'],
       }),
     }),
     AuthModule,

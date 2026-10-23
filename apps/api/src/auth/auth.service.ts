@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,14 +10,15 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { UserEntity } from '../database/entities/user.entity';
 import { User, AuthResponse } from '@rea/shared-types';
-
-const getJwtSecret = () => process.env.JWT_SECRET || 'sailboard_super_secret_jwt_key_2026';
+import { AppConfigService } from '../config/config.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>
+    private readonly userRepo: Repository<UserEntity>,
+    @Inject(AppConfigService)
+    private readonly configService: AppConfigService
   ) {}
 
   private toUserDto(entity: UserEntity): User {
@@ -51,7 +53,7 @@ export class AuthService {
 
     await this.userRepo.save(user);
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), {
+    const token = jwt.sign({ userId: user.id, email: user.email }, this.configService.jwtSecret, {
       expiresIn: '7d',
     });
 
@@ -69,7 +71,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), {
+    const token = jwt.sign({ userId: user.id, email: user.email }, this.configService.jwtSecret, {
       expiresIn: '7d',
     });
 
@@ -78,7 +80,7 @@ export class AuthService {
 
   async verifyToken(token: string): Promise<User> {
     try {
-      const decoded = jwt.verify(token, getJwtSecret()) as { userId: string; email: string };
+      const decoded = jwt.verify(token, this.configService.jwtSecret) as { userId: string; email: string };
       const user = await this.userRepo.findOne({ where: { id: decoded.userId } });
       if (!user) throw new UnauthorizedException('User not found');
       return this.toUserDto(user);

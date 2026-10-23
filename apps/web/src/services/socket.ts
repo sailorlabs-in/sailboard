@@ -22,16 +22,13 @@ class SocketService {
     if (!this.socket) {
       let serverUrl = import.meta.env.VITE_SOCKET_URL;
       if (!serverUrl) {
-        if (typeof window !== 'undefined') {
-          // If in local dev server (port 5173/5174), connect directly to backend 3333
-          if (window.location.port === '5173' || window.location.port === '5174') {
-            serverUrl = `http://${window.location.hostname}:3333/whiteboard`;
-          } else {
-            // In Docker/Production behind reverse proxy, connect to current origin /whiteboard
-            serverUrl = `${window.location.origin}/whiteboard`;
-          }
+        const proxyTarget = import.meta.env.VITE_PROXY_TARGET || import.meta.env.API_PROXY_TARGET;
+        if (proxyTarget) {
+          serverUrl = `${proxyTarget.replace(/\/+$/, '')}/whiteboard`;
+        } else if (typeof window !== 'undefined') {
+          serverUrl = `${window.location.origin}/whiteboard`;
         } else {
-          serverUrl = 'http://localhost:3333/whiteboard';
+          serverUrl = '/whiteboard';
         }
       }
 
