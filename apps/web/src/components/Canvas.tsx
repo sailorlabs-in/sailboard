@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { CanvasElement, ElementType, Point, UserPresence, ArrowBinding } from '@rea/shared-types';
+import { CanvasElement, ElementType, Point, UserPresence, ArrowBinding, ArrowHead, TextAlign } from '@rea/shared-types';
 import {
   getElementBounds,
   getGroupBounds,
@@ -82,6 +82,7 @@ interface CanvasProps {
   onToolChange: (tool: ElementType | 'eraser' | 'pan' | 'comment') => void;
   onDropCommentPin?: (point: Point) => void;
   theme: 'light' | 'dark';
+  isToolLocked?: boolean;
   styleMode: 'rough' | 'clean';
   gridVisible: boolean;
   gridSnap: boolean;
@@ -101,6 +102,11 @@ interface CanvasProps {
     opacity: number;
     fontSize: number;
     fillOpacity?: number;
+    fontFamily?: string;
+    textAlign?: TextAlign;
+    roundness?: 'sharp' | 'round' | null;
+    startArrowhead?: ArrowHead | null;
+    endArrowhead?: ArrowHead | null;
   };
   remoteUsers: UserPresence[];
   onCursorMove: (point: Point) => void;
@@ -118,6 +124,7 @@ function CanvasComponent({
   onToolChange,
   onDropCommentPin,
   theme,
+  isToolLocked,
   styleMode,
   gridVisible,
   gridSnap,
@@ -143,6 +150,8 @@ function CanvasComponent({
     activeHandle: ResizeHandle | null;
     createdElementId: string | null;
     initialBounds?: BoundingBox;
+    initialAngle?: number;
+    centerPoint?: Point;
     elementStartPositions?: Map<string, { x: number; y: number }>;
   };
 
@@ -283,6 +292,7 @@ function CanvasComponent({
     const cam = cameraRef.current;
     renderScene(canvasRef.current, latestElementsRef.current, {
       theme,
+      laserTrail: [],
       gridVisible,
       gridType,
       zoom: cam.zoom,
@@ -604,8 +614,26 @@ function CanvasComponent({
       } else {
         const bounds = getGroupBounds(selected);
         if (bounds) {
-          const handle = getHitResizeHandle(worldPoint, bounds, zoom);
+          const elAngle = selected.length === 1 ? (selected[0].angle || 0) : 0;
+          const handle = getHitResizeHandle(worldPoint, bounds, zoom, elAngle);
           if (handle) {
+            if (handle === 'rotation') {
+              const center = {
+                x: bounds.minX + bounds.width / 2,
+                y: bounds.minY + bounds.height / 2,
+              };
+              updateDragState({
+                mode: 'resizing',
+                startPos: worldPoint,
+                lastPos: worldPoint,
+                activeHandle: 'rotation',
+                createdElementId: null,
+                initialBounds: bounds,
+                initialAngle: elAngle,
+                centerPoint: center,
+              });
+              return;
+            }
             updateDragState({
               mode: 'resizing',
               startPos: worldPoint,
@@ -620,7 +648,7 @@ function CanvasComponent({
       }
     }
 
-    // 2. Eraser Tool: Click on element to delete
+    // 2. Eraser Tool: Click on element to delete and begin drag-to-erase
     if (activeTool === 'eraser') {
       const hit = [...elements].reverse().find((el) => !el.isDeleted && isPointInElement(worldPoint, el));
       if (hit) {
@@ -629,6 +657,13 @@ function CanvasComponent({
           true
         );
       }
+      updateDragState({
+        mode: 'drawing',
+        startPos: worldPoint,
+        lastPos: worldPoint,
+        activeHandle: null,
+        createdElementId: null,
+      });
       return;
     }
 
@@ -648,22 +683,25 @@ function CanvasComponent({
 
         onSelectElements(newSelectedIds);
 
-        // Record start positions for moving
-        const startPositions = new Map<string, { x: number; y: number }>();
-        elements.forEach((el) => {
-          if (newSelectedIds.includes(el.id)) {
-            startPositions.set(el.id, { x: el.x, y: el.y });
-          }
-        });
+        const hasLocked = newSelectedIds.some((id) => elements.find((el) => el.id === id)?.locked);
+        if (!hasLocked) {
+          // Record start positions for moving
+          const startPositions = new Map<string, { x: number; y: number }>();
+          elements.forEach((el) => {
+            if (newSelectedIds.includes(el.id)) {
+              startPositions.set(el.id, { x: el.x, y: el.y });
+            }
+          });
 
-        updateDragState({
-          mode: 'moving',
-          startPos: worldPoint,
-          lastPos: worldPoint,
-          activeHandle: null,
-          createdElementId: null,
-          elementStartPositions: startPositions,
-        });
+          updateDragState({
+            mode: 'moving',
+            startPos: worldPoint,
+            lastPos: worldPoint,
+            activeHandle: null,
+            createdElementId: null,
+            elementStartPositions: startPositions,
+          });
+        }
       } else {
         // Clicked blank canvas: Start Box Selection
         if (!e.shiftKey) {
@@ -812,6 +850,29 @@ function CanvasComponent({
         updatedAt: Date.now(),
         points: [{ x: 0, y: 0 }],
       };
+    } else if (activeTool === 'frame') {
+      newElement = {
+        id: newId,
+        type: 'frame',
+        x: initialPos.x,
+        y: initialPos.y,
+        width: 0,
+        height: 0,
+        angle: 0,
+        strokeColor: '#94a3b8',
+        backgroundColor: 'transparent',
+        fillStyle: 'none',
+        strokeWidth: 2,
+        strokeStyle: 'dashed',
+        roughness: 0,
+        opacity: 100,
+        frameLabel: 'Frame',
+        seed: Math.floor(Math.random() * 100000),
+        version: 1,
+        versionNonce: 1,
+        isDeleted: false,
+        updatedAt: Date.now(),
+      };
     } else if (activeTool === 'arrow' || activeTool === 'line') {
       newElement = {
         id: newId,
@@ -837,7 +898,8 @@ function CanvasComponent({
           { x: 0, y: 0 },
           { x: 0, y: 0 },
         ],
-        endArrowhead: activeTool === 'arrow' ? 'arrow' : 'none',
+        startArrowhead: currentStyle.startArrowhead || 'none',
+        endArrowhead: currentStyle.endArrowhead || (activeTool === 'arrow' ? 'arrow' : 'none'),
         startBinding: startBinding,
       };
     } else {
@@ -858,6 +920,9 @@ function CanvasComponent({
         roughness: currentStyle.roughness,
         opacity: currentStyle.opacity,
         fillOpacity: currentStyle.fillOpacity,
+        roundness: currentStyle.roundness || 'sharp',
+        fontFamily: currentStyle.fontFamily || 'hand-drawn',
+        textAlign: currentStyle.textAlign || 'center',
         textColor: currentStyle.textColor || 'contrast',
         fontSize: currentStyle.fontSize || 16,
         seed: Math.floor(Math.random() * 100000),
@@ -897,6 +962,17 @@ function CanvasComponent({
 
     const curDrag = dragStateRef.current;
 
+    if (activeTool === 'eraser' && curDrag.mode === 'drawing') {
+      const hit = latestElementsRef.current.find((el) => !el.isDeleted && isPointInElement(worldPoint, el));
+      if (hit) {
+        const remaining = latestElementsRef.current.filter((el) => el.id !== hit.id);
+        latestElementsRef.current = remaining;
+        onElementsChange(remaining, true);
+        requestRender();
+      }
+      return;
+    }
+
     if (curDrag.mode === 'none') {
       if (activeTool === 'selection') {
         if (selectedElementIds.length > 0) {
@@ -923,7 +999,8 @@ function CanvasComponent({
             }
           } else {
             const bounds = getGroupBounds(selected);
-            const handle = bounds ? getHitResizeHandle(worldPoint, bounds, zoom) : null;
+            const elAngle = selected.length === 1 ? (selected[0].angle || 0) : 0;
+            const handle = bounds ? getHitResizeHandle(worldPoint, bounds, zoom, elAngle) : null;
             if (hoveredHandleRef.current !== handle) {
               hoveredHandleRef.current = handle;
               updateCursor();
@@ -1211,6 +1288,33 @@ function CanvasComponent({
       const handle = curDrag.activeHandle;
       if (!handle) return;
 
+      if (handle === 'rotation' && curDrag.centerPoint) {
+        const dx = worldPoint.x - curDrag.centerPoint.x;
+        const dy = worldPoint.y - curDrag.centerPoint.y;
+        let angle = Math.atan2(dy, dx) + Math.PI / 2;
+        if (e.shiftKey) {
+          const snapStep = Math.PI / 12; // 15°
+          angle = Math.round(angle / snapStep) * snapStep;
+        }
+        const updated = latestElementsRef.current.map((el) => {
+          if (selectedElementIds.includes(el.id)) {
+            return {
+              ...el,
+              angle,
+              updatedAt: Date.now(),
+            };
+          }
+          return el;
+        });
+        latestElementsRef.current = updated;
+        requestRender();
+        if (now - lastSocketEmitRef.current > 33) {
+          lastSocketEmitRef.current = now;
+          socketService.emitElementsChange(updated, false);
+        }
+        return;
+      }
+
       if (handle === 'start' || handle === 'end') {
         const targetArrowId = curDrag.createdElementId || selectedElementIds[0];
         const targetArrow = latestElementsRef.current.find((item) => item.id === targetArrowId);
@@ -1429,14 +1533,16 @@ function CanvasComponent({
               );
               latestElementsRef.current = finalElements;
             }
-          } else if (['rectangle', 'diamond', 'ellipse'].includes(createdEl.type)) {
+          } else if (['rectangle', 'diamond', 'ellipse', 'frame'].includes(createdEl.type)) {
             if (createdEl.width < 6 && createdEl.height < 6) {
+              const defaultW = createdEl.type === 'frame' ? 320 : 100;
+              const defaultH = createdEl.type === 'frame' ? 240 : 100;
               finalElements = finalElements.map((item) =>
                 item.id === createdEl.id
                   ? {
                       ...item,
-                      width: 100,
-                      height: 100,
+                      width: defaultW,
+                      height: defaultH,
                       updatedAt: Date.now(),
                     }
                   : item
@@ -1456,7 +1562,9 @@ function CanvasComponent({
       if (curDrag.mode === 'drawing' && curDrag.createdElementId) {
         if (activeTool !== 'draw') {
           onSelectElements([curDrag.createdElementId]);
-          onToolChange('selection');
+          if (!isToolLocked) {
+            onToolChange('selection');
+          }
         }
       }
     }
@@ -1483,13 +1591,17 @@ function CanvasComponent({
 
     if (hit) {
       onSelectElements([hit.id]);
+      const initialText =
+        hit.type === 'frame'
+          ? hit.frameLabel || hit.text || 'Frame'
+          : hit.text || '';
       setEditingTextElement({
         elementId: hit.id,
         x: hit.x,
         y: hit.y,
         width: hit.width,
         height: hit.height,
-        text: hit.text || '',
+        text: initialText,
         textColor: hit.textColor || (currentStyle as any).textColor || 'contrast',
         fontSize: hit.fontSize || currentStyle.fontSize || 14,
       });
@@ -1538,17 +1650,27 @@ function CanvasComponent({
   const handleFinishEditingText = (newText: string) => {
     if (editingTextElement) {
       onElementsChange(
-        elements.map((el) =>
-          el.id === editingTextElement.elementId
-            ? {
+        elements.map((el) => {
+          if (el.id === editingTextElement.elementId) {
+            if (el.type === 'frame') {
+              const label = newText.trim() || 'Frame';
+              return {
                 ...el,
-                text: newText,
-                textColor: el.textColor || editingTextElement.textColor || (currentStyle as any).textColor,
-                fontSize: el.fontSize || editingTextElement.fontSize || currentStyle.fontSize || 14,
+                frameLabel: label,
+                text: label,
                 updatedAt: Date.now(),
-              }
-            : el
-        ),
+              };
+            }
+            return {
+              ...el,
+              text: newText,
+              textColor: el.textColor || editingTextElement.textColor || (currentStyle as any).textColor,
+              fontSize: el.fontSize || editingTextElement.fontSize || currentStyle.fontSize || 14,
+              updatedAt: Date.now(),
+            };
+          }
+          return el;
+        }),
         true
       );
       setEditingTextElement(null);
@@ -1571,6 +1693,162 @@ function CanvasComponent({
     }
   }
 
+  // Drag and drop image files directly onto canvas
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        const dropPoint = clientToWorld(e.clientX, e.clientY);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          if (!dataUrl) return;
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 400;
+            let w = img.naturalWidth || 300;
+            let h = img.naturalHeight || 200;
+            if (w > maxDim || h > maxDim) {
+              const scale = Math.min(maxDim / w, maxDim / h);
+              w *= scale;
+              h *= scale;
+            }
+            const newImgEl: CanvasElement = {
+              id: `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              type: 'image',
+              x: dropPoint.x - w / 2,
+              y: dropPoint.y - h / 2,
+              width: w,
+              height: h,
+              angle: 0,
+              strokeColor: 'transparent',
+              backgroundColor: 'transparent',
+              fillStyle: 'none',
+              strokeWidth: 1,
+              strokeStyle: 'solid',
+              roughness: 0,
+              opacity: 100,
+              imageUrl: dataUrl,
+              seed: Math.floor(Math.random() * 100000),
+              version: 1,
+              versionNonce: 1,
+              isDeleted: false,
+              updatedAt: Date.now(),
+            };
+            onElementsChange([...elements, newImgEl], true);
+            onSelectElements([newImgEl.id]);
+          };
+          img.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  // Clipboard copy and paste (support JSON elements and image pasting)
+  useEffect(() => {
+    const handleCopy = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) return;
+      if (selectedElementIds.length === 0) return;
+      const selected = elements.filter((el) => selectedElementIds.includes(el.id) && !el.isDeleted);
+      if (selected.length === 0) return;
+      e.clipboardData?.setData('application/json', JSON.stringify({ type: 'sailboard/elements', elements: selected }));
+      e.clipboardData?.setData('text/plain', JSON.stringify({ type: 'sailboard/elements', elements: selected }, null, 2));
+      e.preventDefault();
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) return;
+
+      // 1. Image in clipboard
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        const file = e.clipboardData.files[0];
+        if (file.type.startsWith('image/')) {
+          e.preventDefault();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (!dataUrl) return;
+            const img = new Image();
+            img.onload = () => {
+              const maxDim = 400;
+              let w = img.naturalWidth || 300;
+              let h = img.naturalHeight || 200;
+              if (w > maxDim || h > maxDim) {
+                const scale = Math.min(maxDim / w, maxDim / h);
+                w *= scale;
+                h *= scale;
+              }
+              const newImgEl: CanvasElement = {
+                id: `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                type: 'image',
+                x: -pan.x / zoom + (window.innerWidth / 2) / zoom - w / 2,
+                y: -pan.y / zoom + (window.innerHeight / 2) / zoom - h / 2,
+                width: w,
+                height: h,
+                angle: 0,
+                strokeColor: 'transparent',
+                backgroundColor: 'transparent',
+                fillStyle: 'none',
+                strokeWidth: 1,
+                strokeStyle: 'solid',
+                roughness: 0,
+                opacity: 100,
+                imageUrl: dataUrl,
+                seed: Math.floor(Math.random() * 100000),
+                version: 1,
+                versionNonce: 1,
+                isDeleted: false,
+                updatedAt: Date.now(),
+              };
+              onElementsChange([...elements, newImgEl], true);
+              onSelectElements([newImgEl.id]);
+            };
+            img.src = dataUrl;
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+
+      // 2. Elements JSON in clipboard
+      const jsonText = e.clipboardData?.getData('application/json') || e.clipboardData?.getData('text/plain');
+      if (jsonText) {
+        try {
+          const parsed = JSON.parse(jsonText);
+          const rawElements = Array.isArray(parsed) ? parsed : parsed.elements;
+          if (Array.isArray(rawElements) && rawElements.length > 0 && rawElements[0].type) {
+            e.preventDefault();
+            const newEls = rawElements.map((el: CanvasElement) => ({
+              ...el,
+              id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+              x: el.x + 24,
+              y: el.y + 24,
+              updatedAt: Date.now(),
+            }));
+            onElementsChange([...elements, ...newEls], true);
+            onSelectElements(newEls.map((el: CanvasElement) => el.id));
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('copy', handleCopy);
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('copy', handleCopy);
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [elements, selectedElementIds, onElementsChange, onSelectElements, pan, zoom]);
+
   return (
     <div
       ref={containerRef}
@@ -1586,12 +1864,15 @@ function CanvasComponent({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onDoubleClick={handleDoubleClick}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
     >
       <canvas ref={canvasRef} style={{ display: 'block' }} />
 
       {/* Inline Text Editor Overlay */}
       {editingTextElement && (() => {
         const targetElement = elements.find((e) => e.id === editingTextElement.elementId);
+        const isFrame = targetElement?.type === 'frame';
         const effectiveTextColor = getEffectiveTextColor(
           editingTextElement.textColor,
           targetElement || {
@@ -1605,37 +1886,55 @@ function CanvasComponent({
           elements
         );
 
+        const screenPos = worldToClient(
+          editingTextElement.x,
+          isFrame ? editingTextElement.y - 28 : editingTextElement.y
+        );
+
         return (
           <textarea
             autoFocus
+            rows={isFrame ? 1 : undefined}
             value={editingTextElement.text}
             onChange={(e) =>
               setEditingTextElement((prev) => (prev ? { ...prev, text: e.target.value } : null))
             }
             onBlur={() => handleFinishEditingText(editingTextElement.text)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
+              if (
+                e.key === 'Escape' ||
+                (e.key === 'Enter' && (isFrame || e.metaKey || e.ctrlKey))
+              ) {
+                e.preventDefault();
                 handleFinishEditingText(editingTextElement.text);
               }
             }}
             style={{
               position: 'absolute',
-              left: `${worldToClient(editingTextElement.x, editingTextElement.y).x}px`,
-              top: `${worldToClient(editingTextElement.x, editingTextElement.y).y}px`,
-              width: `${Math.max(120, editingTextElement.width * zoom)}px`,
-              height: `${Math.max(60, editingTextElement.height * zoom)}px`,
+              left: `${screenPos.x}px`,
+              top: `${screenPos.y}px`,
+              width: `${isFrame ? Math.max(160, Math.min(editingTextElement.width * zoom, 320)) : Math.max(120, editingTextElement.width * zoom)}px`,
+              height: isFrame ? '34px' : `${Math.max(60, editingTextElement.height * zoom)}px`,
               transformOrigin: 'top left',
               background: theme === 'dark' ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
               color: effectiveTextColor,
               border: '2px solid #6366f1',
               borderRadius: 6,
-              padding: 8,
+              padding: isFrame ? '4px 8px' : 8,
+              textAlign: isFrame
+                ? 'left'
+                : targetElement?.textAlign || (targetElement?.type === 'text' ? 'left' : 'center'),
               fontFamily:
-                targetElement?.type === 'sticky'
-                  ? "'Lobster Two', cursive, sans-serif"
-                  : "'Teachers', 'Inter', sans-serif",
-              fontSize: `${(editingTextElement.fontSize || 14) * zoom}px`,
-              resize: 'both',
+                targetElement?.fontFamily === 'hand-drawn'
+                  ? "'Caveat', cursive, sans-serif"
+                  : targetElement?.fontFamily === 'monospace'
+                  ? "'JetBrains Mono', monospace"
+                  : targetElement?.type === 'sticky'
+                  ? "'Caveat', cursive, sans-serif"
+                  : "'Inter', sans-serif",
+              fontSize: `${(isFrame ? 12 : editingTextElement.fontSize || 14) * zoom}px`,
+              fontWeight: isFrame ? 700 : 500,
+              resize: isFrame ? 'none' : 'both',
               zIndex: 100,
               outline: 'none',
               boxShadow: '0 8px 24px rgba(0,0,0,0.2)',

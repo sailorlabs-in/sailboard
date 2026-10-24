@@ -60,9 +60,9 @@ export function ExportDialog({
   theme,
   styleMode,
 }: ExportDialogProps) {
-  const [exportFormat, setExportFormat] = useState<"png" | "svg" | "json">(
-    "png",
-  );
+  const [exportFormat, setExportFormat] = useState<
+    "png" | "svg" | "json" | "excalidraw"
+  >("png");
   const [transparentBg, setTransparentBg] = useState(false);
   const [scale, setScale] = useState<number>(2); // 2x default for crisp retina export
 
@@ -222,6 +222,75 @@ export function ExportDialog({
       link.click();
       URL.revokeObjectURL(url);
       toast.success("Sailboard document exported as JSON!");
+    } else if (exportFormat === "excalidraw") {
+      const excalidrawElements = visible.map((el) => {
+        let exType = el.type as string;
+        if (exType === "draw") exType = "freedraw";
+        return {
+          id: el.id,
+          type: exType,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          angle: el.angle || 0,
+          strokeColor: el.strokeColor || "#000000",
+          backgroundColor: el.backgroundColor || "transparent",
+          fillStyle: el.fillStyle || "hachure",
+          strokeWidth: el.strokeWidth || 2,
+          strokeStyle: el.strokeStyle || "solid",
+          roughness: el.roughness ?? 1,
+          opacity: el.opacity ?? 100,
+          roundness: el.roundness === "round" ? { type: 2 } : null,
+          seed: el.seed || Math.floor(Math.random() * 100000),
+          version: el.version || 1,
+          versionNonce: el.versionNonce || 1,
+          isDeleted: false,
+          groupIds: el.groupIds || [],
+          frameId: el.frameId || null,
+          boundElements: el.boundElements || null,
+          updated: el.updatedAt || Date.now(),
+          link: null,
+          locked: Boolean(el.locked),
+          points: el.points ? el.points.map((p) => [p.x, p.y]) : undefined,
+          text: el.text || "",
+          fontSize: el.fontSize || 20,
+          fontFamily:
+            el.fontFamily === "monospace"
+              ? 3
+              : el.fontFamily === "sans-serif"
+              ? 2
+              : 1,
+          textAlign: el.textAlign || "center",
+          verticalAlign: "middle",
+          startArrowhead: el.startArrowhead || null,
+          endArrowhead: el.endArrowhead || null,
+          imageUrl: el.imageUrl,
+        };
+      });
+
+      const excalidrawExport = {
+        type: "excalidraw",
+        version: 2,
+        source: "https://sailboard.app",
+        elements: excalidrawElements,
+        appState: {
+          gridSize: null,
+          viewBackgroundColor: isDark ? "#121622" : "#ffffff",
+        },
+        files: {},
+      };
+
+      const blob = new Blob([JSON.stringify(excalidrawExport, null, 2)], {
+        type: "application/vnd.excalidraw+json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.download = `${doc.title.toLowerCase().replace(/\s+/g, "-")}.excalidraw`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Exported to .excalidraw format!");
     }
 
     onClose();
@@ -439,6 +508,61 @@ export function ExportDialog({
                   }}
                 >
                   Native backup containing canvas elements, notes, and metadata
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Box
+            onClick={() => setExportFormat("excalidraw")}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              p: 1.25,
+              borderRadius: "12px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              bgcolor:
+                exportFormat === "excalidraw"
+                  ? "var(--neu-surface-pressed)"
+                  : "transparent",
+              border:
+                exportFormat === "excalidraw"
+                  ? "1px solid #f59e0b"
+                  : "1px solid var(--neu-border-subtle)",
+              "&:hover": { bgcolor: "var(--neu-surface-hover)" },
+            }}
+          >
+            <Radio
+              size="small"
+              checked={exportFormat === "excalidraw"}
+              sx={{ p: 0.5, mr: 1 }}
+            />
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.2,
+                flexGrow: 1,
+              }}
+            >
+              <DataObjectOutlined fontSize="small" sx={{ color: "#f59e0b" }} />
+              <Box>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 600, color: "var(--neu-text-primary)" }}
+                >
+                  Excalidraw File (.excalidraw)
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "var(--neu-text-secondary)",
+                    display: "block",
+                    fontSize: "0.72rem",
+                  }}
+                >
+                  Standard Excalidraw v2 format fully compatible with excalidraw.com
                 </Typography>
               </Box>
             </Box>

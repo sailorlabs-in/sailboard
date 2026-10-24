@@ -19,10 +19,23 @@ export type ResizeHandle =
   | 'sw'
   | 'w'
   | 'start'
-  | 'end';
+  | 'end'
+  | 'rotation';
 
 export function distance(p1: Point, p2: Point): number {
   return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+export function rotatePoint(p: Point, center: Point, angle: number): Point {
+  if (!angle) return p;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = p.x - center.x;
+  const dy = p.y - center.y;
+  return {
+    x: center.x + (dx * cos - dy * sin),
+    y: center.y + (dx * sin + dy * cos),
+  };
 }
 
 export function getElementBounds(el: CanvasElement): BoundingBox {
@@ -87,25 +100,43 @@ export function getGroupBounds(elements: CanvasElement[]): BoundingBox | null {
 }
 
 export function isPointInElement(point: Point, el: CanvasElement): boolean {
+  // If element is rotated, transform test point by negative angle around element center
+  let testPoint = point;
+  if (el.angle && el.angle !== 0) {
+    const cx = el.x + el.width / 2;
+    const cy = el.y + el.height / 2;
+    testPoint = rotatePoint(point, { x: cx, y: cy }, -el.angle);
+  }
+
   const bounds = getElementBounds(el);
   const padding = Math.max(8, el.strokeWidth);
 
   // Quick bounding box check
   if (
-    point.x < bounds.minX - padding ||
-    point.x > bounds.maxX + padding ||
-    point.y < bounds.minY - padding ||
-    point.y > bounds.maxY + padding
+    testPoint.x < bounds.minX - padding ||
+    testPoint.x > bounds.maxX + padding ||
+    testPoint.y < bounds.minY - padding ||
+    testPoint.y > bounds.maxY + padding
   ) {
     return false;
   }
 
-  if (el.type === 'rectangle' || el.type === 'sticky') {
+  if (el.type === 'frame') {
+    const badgeTop = bounds.minY - 26;
     return (
-      point.x >= bounds.minX &&
-      point.x <= bounds.maxX &&
-      point.y >= bounds.minY &&
-      point.y <= bounds.maxY
+      testPoint.x >= bounds.minX &&
+      testPoint.x <= bounds.maxX &&
+      testPoint.y >= badgeTop &&
+      testPoint.y <= bounds.maxY
+    );
+  }
+
+  if (el.type === 'rectangle' || el.type === 'sticky' || el.type === 'image') {
+    return (
+      testPoint.x >= bounds.minX &&
+      testPoint.x <= bounds.maxX &&
+      testPoint.y >= bounds.minY &&
+      testPoint.y <= bounds.maxY
     );
   }
 
@@ -115,16 +146,16 @@ export function isPointInElement(point: Point, el: CanvasElement): boolean {
     const cx = bounds.minX + rx;
     const cy = bounds.minY + ry;
     if (rx === 0 || ry === 0) return false;
-    const normX = (point.x - cx) / (rx + padding);
-    const normY = (point.y - cy) / (ry + padding);
+    const normX = (testPoint.x - cx) / (rx + padding);
+    const normY = (testPoint.y - cy) / (ry + padding);
     return normX * normX + normY * normY <= 1;
   }
 
   if (el.type === 'diamond') {
     const cx = bounds.minX + bounds.width / 2;
     const cy = bounds.minY + bounds.height / 2;
-    const dx = Math.abs(point.x - cx);
-    const dy = Math.abs(point.y - cy);
+    const dx = Math.abs(testPoint.x - cx);
+    const dy = Math.abs(testPoint.y - cy);
     const w = bounds.width / 2 + padding;
     const h = bounds.height / 2 + padding;
     return dx / w + dy / h <= 1;
@@ -135,7 +166,7 @@ export function isPointInElement(point: Point, el: CanvasElement): boolean {
       for (let i = 0; i < el.points.length - 1; i++) {
         const p1 = { x: el.x + el.points[i].x, y: el.y + el.points[i].y };
         const p2 = { x: el.x + el.points[i + 1].x, y: el.y + el.points[i + 1].y };
-        if (distanceToSegment(point, p1, p2) <= padding + 4) {
+        if (distanceToSegment(testPoint, p1, p2) <= padding + 4) {
           return true;
         }
       }
@@ -146,12 +177,12 @@ export function isPointInElement(point: Point, el: CanvasElement): boolean {
   if (el.type === 'draw') {
     if (el.points && el.points.length > 0) {
       if (el.points.length === 1) {
-        return distance(point, { x: el.x + el.points[0].x, y: el.y + el.points[0].y }) <= padding + 6;
+        return distance(testPoint, { x: el.x + el.points[0].x, y: el.y + el.points[0].y }) <= padding + 6;
       }
       for (let i = 0; i < el.points.length - 1; i++) {
         const p1 = { x: el.x + el.points[i].x, y: el.y + el.points[i].y };
         const p2 = { x: el.x + el.points[i + 1].x, y: el.y + el.points[i + 1].y };
-        if (distanceToSegment(point, p1, p2) <= padding + 6) {
+        if (distanceToSegment(testPoint, p1, p2) <= padding + 6) {
           return true;
         }
       }
@@ -161,10 +192,10 @@ export function isPointInElement(point: Point, el: CanvasElement): boolean {
 
   if (el.type === 'text') {
     return (
-      point.x >= bounds.minX &&
-      point.x <= bounds.maxX &&
-      point.y >= bounds.minY &&
-      point.y <= bounds.maxY
+      testPoint.x >= bounds.minX &&
+      testPoint.x <= bounds.maxX &&
+      testPoint.y >= bounds.minY &&
+      testPoint.y <= bounds.maxY
     );
   }
 
@@ -179,12 +210,26 @@ export function distanceToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
 }
 
-export function getResizeHandles(bounds: BoundingBox, zoom: number): { handle: ResizeHandle; x: number; y: number }[] {
+export function getRotationHandle(bounds: BoundingBox, zoom: number, angle = 0): Point {
+  const midX = bounds.minX + bounds.width / 2;
+  const stalkDist = 30 / zoom;
+  const rawHandle = { x: midX, y: bounds.minY - stalkDist };
+  if (!angle) return rawHandle;
+  const center = { x: midX, y: bounds.minY + bounds.height / 2 };
+  return rotatePoint(rawHandle, center, angle);
+}
+
+export function getResizeHandles(
+  bounds: BoundingBox,
+  zoom: number,
+  angle = 0
+): { handle: ResizeHandle; x: number; y: number }[] {
   const { minX, minY, maxX, maxY, width, height } = bounds;
   const midX = minX + width / 2;
   const midY = minY + height / 2;
+  const center = { x: midX, y: midY };
 
-  return [
+  const rawHandles: { handle: ResizeHandle; x: number; y: number }[] = [
     { handle: 'nw', x: minX, y: minY },
     { handle: 'n', x: midX, y: minY },
     { handle: 'ne', x: maxX, y: minY },
@@ -194,11 +239,31 @@ export function getResizeHandles(bounds: BoundingBox, zoom: number): { handle: R
     { handle: 'sw', x: minX, y: maxY },
     { handle: 'w', x: minX, y: midY },
   ];
+
+  if (!angle) return rawHandles;
+
+  return rawHandles.map((h) => {
+    const rot = rotatePoint({ x: h.x, y: h.y }, center, angle);
+    return { handle: h.handle, x: rot.x, y: rot.y };
+  });
 }
 
-export function getHitResizeHandle(point: Point, bounds: BoundingBox, zoom: number): ResizeHandle | null {
-  const handles = getResizeHandles(bounds, zoom);
-  const handleRadius = 8 / zoom;
+export function getHitResizeHandle(
+  point: Point,
+  bounds: BoundingBox,
+  zoom: number,
+  angle = 0
+): ResizeHandle | null {
+  // 1. Check rotation handle first
+  const rotHandle = getRotationHandle(bounds, zoom, angle);
+  const rotRadius = 14 / zoom;
+  if (distance(point, rotHandle) <= rotRadius) {
+    return 'rotation';
+  }
+
+  // 2. Check 8 resize handles
+  const handles = getResizeHandles(bounds, zoom, angle);
+  const handleRadius = 9 / zoom;
 
   for (const h of handles) {
     if (distance(point, { x: h.x, y: h.y }) <= handleRadius) {
@@ -430,3 +495,212 @@ export function updateBoundArrows(
 
   return hasChanges ? updatedElements : elements;
 }
+
+// --- Excalidraw Alignment & Distribution Utilities ---
+
+export function alignElements(
+  elements: CanvasElement[],
+  selectedIds: string[],
+  alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
+): CanvasElement[] {
+  const selected = elements.filter((el) => selectedIds.includes(el.id) && !el.isDeleted);
+  if (selected.length < 2) return elements;
+
+  const groupBounds = getGroupBounds(selected);
+  if (!groupBounds) return elements;
+
+  return elements.map((el) => {
+    if (!selectedIds.includes(el.id) || el.isDeleted || el.locked) return el;
+    const b = getElementBounds(el);
+    let newX = el.x;
+    let newY = el.y;
+
+    switch (alignment) {
+      case 'left':
+        newX = groupBounds.minX;
+        break;
+      case 'center':
+        newX = groupBounds.minX + (groupBounds.width - b.width) / 2;
+        break;
+      case 'right':
+        newX = groupBounds.maxX - b.width;
+        break;
+      case 'top':
+        newY = groupBounds.minY;
+        break;
+      case 'middle':
+        newY = groupBounds.minY + (groupBounds.height - b.height) / 2;
+        break;
+      case 'bottom':
+        newY = groupBounds.maxY - b.height;
+        break;
+    }
+
+    return {
+      ...el,
+      x: Math.round(newX),
+      y: Math.round(newY),
+      version: el.version + 1,
+      updatedAt: Date.now(),
+    };
+  });
+}
+
+export function distributeElements(
+  elements: CanvasElement[],
+  selectedIds: string[],
+  direction: 'horizontal' | 'vertical'
+): CanvasElement[] {
+  const selected = elements.filter((el) => selectedIds.includes(el.id) && !el.isDeleted);
+  if (selected.length < 3) return elements;
+
+  if (direction === 'horizontal') {
+    const sorted = [...selected].sort((a, b) => a.x - b.x);
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const totalSpan = (last.x + last.width) - first.x;
+    const sumWidths = sorted.reduce((sum, item) => sum + item.width, 0);
+    const availableGap = totalSpan - sumWidths;
+    const gap = availableGap / (sorted.length - 1);
+
+    let curX = first.x;
+    const xMap = new Map<string, number>();
+    for (const item of sorted) {
+      xMap.set(item.id, curX);
+      curX += item.width + gap;
+    }
+
+    return elements.map((el) => {
+      if (xMap.has(el.id) && !el.locked) {
+        return {
+          ...el,
+          x: Math.round(xMap.get(el.id)!),
+          version: el.version + 1,
+          updatedAt: Date.now(),
+        };
+      }
+      return el;
+    });
+  } else {
+    const sorted = [...selected].sort((a, b) => a.y - b.y);
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const totalSpan = (last.y + last.height) - first.y;
+    const sumHeights = sorted.reduce((sum, item) => sum + item.height, 0);
+    const availableGap = totalSpan - sumHeights;
+    const gap = availableGap / (sorted.length - 1);
+
+    let curY = first.y;
+    const yMap = new Map<string, number>();
+    for (const item of sorted) {
+      yMap.set(item.id, curY);
+      curY += item.height + gap;
+    }
+
+    return elements.map((el) => {
+      if (yMap.has(el.id) && !el.locked) {
+        return {
+          ...el,
+          y: Math.round(yMap.get(el.id)!),
+          version: el.version + 1,
+          updatedAt: Date.now(),
+        };
+      }
+      return el;
+    });
+  }
+}
+
+export function flipElements(
+  elements: CanvasElement[],
+  selectedIds: string[],
+  direction: 'horizontal' | 'vertical'
+): CanvasElement[] {
+  const selected = elements.filter((el) => selectedIds.includes(el.id) && !el.isDeleted);
+  if (selected.length === 0) return elements;
+
+  const bounds = getGroupBounds(selected);
+  if (!bounds) return elements;
+
+  return elements.map((el) => {
+    if (!selectedIds.includes(el.id) || el.isDeleted || el.locked) return el;
+
+    if (direction === 'horizontal') {
+      const elBounds = getElementBounds(el);
+      const newX = bounds.minX + (bounds.maxX - elBounds.maxX);
+      let updatedPoints = el.points;
+      if (el.points && el.points.length > 0) {
+        updatedPoints = el.points.map((p) => ({
+          x: el.width - p.x,
+          y: p.y,
+        }));
+      }
+      return {
+        ...el,
+        x: newX,
+        points: updatedPoints,
+        flipX: !el.flipX,
+        version: el.version + 1,
+        updatedAt: Date.now(),
+      };
+    } else {
+      const elBounds = getElementBounds(el);
+      const newY = bounds.minY + (bounds.maxY - elBounds.maxY);
+      let updatedPoints = el.points;
+      if (el.points && el.points.length > 0) {
+        updatedPoints = el.points.map((p) => ({
+          x: p.x,
+          y: el.height - p.y,
+        }));
+      }
+      return {
+        ...el,
+        y: newY,
+        points: updatedPoints,
+        flipY: !el.flipY,
+        version: el.version + 1,
+        updatedAt: Date.now(),
+      };
+    }
+  });
+}
+
+export function groupElements(
+  elements: CanvasElement[],
+  selectedIds: string[]
+): { elements: CanvasElement[]; newGroupId: string } {
+  const newGroupId = `grp-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const updated = elements.map((el) => {
+    if (selectedIds.includes(el.id) && !el.isDeleted) {
+      const existing = el.groupIds || [];
+      return {
+        ...el,
+        groupIds: [...existing, newGroupId],
+        version: el.version + 1,
+        updatedAt: Date.now(),
+      };
+    }
+    return el;
+  });
+  return { elements: updated, newGroupId };
+}
+
+export function ungroupElements(
+  elements: CanvasElement[],
+  selectedIds: string[]
+): CanvasElement[] {
+  return elements.map((el) => {
+    if (selectedIds.includes(el.id) && !el.isDeleted && el.groupIds && el.groupIds.length > 0) {
+      const newGroupIds = [...el.groupIds];
+      newGroupIds.pop(); // Remove innermost group
+      return {
+        ...el,
+        groupIds: newGroupIds.length > 0 ? newGroupIds : undefined,
+        version: el.version + 1,
+        updatedAt: Date.now(),
+      };
+    }
+    return el;
+  });
+}
+

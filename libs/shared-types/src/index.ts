@@ -8,12 +8,14 @@ export type ElementType =
   | "draw"
   | "text"
   | "sticky"
-  | "image";
+  | "image"
+  | "frame"
+  | "laser";
 
 export type FillStyle = "none" | "solid" | "hachure" | "cross-hatch" | "zigzag";
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type TextAlign = "left" | "center" | "right";
-export type ArrowHead = "none" | "arrow" | "triangle" | "circle";
+export type ArrowHead = "none" | "arrow" | "triangle" | "circle" | "bar";
 
 export interface Point {
   x: number;
@@ -70,6 +72,12 @@ export interface CanvasElement {
   endArrowhead?: ArrowHead | null;
   zIndex?: number;
   locked?: boolean;
+  roundness?: 'sharp' | 'round' | null;
+  imageUrl?: string;
+  flipX?: boolean;
+  flipY?: boolean;
+  frameId?: string | null;
+  frameLabel?: string;
   customData?: Record<string, any>;
 }
 
@@ -132,6 +140,7 @@ export interface WhiteboardDocument {
   elements: CanvasElement[];
   viewMode: "canvas" | "split" | "notes";
   canvasTheme: "light" | "dark";
+  canvasBackgroundColor?: string;
   gridVisible: boolean;
   gridSnap: boolean;
   version: number;
@@ -175,6 +184,7 @@ export interface UpdateDocumentDto {
   elements?: CanvasElement[];
   viewMode?: "canvas" | "split" | "notes";
   canvasTheme?: "light" | "dark";
+  canvasBackgroundColor?: string;
   gridVisible?: boolean;
   gridSnap?: boolean;
 }

@@ -27,6 +27,7 @@ export interface NeuSegmentedControlProps<T extends string = string> {
   onChange: (value: T) => void;
   size?: 'small' | 'medium';
   className?: string;
+  fullWidth?: boolean;
   sx?: SxProps<Theme>;
   ariaLabel?: string;
 }
@@ -37,6 +38,7 @@ export function NeuSegmentedControl<T extends string>({
   onChange,
   size = 'medium',
   className = '',
+  fullWidth,
   sx,
   ariaLabel,
 }: NeuSegmentedControlProps<T>) {
@@ -49,14 +51,30 @@ export function NeuSegmentedControl<T extends string>({
   const isHoverActiveRef = useRef(false);
   const lastContentSize = useRef<{ width: number; height: number } | null>(null);
 
+  const isFull = Boolean(
+    fullWidth || (sx && typeof sx === 'object' && (sx as Record<string, unknown>).width === '100%')
+  );
+
   const getButtonGeometry = useCallback((btn: HTMLElement) => {
     const container = containerRef.current;
     if (!container || !btn) return null;
 
+    if (btn.offsetWidth === 0 || btn.offsetHeight === 0) return null;
+
+    // Direct offsetParent calculation is immune to ancestor CSS transform / scale animations
+    if (btn.offsetParent === container) {
+      return {
+        x: btn.offsetLeft,
+        y: btn.offsetTop,
+        width: btn.offsetWidth,
+        height: btn.offsetHeight,
+      };
+    }
+
     const containerRect = container.getBoundingClientRect();
     const btnRect = btn.getBoundingClientRect();
 
-    if (btnRect.width === 0 || btnRect.height === 0) return null;
+    if (containerRect.width === 0 || containerRect.height === 0) return null;
 
     const clientLeft = container.clientLeft || 0;
     const clientTop = container.clientTop || 0;
@@ -68,6 +86,32 @@ export function NeuSegmentedControl<T extends string>({
       height: btnRect.height,
     };
   }, []);
+
+  const updateIndicatorPosition = useCallback(() => {
+    const activeBtn = buttonRefs.current.get(value);
+    const indicator = indicatorRef.current;
+    if (!activeBtn || !indicator) return;
+
+    const geo = getButtonGeometry(activeBtn);
+    if (!geo) return;
+
+    gsap.set(indicator, {
+      x: geo.x,
+      y: geo.y,
+      width: geo.width,
+      height: geo.height,
+      opacity: 1,
+    });
+  }, [value, getButtonGeometry]);
+
+  // Synchronize indicator when web fonts (e.g. Virgil, Inter) complete loading
+  useEffect(() => {
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      document.fonts.ready.then(() => {
+        updateIndicatorPosition();
+      });
+    }
+  }, [updateIndicatorPosition]);
 
   // Vercel-Style Active Indicator Sliding
   useLayoutEffect(() => {
@@ -246,6 +290,8 @@ export function NeuSegmentedControl<T extends string>({
       sx={{
         p: isSmall ? '2px' : '4px',
         gap: isSmall ? '2px' : '4px',
+        width: isFull ? '100%' : 'auto',
+        display: isFull ? 'flex' : 'inline-flex',
         ...sx,
       }}
     >
@@ -294,10 +340,11 @@ export function NeuSegmentedControl<T extends string>({
               alignItems: 'center',
               justifyContent: 'center',
               gap: isSmall ? 0.4 : 0.6,
-              px: isSmall ? '7px' : '11px',
+              px: isSmall ? '6px' : '10px',
               py: isSmall ? '3px' : '5px',
               fontSize: isSmall ? '0.72rem' : '0.8rem',
               fontWeight: 600,
+              lineHeight: 1.2,
               cursor: opt.disabled ? 'not-allowed' : 'pointer',
               opacity: opt.disabled ? 0.4 : 1,
               outline: 'none',
@@ -305,15 +352,48 @@ export function NeuSegmentedControl<T extends string>({
               border: 'none',
               background: 'transparent',
               borderRadius: isSmall ? '6px' : '8px',
+              flex: isFull ? '1 1 0px' : 'none',
+              minWidth: 0,
             }}
           >
-            {opt.icon}
+            {opt.icon && (
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  lineHeight: 1,
+                }}
+              >
+                {opt.icon}
+              </Box>
+            )}
             {opt.hideOnMobile ? (
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              <Box
+                component="span"
+                sx={{
+                  display: { xs: 'none', sm: 'inline-flex' },
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
                 {opt.label}
               </Box>
             ) : (
-              <span>{opt.label}</span>
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
+                {opt.label}
+              </Box>
             )}
           </Box>
         );

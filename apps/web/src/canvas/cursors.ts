@@ -190,6 +190,7 @@ export function getFigmaCursor(
   // Selection tool
   if (tool === 'selection') {
     if (activeHandle) {
+      if (activeHandle === 'rotation') return 'grab';
       if (['nw', 'se'].includes(activeHandle)) return 'nwse-resize';
       if (['ne', 'sw'].includes(activeHandle)) return 'nesw-resize';
       if (['e', 'w'].includes(activeHandle)) return 'ew-resize';

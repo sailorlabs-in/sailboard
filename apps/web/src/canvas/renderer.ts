@@ -20,6 +20,7 @@ export interface RenderOptions {
   activeSnapAnchor?: ShapeAnchor | null;
   candidateAnchors?: ShapeAnchor[];
   isThumbnail?: boolean;
+  laserTrail?: { x: number; y: number; timestamp: number }[];
 }
 
 export function renderScene(
@@ -36,7 +37,7 @@ export function renderScene(
   const { theme, gridVisible, gridType = 'dots', zoom, pan, selectedElementIds, selectionBox, remoteUsers, activeStyleMode } = options;
   const isDark = theme === 'dark';
 
-  // Clear canvas
+  // Clear canvas seamlessly blending with light and dark mode neumorphic theme
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = isDark ? '#121622' : '#e2e8f0';
@@ -137,6 +138,11 @@ export function renderScene(
 
   if (candidateList.length > 0) {
     renderShapeAnchors(ctx, candidateList, options.activeSnapAnchor, zoom, isDark);
+  }
+
+  // Render Laser Trail (Excalidraw presentation pointer)
+  if (options.laserTrail && options.laserTrail.length > 1) {
+    renderLaserTrail(ctx, options.laserTrail, zoom);
   }
 
   ctx.restore();
@@ -475,6 +481,175 @@ function renderElement(
       renderStandaloneText(ctx, el, isDark, allElements);
       break;
     }
+
+    case 'image': {
+      renderImage(ctx, rc, el, useRough, isDark, isThumbnail, zoom);
+      break;
+    }
+
+    case 'frame': {
+      renderFrame(ctx, el, isDark, zoom);
+      break;
+    }
+  }
+
+  ctx.restore();
+}
+
+const imageCache = new Map<string, HTMLImageElement>();
+function getImage(url: string, onLoaded?: () => void): HTMLImageElement | null {
+  let img = imageCache.get(url);
+  if (!img) {
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      onLoaded?.();
+    };
+    img.src = url;
+    imageCache.set(url, img);
+  }
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+function renderImage(
+  ctx: CanvasRenderingContext2D,
+  rc: any,
+  el: CanvasElement,
+  useRough: boolean,
+  isDark: boolean,
+  isThumbnail?: boolean,
+  zoom: number = 1
+) {
+  const { width: w, height: h } = el;
+  const imgUrl = el.imageUrl || el.customData?.imageUrl;
+  const img = imgUrl ? getImage(imgUrl) : null;
+
+  if (img) {
+    ctx.save();
+    const isRound = el.roundness === 'round' || el.customData?.roundness === 'round';
+    const r = isRound ? Math.min(16, Math.min(w, h) / 4) : 0;
+    ctx.beginPath();
+    if (r > 0) ctx.roundRect(0, 0, w, h, r);
+    else ctx.rect(0, 0, w, h);
+    ctx.clip();
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.restore();
+
+    // Subtle outline or rough outline around image
+    ctx.save();
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (r > 0) ctx.roundRect(0, 0, w, h, r);
+    else ctx.rect(0, 0, w, h);
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    // Skeleton placeholder while loading or if empty
+    ctx.save();
+    ctx.fillStyle = isDark ? '#1e293b' : '#f1f5f9';
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.roundRect(0, 0, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
+    ctx.font = `600 ${Math.max(12, Math.min(15, h / 5))}px 'Inter', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🖼️ Image', w / 2, h / 2);
+    ctx.restore();
+  }
+}
+
+function renderFrame(
+  ctx: CanvasRenderingContext2D,
+  el: CanvasElement,
+  isDark: boolean,
+  zoom: number = 1
+) {
+  const { width: w, height: h } = el;
+  const strokeColor = isDark ? 'rgba(148, 163, 184, 0.5)' : 'rgba(100, 116, 139, 0.5)';
+  const label = el.frameLabel || el.text || 'Frame';
+
+  ctx.save();
+  // Frame boundary (dashed clean rectangle)
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.setLineDash([6 / zoom, 4 / zoom]);
+  ctx.strokeRect(0, 0, w, h);
+
+  // Frame label pill at top-left
+  ctx.setLineDash([]);
+  const fontSize = Math.max(10, 11 / zoom);
+  ctx.font = `700 ${fontSize}px 'Inter', sans-serif`;
+  const textMetrics = ctx.measureText(label);
+  const badgeW = textMetrics.width + 16 / zoom;
+  const badgeH = 20 / zoom;
+  const badgeX = 0;
+  const badgeY = -badgeH;
+
+  ctx.fillStyle = isDark ? '#1e293b' : '#f1f5f9';
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1 / zoom;
+  ctx.beginPath();
+  ctx.roundRect(badgeX, badgeY, badgeW, badgeH, [4 / zoom, 4 / zoom, 0, 0]);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = isDark ? '#e2e8f0' : '#334155';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, badgeX + 8 / zoom, badgeY + badgeH / 2);
+
+  ctx.restore();
+}
+
+function renderLaserTrail(
+  ctx: CanvasRenderingContext2D,
+  trail: { x: number; y: number; timestamp: number }[],
+  zoom: number
+) {
+  if (trail.length < 2) return;
+  const now = Date.now();
+  const maxAge = 1200;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 1; i < trail.length; i++) {
+    const p1 = trail[i - 1];
+    const p2 = trail[i];
+    const age = now - p2.timestamp;
+    if (age >= maxAge) continue;
+
+    const progress = 1 - age / maxAge;
+    const alpha = Math.max(0, Math.min(1, progress));
+    const width = (5 + progress * 7) / zoom;
+
+    // Outer glow aura
+    ctx.shadowColor = '#f43f5e';
+    ctx.shadowBlur = 12 / zoom;
+    ctx.strokeStyle = `rgba(244, 63, 94, ${alpha * 0.9})`;
+    ctx.lineWidth = width;
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    // Hot inner neon core
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = width * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
   }
 
   ctx.restore();
@@ -491,9 +666,14 @@ function renderCleanRect(
   isThumbnail?: boolean,
   zoom: number = 1
 ) {
-  const r = Math.min(8, Math.min(w, h) / 4); // rounded corners for clean modern look
+  const isRound = el.roundness === 'round' || el.customData?.roundness === 'round';
+  const r = isRound ? Math.min(24, Math.min(w, h) / 3) : 0;
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
+  if (r > 0) {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
   applyCleanFillAndStroke(ctx, el, isDark, isThumbnail, zoom);
 }
 
@@ -541,7 +721,9 @@ function renderStickyNote(
   el: CanvasElement,
   useRough: boolean,
   isDark: boolean,
-  allElements?: CanvasElement[]
+  allElements?: CanvasElement[],
+  isThumbnail?: boolean,
+  zoom?: number
 ) {
   const { width: w, height: h } = el;
   const foldSize = 16;
@@ -619,6 +801,62 @@ function renderStickyNote(
   }
 }
 
+function renderArrowhead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  type: any,
+  strokeColor: string,
+  strokeWidth: number
+) {
+  if (!type || type === 'none') return;
+  const headLen = 12 + strokeWidth * 1.5;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  if (type === 'arrow') {
+    // Sharp classic arrow
+    ctx.fillStyle = strokeColor;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-headLen, -headLen * 0.42);
+    ctx.lineTo(-headLen * 0.72, 0);
+    ctx.lineTo(-headLen, headLen * 0.42);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'triangle') {
+    // Solid filled triangle
+    ctx.fillStyle = strokeColor;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-headLen, -headLen * 0.48);
+    ctx.lineTo(-headLen, headLen * 0.48);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'circle') {
+    // Circle / dot terminal
+    const radius = 5 + strokeWidth;
+    ctx.fillStyle = strokeColor;
+    ctx.beginPath();
+    ctx.arc(-radius, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'bar') {
+    // T-bar terminal
+    const barHeight = 8 + strokeWidth * 2;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = Math.max(2, strokeWidth);
+    ctx.beginPath();
+    ctx.moveTo(0, -barHeight);
+    ctx.lineTo(0, barHeight);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function renderArrow(
   ctx: CanvasRenderingContext2D,
   rc: any,
@@ -659,50 +897,52 @@ function renderArrow(
   }
   ctx.stroke();
 
-  // Draw sleek filled arrowhead at the end (Eraser diagram standard)
-  const angle = Math.atan2(endY - points[points.length - 2].y, endX - points[points.length - 2].x);
-  const headLen = Math.min(13 + strokeWidth * 1.5, Math.max(9, length * 0.35));
+  // Draw end arrowhead
+  const endAngle = Math.atan2(endY - points[points.length - 2].y, endX - points[points.length - 2].x);
+  renderArrowhead(ctx, endX, endY, endAngle, el.endArrowhead || 'arrow', strokeColor, strokeWidth);
 
-  ctx.fillStyle = strokeColor;
-  ctx.beginPath();
-  ctx.moveTo(endX, endY);
-  ctx.lineTo(
-    endX - headLen * Math.cos(angle - Math.PI / 6.5),
-    endY - headLen * Math.sin(angle - Math.PI / 6.5)
-  );
-  ctx.lineTo(
-    endX - headLen * 0.75 * Math.cos(angle),
-    endY - headLen * 0.75 * Math.sin(angle)
-  );
-  ctx.lineTo(
-    endX - headLen * Math.cos(angle + Math.PI / 6.5),
-    endY - headLen * Math.sin(angle + Math.PI / 6.5)
-  );
-  ctx.closePath();
-  ctx.fill();
-
-  // Optional start arrowhead if bidirectional
-  if (el.startArrowhead === 'arrow') {
+  // Draw start arrowhead if specified
+  if (el.startArrowhead && el.startArrowhead !== 'none') {
     const startAngle = Math.atan2(points[1].y - startY, points[1].x - startX);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(
-      startX + headLen * Math.cos(startAngle + Math.PI / 6.5),
-      startY + headLen * Math.sin(startAngle + Math.PI / 6.5)
-    );
-    ctx.lineTo(
-      startX + headLen * 0.75 * Math.cos(startAngle),
-      startY + headLen * 0.75 * Math.sin(startAngle)
-    );
-    ctx.lineTo(
-      startX + headLen * Math.cos(startAngle - Math.PI / 6.5),
-      startY + headLen * Math.sin(startAngle - Math.PI / 6.5)
-    );
-    ctx.closePath();
-    ctx.fill();
+    renderArrowhead(ctx, startX, startY, startAngle + Math.PI, el.startArrowhead, strokeColor, strokeWidth);
   }
 
   ctx.restore();
+}
+
+function getFontFamily(fontFamily?: string): string {
+  if (fontFamily === 'hand-drawn' || fontFamily === 'virgil' || fontFamily === 'excalifont') {
+    return "'Caveat', 'Architects Daughter', cursive, sans-serif";
+  }
+  if (fontFamily === 'monospace' || fontFamily === 'code') {
+    return "'JetBrains Mono', 'Fira Code', monospace";
+  }
+  return "'Teachers', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const resultLines: string[] = [];
+  const rawLines = text.split('\n');
+  for (const rawLine of rawLines) {
+    if (!rawLine) {
+      resultLines.push('');
+      continue;
+    }
+    const words = rawLine.split(' ');
+    let currentLine = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const testLine = `${currentLine} ${word}`;
+      if (ctx.measureText(testLine).width <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        resultLines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    resultLines.push(currentLine);
+  }
+  return resultLines;
 }
 
 function renderElementText(
@@ -714,11 +954,13 @@ function renderElementText(
   if (!el.text) return;
   ctx.save();
   ctx.fillStyle = getEffectiveTextColor(el.textColor, el, isDark, allElements);
-  ctx.font = `600 ${el.fontSize || 14}px 'Teachers', 'Inter', sans-serif`;
+  const font = getFontFamily(el.fontFamily);
+  ctx.font = `600 ${el.fontSize || 14}px ${font}`;
   ctx.textAlign = (el.textAlign as CanvasTextAlign) || 'center';
   ctx.textBaseline = 'middle';
 
-  const lines = el.text.split('\n');
+  const maxW = Math.max(20, el.width - 24);
+  const lines = wrapText(ctx, el.text, maxW);
   const lineHeight = (el.fontSize || 14) * 1.35;
   const totalHeight = lines.length * lineHeight;
   const startY = el.height / 2 - totalHeight / 2 + lineHeight / 2;
@@ -745,8 +987,9 @@ function renderStandaloneText(
   if (!el.text) return;
   ctx.save();
   ctx.fillStyle = getEffectiveTextColor(el.textColor, el, isDark, allElements);
-  ctx.font = `500 ${el.fontSize || 18}px 'Teachers', 'Inter', sans-serif`;
-  ctx.textAlign = 'left';
+  const font = getFontFamily(el.fontFamily);
+  ctx.font = `500 ${el.fontSize || 18}px ${font}`;
+  ctx.textAlign = (el.textAlign as CanvasTextAlign) || 'left';
   ctx.textBaseline = 'top';
 
   const lines = el.text.split('\n');
@@ -796,6 +1039,16 @@ function renderSelection(
       continue;
     }
 
+    ctx.save();
+    // Support rotated selection box when element has angle
+    if (el.angle && el.angle !== 0) {
+      const cx = el.x + el.width / 2;
+      const cy = el.y + el.height / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(el.angle);
+      ctx.translate(-cx, -cy);
+    }
+
     const bounds = getElementBounds(el);
     const padding = 6 / zoom;
     const x = bounds.minX - padding;
@@ -810,7 +1063,7 @@ function renderSelection(
     ctx.strokeRect(x, y, w, h);
 
     // 8 Resize handles
-    const handles = getResizeHandles({ minX: x, minY: y, maxX: x + w, maxY: y + h, width: w, height: h }, zoom);
+    const handles = getResizeHandles({ minX: x, minY: y, maxX: x + w, maxY: y + h, width: w, height: h }, zoom, 0);
     ctx.setLineDash([]);
     ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
     ctx.strokeStyle = '#6366f1';
@@ -821,6 +1074,39 @@ function renderSelection(
       ctx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
       ctx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
     }
+
+    // Excalidraw Rotation Handle (connected with vertical stalk 24px above top-center)
+    const midX = x + w / 2;
+    const rotY = y - 24 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(midX, y);
+    ctx.lineTo(midX, rotY);
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(midX, rotY, 5 / zoom, 0, Math.PI * 2);
+    ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 2 / zoom;
+    ctx.stroke();
+
+    // Lock indicator if element is locked
+    if (el.locked) {
+      ctx.fillStyle = '#6366f1';
+      ctx.beginPath();
+      ctx.arc(x + w, y, 9 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${10 / zoom}px 'Inter', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🔒', x + w, y);
+    }
+
+    ctx.restore();
   }
   ctx.restore();
 }

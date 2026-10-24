@@ -9,6 +9,10 @@ interface ToolbarProps {
   theme: 'light' | 'dark';
   isViewer?: boolean;
   canComment?: boolean;
+  isToolLocked?: boolean;
+  onToggleToolLock?: () => void;
+  onInsertImage?: (file: File) => void;
+  onImageSelected?: (dataUrl: string) => void;
 }
 
 interface ToolItem {
@@ -97,6 +101,27 @@ function TextIcon() {
   );
 }
 
+function ImageIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
+function FrameIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="6" x2="2" y2="6" />
+      <line x1="22" y1="18" x2="2" y2="18" />
+      <line x1="6" y1="2" x2="6" y2="22" />
+      <line x1="18" y1="2" x2="18" y2="22" />
+    </svg>
+  );
+}
+
 function StickyIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -105,6 +130,7 @@ function StickyIcon() {
     </svg>
   );
 }
+
 
 function EraserIcon() {
   return (
@@ -124,8 +150,32 @@ function CommentIcon() {
   );
 }
 
-function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = true }: ToolbarProps) {
+function LockIcon({ locked }: { locked: boolean }) {
+  return locked ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </svg>
+  );
+}
+
+function ToolbarComponent({
+  activeTool,
+  onToolSelect,
+  isViewer,
+  canComment = true,
+  isToolLocked = false,
+  onToggleToolLock,
+  onInsertImage,
+  onImageSelected,
+}: ToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Floating dock entrance with back.out spring physics
   useEffect(() => {
@@ -133,6 +183,34 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
       animateDockIn(toolbarRef.current, { delay: 0.05, duration: 0.65 });
     }
   }, []);
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (onInsertImage) {
+        onInsertImage(file);
+      }
+      if (onImageSelected) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          if (ev.target?.result) {
+            onImageSelected(ev.target.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    e.target.value = '';
+  };
+
+  const handleToolClick = (toolId: ElementType | 'eraser' | 'pan' | 'comment', e: React.MouseEvent<HTMLButtonElement>) => {
+    animateTactileClick(e.currentTarget);
+    if (toolId === 'image') {
+      imageInputRef.current?.click();
+    } else {
+      onToolSelect(toolId);
+    }
+  };
 
   const tools: ToolItem[] = [
     { id: 'selection', label: 'Select / Move', shortcut: 'V', icon: <CursorIcon /> },
@@ -144,6 +222,8 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
     { id: 'line', label: 'Straight Line', shortcut: 'L', icon: <LineIcon /> },
     { id: 'draw', label: 'Freehand Pen', shortcut: 'P', icon: <PenIcon /> },
     { id: 'text', label: 'Text Block', shortcut: 'T', icon: <TextIcon /> },
+    { id: 'image', label: 'Image / Asset', shortcut: '9', icon: <ImageIcon /> },
+    { id: 'frame', label: 'Frame Container', shortcut: 'F', icon: <FrameIcon /> },
     { id: 'sticky', label: 'Sticky Note', shortcut: 'S', icon: <StickyIcon /> },
     { id: 'comment', label: 'Comment Pin', shortcut: 'C', icon: <CommentIcon /> },
     { id: 'eraser', label: 'Eraser', shortcut: 'E', icon: <EraserIcon /> },
@@ -162,8 +242,8 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
         zIndex: 40,
         display: 'flex',
         alignItems: 'center',
-        gap: { xs: 0.4, sm: 0.8 },
-        p: { xs: 0.5, sm: 0.8 },
+        gap: { xs: 0.3, sm: 0.6 },
+        p: { xs: 0.4, sm: 0.7 },
         borderRadius: '16px',
         maxWidth: 'calc(100% - 24px)',
         overflowX: 'auto',
@@ -171,6 +251,54 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
         '&::-webkit-scrollbar': { display: 'none' },
       }}
     >
+      {/* Hidden file input for image upload */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleImageFileChange}
+      />
+
+      {/* Tool Lock Padlock Toggle (Excalidraw feature) */}
+      {!isViewer && onToggleToolLock && (
+        <>
+          <Tooltip
+            title={
+              isToolLocked
+                ? 'Tool Lock Active: Keeps tool selected after drawing (Q)'
+                : 'Tool Lock Inactive: Reverts to Selection after drawing (Q)'
+            }
+            arrow
+            placement="bottom"
+          >
+            <IconButton
+              size="small"
+              onClick={onToggleToolLock}
+              sx={{
+                width: { xs: 30, sm: 34 },
+                height: { xs: 30, sm: 34 },
+                borderRadius: '9px',
+                color: isToolLocked ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
+                bgcolor: isToolLocked ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                border: isToolLocked ? '1.5px solid var(--neu-primary)' : '1px solid transparent',
+                '&:hover': {
+                  bgcolor: isToolLocked ? 'rgba(99, 102, 241, 0.22)' : 'var(--neu-surface-hover)',
+                  color: isToolLocked ? 'var(--neu-primary)' : 'var(--neu-text-primary)',
+                },
+              }}
+            >
+              <LockIcon locked={isToolLocked} />
+            </IconButton>
+          </Tooltip>
+          <Divider
+            orientation="vertical"
+            flexItem
+            sx={{ my: 0.8, mx: { xs: 0.2, sm: 0.3 }, borderColor: 'var(--neu-border-subtle)' }}
+          />
+        </>
+      )}
+
       {tools.map((item, index) => {
         const isActive = activeTool === item.id;
         const isToolAllowed =
@@ -181,13 +309,13 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
         const isDisabled = !isToolAllowed;
         return (
           <React.Fragment key={item.id}>
-            {index === 2 || index === 8 || index === 10 ? (
+            {index === 2 || index === 9 || index === 12 ? (
               <Divider
                 orientation="vertical"
                 flexItem
                 sx={{
                   my: 0.8,
-                  mx: { xs: 0.2, sm: 0.4 },
+                  mx: { xs: 0.2, sm: 0.3 },
                   borderColor: 'var(--neu-border-subtle)',
                   flexShrink: 0,
                 }}
@@ -214,13 +342,10 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
                   onMouseLeave={(e) => {
                     if (!isDisabled) animateHoverLeave(e.currentTarget);
                   }}
-                  onClick={(e) => {
-                    animateTactileClick(e.currentTarget);
-                    onToolSelect(item.id);
-                  }}
+                  onClick={(e) => handleToolClick(item.id, e)}
                   sx={{
-                    width: { xs: 34, sm: 38 },
-                    height: { xs: 34, sm: 38 },
+                    width: { xs: 32, sm: 36 },
+                    height: { xs: 32, sm: 36 },
                     borderRadius: '10px',
                     color: isActive ? 'var(--neu-primary-light)' : 'var(--neu-text-secondary)',
                     bgcolor: isActive ? 'var(--neu-bg)' : 'var(--neu-surface)',
@@ -262,3 +387,4 @@ function ToolbarComponent({ activeTool, onToolSelect, isViewer, canComment = tru
 }
 
 export const Toolbar = React.memo(ToolbarComponent);
+

@@ -25,8 +25,27 @@ import {
   TextFieldsOutlined,
   TuneOutlined,
   ChevronLeftOutlined,
+  ChevronRightOutlined,
+  LockOutlined,
+  LockOpenOutlined,
+  FormatAlignLeftOutlined,
+  FormatAlignCenterOutlined,
+  FormatAlignRightOutlined,
+  ColorLensOutlined,
+  CropSquareOutlined,
+  RoundedCornerOutlined,
+  ArrowForwardOutlined,
+  FlipOutlined,
+  AlignHorizontalLeftOutlined,
+  AlignHorizontalCenterOutlined,
+  AlignHorizontalRightOutlined,
+  AlignVerticalTopOutlined,
+  AlignVerticalCenterOutlined,
+  AlignVerticalBottomOutlined,
+  AddOutlined,
+  RemoveOutlined,
 } from '@mui/icons-material';
-import { CanvasElement, ElementType, FillStyle, StrokeStyle } from '@rea/shared-types';
+import { CanvasElement, ElementType, FillStyle, StrokeStyle, ArrowHead, TextAlign } from '@rea/shared-types';
 import {
   parseColor,
   applyFillOpacity,
@@ -47,7 +66,12 @@ interface PropertiesPanelProps {
     roughness: number;
     opacity: number;
     fontSize: number;
+    fontFamily?: string;
+    textAlign?: TextAlign;
     fillOpacity?: number;
+    roundness?: 'sharp' | 'round' | null;
+    startArrowhead?: ArrowHead | null;
+    endArrowhead?: ArrowHead | null;
   };
   onUpdateStyle: (updates: Partial<CanvasElement>) => void;
   onDuplicate: () => void;
@@ -56,6 +80,11 @@ interface PropertiesPanelProps {
   onSendToBack: () => void;
   theme: 'light' | 'dark';
   activeTool?: ElementType | 'eraser' | 'pan' | 'comment';
+  onLockToggle?: () => void;
+  onFlipHorizontal?: () => void;
+  onFlipVertical?: () => void;
+  onAlign?: (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistribute?: (direction: 'horizontal' | 'vertical') => void;
 }
 
 const STROKE_COLORS = [
@@ -110,6 +139,11 @@ function PropertiesPanelComponent({
   onSendToBack,
   theme,
   activeTool,
+  onLockToggle,
+  onFlipHorizontal,
+  onFlipVertical,
+  onAlign,
+  onDistribute,
 }: PropertiesPanelProps) {
   const isDark = theme === 'dark';
   const hasSelection = selectedElements.length > 0;
@@ -126,13 +160,13 @@ function PropertiesPanelComponent({
     setIsCollapsed(isTablet);
   }, [isTablet]);
 
-  // Entrance animation when opening the Styles panel
+  // Entrance animation when opening the Styles panel (slides in from right)
   useEffect(() => {
     if (!isCollapsed && panelRef.current) {
       gsap.killTweensOf(panelRef.current);
       gsap.fromTo(
         panelRef.current,
-        { opacity: 0, x: -28, scale: 0.94, filter: 'blur(4px)' },
+        { opacity: 0, x: 28, scale: 0.94, filter: 'blur(4px)' },
         {
           opacity: 1,
           x: 0,
@@ -143,6 +177,7 @@ function PropertiesPanelComponent({
           clearProps: 'transform,filter',
           onComplete: () => {
             isAnimatingRef.current = false;
+            window.dispatchEvent(new Event('resize'));
           },
         }
       );
@@ -166,13 +201,13 @@ function PropertiesPanelComponent({
     }
   }, [isCollapsed]);
 
-  // Entrance animation for the collapsed "Styles" pill
+  // Entrance animation for the collapsed "Styles" pill (from right)
   useEffect(() => {
     if (isCollapsed && pillRef.current) {
       gsap.killTweensOf(pillRef.current);
       gsap.fromTo(
         pillRef.current,
-        { opacity: 0, scale: 0.78, x: -16 },
+        { opacity: 0, scale: 0.78, x: 16 },
         {
           opacity: 1,
           scale: 1,
@@ -196,7 +231,7 @@ function PropertiesPanelComponent({
       gsap.to(pillRef.current, {
         opacity: 0,
         scale: 0.82,
-        x: -12,
+        x: 12,
         duration: 0.18,
         ease: 'power2.in',
         onComplete: () => {
@@ -227,7 +262,7 @@ function PropertiesPanelComponent({
 
       gsap.to(panelRef.current, {
         opacity: 0,
-        x: -28,
+        x: 28,
         scale: 0.94,
         filter: 'blur(4px)',
         duration: 0.22,
@@ -316,6 +351,23 @@ function PropertiesPanelComponent({
   const activeFontSize = hasSelection
     ? selectedElements[0].fontSize || currentStyle.fontSize
     : currentStyle.fontSize;
+  const activeFontFamily = hasSelection
+    ? selectedElements[0].fontFamily || currentStyle.fontFamily || 'hand-drawn'
+    : currentStyle.fontFamily || 'hand-drawn';
+  const activeTextAlign = hasSelection
+    ? selectedElements[0].textAlign || currentStyle.textAlign || 'center'
+    : currentStyle.textAlign || 'center';
+  const activeRoundness = hasSelection
+    ? selectedElements[0].roundness || currentStyle.roundness || 'sharp'
+    : currentStyle.roundness || 'sharp';
+  const activeStartArrowhead = hasSelection
+    ? selectedElements[0].startArrowhead || currentStyle.startArrowhead || 'none'
+    : currentStyle.startArrowhead || 'none';
+  const activeEndArrowhead = hasSelection
+    ? selectedElements[0].endArrowhead || currentStyle.endArrowhead || 'arrow'
+    : currentStyle.endArrowhead || 'arrow';
+  const isLocked = hasSelection && selectedElements.every((el) => el.locked);
+
   const activeFillStyle = hasSelection ? selectedElements[0].fillStyle : currentStyle.fillStyle;
   const activeWidth = hasSelection ? selectedElements[0].strokeWidth : currentStyle.strokeWidth;
   const activeStrokeStyle = hasSelection ? selectedElements[0].strokeStyle : currentStyle.strokeStyle;
@@ -324,24 +376,37 @@ function PropertiesPanelComponent({
 
   // Contextual visibility flags
   const showStroke = !hasSelection
-    ? activeTool !== 'text' && activeTool !== 'sticky'
-    : selectedElements.some((el) => el.type !== 'text' && el.type !== 'sticky' && el.type !== 'image');
+    ? activeTool !== 'text' && activeTool !== 'sticky' && activeTool !== 'frame'
+    : selectedElements.some((el) => el.type !== 'text' && el.type !== 'sticky' && el.type !== 'image' && el.type !== 'frame');
 
   const showFill = !hasSelection
-    ? activeTool !== 'line' && activeTool !== 'arrow' && activeTool !== 'draw' && activeTool !== 'text'
-    : selectedElements.some((el) => el.type !== 'line' && el.type !== 'arrow' && el.type !== 'draw' && el.type !== 'text' && el.type !== 'image');
+    ? activeTool !== 'line' && activeTool !== 'arrow' && activeTool !== 'draw' && activeTool !== 'text' && activeTool !== 'frame'
+    : selectedElements.some((el) => el.type !== 'line' && el.type !== 'arrow' && el.type !== 'draw' && el.type !== 'text' && el.type !== 'image' && el.type !== 'frame');
 
   const showFillStyle = !hasSelection
-    ? activeTool !== 'line' && activeTool !== 'arrow' && activeTool !== 'draw' && activeTool !== 'text' && activeTool !== 'sticky'
-    : selectedElements.some((el) => !['line', 'arrow', 'draw', 'text', 'sticky', 'image'].includes(el.type));
+    ? activeTool !== 'line' && activeTool !== 'arrow' && activeTool !== 'draw' && activeTool !== 'text' && activeTool !== 'sticky' && activeTool !== 'frame'
+    : selectedElements.some((el) => !['line', 'arrow', 'draw', 'text', 'sticky', 'image', 'frame'].includes(el.type));
+
+  const showRoundness = hasSelection
+    ? selectedElements.some((el) => el.type === 'rectangle' || el.type === 'diamond')
+    : activeTool === 'rectangle' || activeTool === 'diamond';
+
+  const showArrowheads = hasSelection
+    ? selectedElements.some((el) => el.type === 'arrow' || el.type === 'line')
+    : activeTool === 'arrow' || activeTool === 'line';
+
+  const canHaveText = (type: string) =>
+    ['text', 'sticky', 'rectangle', 'diamond', 'ellipse'].includes(type);
 
   const showText = !hasSelection
-    ? activeTool !== 'line' && activeTool !== 'draw' && activeTool !== 'eraser' && activeTool !== 'pan'
-    : selectedElements.some((el) => el.type !== 'image' && el.type !== 'draw' && el.type !== 'line');
+    ? activeTool === 'text' || activeTool === 'sticky' || activeTool === 'rectangle' || activeTool === 'diamond' || activeTool === 'ellipse'
+    : selectedElements.some((el) => canHaveText(el.type) || Boolean(el.text));
 
   const showRoughness = !hasSelection
-    ? activeTool !== 'text' && activeTool !== 'sticky'
-    : selectedElements.some((el) => el.type !== 'text' && el.type !== 'image');
+    ? activeTool !== 'text' && activeTool !== 'sticky' && activeTool !== 'frame'
+    : selectedElements.some((el) => el.type !== 'text' && el.type !== 'image' && el.type !== 'frame');
+
+  const showAlign = selectedElements.length >= 2;
 
   // Title formatting
   const headerTitle = hasSelection
@@ -435,13 +500,54 @@ function PropertiesPanelComponent({
             </Tooltip>
           );
         })}
+        {/* Custom Hex Color Picker Swatch */}
+        <Tooltip title="Custom Color (Hex Picker)" placement="top" arrow>
+          <Box
+            component="label"
+            sx={{
+              position: 'relative',
+              width: 22,
+              height: 22,
+              borderRadius: '6px',
+              border: 'var(--neu-border)',
+              boxShadow: 'var(--neu-shadow-btn)',
+              cursor: 'pointer',
+              justifySelf: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              bgcolor: 'var(--neu-surface)',
+              transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                transform: 'scale(1.18)',
+                zIndex: 2,
+                boxShadow: 'var(--neu-shadow-btn-hover)',
+              },
+            }}
+          >
+            <ColorLensOutlined sx={{ fontSize: 13, color: 'var(--neu-primary-light)' }} />
+            <input
+              type="color"
+              style={{
+                position: 'absolute',
+                opacity: 0,
+                width: '100%',
+                height: '100%',
+                cursor: 'pointer',
+              }}
+              value={activeVal.startsWith('#') ? activeVal : '#6366f1'}
+              onChange={(e) => onSelect(e.target.value)}
+            />
+          </Box>
+        </Tooltip>
       </Box>
     );
   };
 
   if (isCollapsed && !isExiting) {
     return (
-      <Tooltip title="Open Style Inspector" placement="right">
+      <Tooltip title="Open Style Inspector" placement="left">
         <Paper
           ref={pillRef}
           elevation={0}
@@ -450,7 +556,8 @@ function PropertiesPanelComponent({
           sx={{
             position: 'absolute',
             top: { xs: 68, sm: 80 },
-            left: { xs: 12, sm: 20 },
+            right: { xs: 12, sm: 20 },
+            left: 'auto',
             zIndex: 35,
             px: 1.4,
             py: 0.8,
@@ -465,7 +572,7 @@ function PropertiesPanelComponent({
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
               bgcolor: 'var(--neu-surface-hover)',
-              transform: 'translateX(2px) scale(1.03)',
+              transform: 'translateX(-2px) scale(1.03)',
               boxShadow: 'var(--neu-shadow-btn-hover)',
               '& .tune-icon': {
                 transform: 'rotate(45deg)',
@@ -490,17 +597,27 @@ function PropertiesPanelComponent({
       sx={{
         position: 'absolute',
         top: { xs: 68, sm: 80 },
-        left: { xs: 12, sm: 20 },
-        width: { xs: 200, sm: 218 },
-        maxHeight: { xs: 'calc(100vh - 90px)', sm: 'calc(100vh - 110px)' },
+        right: { xs: 12, sm: 20 },
+        left: 'auto',
+        width: { xs: 236, sm: 252 },
+        maxHeight: { xs: '76vh', sm: '78vh' },
         overflowY: 'auto',
         overflowX: 'hidden',
-        scrollbarWidth: 'none', // Firefox
-        msOverflowStyle: 'none', // IE and Edge
+        overscrollBehavior: 'contain',
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'var(--neu-scrollbar, rgba(120, 140, 180, 0.3)) transparent',
         '&::-webkit-scrollbar': {
-          display: 'none', // Chrome, Safari, Opera
-          width: 0,
-          height: 0,
+          width: '5px',
+        },
+        '&::-webkit-scrollbar-track': {
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          backgroundColor: 'var(--neu-scrollbar, rgba(120, 140, 180, 0.3))',
+          borderRadius: '4px',
+        },
+        '&::-webkit-scrollbar-thumb:hover': {
+          backgroundColor: 'var(--neu-scrollbar-hover, rgba(120, 140, 180, 0.5))',
         },
         zIndex: 35,
         p: 1.2,
@@ -516,7 +633,7 @@ function PropertiesPanelComponent({
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 0.2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
-          <Tooltip title="Collapse Styles Inspector">
+          <Tooltip title="Collapse Style Panel">
             <IconButton
               size="small"
               onClick={handleClose}
@@ -527,11 +644,11 @@ function PropertiesPanelComponent({
                 p: 0.2,
                 transition: 'transform 0.2s ease',
                 '&:hover': {
-                  transform: 'scale(1.1) translateX(-2px)',
+                  transform: 'scale(1.1) translateX(2px)',
                 },
               }}
             >
-              <ChevronLeftOutlined sx={{ fontSize: 15 }} />
+              <ChevronRightOutlined sx={{ fontSize: 15 }} />
             </IconButton>
           </Tooltip>
           <Typography
@@ -550,6 +667,22 @@ function PropertiesPanelComponent({
         </Box>
         {hasSelection && (
           <Box sx={{ display: 'flex', gap: 0.4 }}>
+            {onLockToggle && (
+              <Tooltip title={isLocked ? 'Unlock (Ctrl+Shift+L)' : 'Lock (Ctrl+Shift+L)'}>
+                <IconButton
+                  size="small"
+                  onClick={onLockToggle}
+                  className="neu-icon-btn"
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    color: isLocked ? 'var(--neu-primary-light)' : 'inherit',
+                  }}
+                >
+                  {isLocked ? <LockOutlined sx={{ fontSize: 13 }} /> : <LockOpenOutlined sx={{ fontSize: 13 }} />}
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Duplicate (Ctrl+D)">
               <IconButton size="small" onClick={onDuplicate} className="neu-icon-btn" sx={{ width: 24, height: 24 }}>
                 <ContentCopyOutlined sx={{ fontSize: 13 }} />
@@ -563,6 +696,54 @@ function PropertiesPanelComponent({
           </Box>
         )}
       </Box>
+
+      {/* Frame Name */}
+      {hasSelection && selectedElements.length === 1 && selectedElements[0].type === 'frame' && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              mb: 0.4,
+              fontWeight: 600,
+              fontSize: '0.68rem',
+              color: 'var(--neu-text-primary)',
+            }}
+          >
+            Frame Name
+          </Typography>
+          <Box
+            component="input"
+            type="text"
+            value={selectedElements[0].frameLabel || selectedElements[0].text || ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onUpdateStyle({ frameLabel: e.target.value, text: e.target.value })
+            }
+            placeholder="Frame title..."
+            sx={{
+              width: '100%',
+              boxSizing: 'border-box',
+              px: 1,
+              py: 0.6,
+              borderRadius: '8px',
+              border: 'var(--neu-border)',
+              bgcolor: 'var(--neu-surface)',
+              color: 'var(--neu-text-primary)',
+              fontFamily: 'inherit',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              outline: 'none',
+              boxShadow: 'var(--neu-shadow-pressed)',
+              transition: 'border-color 0.15s ease',
+              '&:focus': {
+                borderColor: 'var(--neu-primary-light)',
+              },
+            }}
+          />
+        </Box>
+      )}
 
       {/* Stroke Color */}
       {showStroke && (
@@ -656,6 +837,53 @@ function PropertiesPanelComponent({
         </Box>
       )}
 
+      {/* Text Inside Shape Editor */}
+      {showText && hasSelection && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              mb: 0.4,
+              fontWeight: 600,
+              fontSize: '0.68rem',
+              color: 'var(--neu-text-primary)',
+            }}
+          >
+            <TextFieldsOutlined sx={{ fontSize: 12 }} /> Text Inside Shape
+          </Typography>
+          <Box
+            component="textarea"
+            rows={2}
+            value={selectedElements[0].text || ''}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              onUpdateStyle({ text: e.target.value })
+            }
+            placeholder="Type text inside shape..."
+            sx={{
+              width: '100%',
+              boxSizing: 'border-box',
+              p: 0.8,
+              borderRadius: '8px',
+              border: 'var(--neu-border)',
+              bgcolor: 'var(--neu-surface)',
+              color: 'var(--neu-text-primary)',
+              fontFamily: 'inherit',
+              fontSize: '0.75rem',
+              resize: 'vertical',
+              outline: 'none',
+              boxShadow: 'var(--neu-shadow-pressed)',
+              transition: 'border-color 0.15s ease',
+              '&:focus': {
+                borderColor: 'var(--neu-primary-light)',
+              },
+            }}
+          />
+        </Box>
+      )}
+
       {/* Text Color */}
       {showText && (
         <Box>
@@ -677,26 +905,210 @@ function PropertiesPanelComponent({
         </Box>
       )}
 
-      {/* Font Size */}
+      {/* Font Size with Stepper Number Selector and Wide Presets */}
       {showText && (
         <Box>
-          <Typography
-            variant="caption"
-            sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
-          >
-            Font Size
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.4 }}>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+            >
+              Font Size
+            </Typography>
+            {/* Number Selector / Stepper */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.3,
+                bgcolor: 'var(--neu-surface)',
+                border: 'var(--neu-border)',
+                borderRadius: '8px',
+                p: '2px 4px',
+                boxShadow: 'var(--neu-shadow-pressed)',
+              }}
+            >
+              <IconButton
+                size="small"
+                onClick={() => onUpdateStyle({ fontSize: Math.max(8, (activeFontSize || 16) - 2) })}
+                sx={{ width: 18, height: 18, p: 0, color: 'var(--neu-text-secondary)' }}
+              >
+                <RemoveOutlined sx={{ fontSize: 11 }} />
+              </IconButton>
+              <Box
+                component="input"
+                type="number"
+                min={8}
+                max={120}
+                value={activeFontSize || 16}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val)) {
+                    onUpdateStyle({ fontSize: Math.max(8, Math.min(160, val)) });
+                  }
+                }}
+                sx={{
+                  width: 36,
+                  border: 'none',
+                  bgcolor: 'transparent',
+                  color: 'var(--neu-text-primary)',
+                  fontFamily: 'inherit',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  outline: 'none',
+                  p: 0,
+                  MozAppearance: 'textfield',
+                  '&::-webkit-outer-spin-button, &::-webkit-inner-spin-button': {
+                    WebkitAppearance: 'none',
+                    margin: 0,
+                  },
+                }}
+              />
+              <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'var(--neu-text-secondary)', mr: 0.2 }}>
+                px
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => onUpdateStyle({ fontSize: Math.min(160, (activeFontSize || 16) + 2) })}
+                sx={{ width: 18, height: 18, p: 0, color: 'var(--neu-text-secondary)' }}
+              >
+                <AddOutlined sx={{ fontSize: 11 }} />
+              </IconButton>
+            </Box>
+          </Box>
           <NeuSegmentedControl
             size="small"
             value={String(activeFontSize)}
             onChange={(fs) => onUpdateStyle({ fontSize: Number(fs) })}
             sx={{ width: '100%' }}
             ariaLabel="Font Size"
-            options={[14, 18, 24, 32].map((fs) => ({
+            options={[12, 16, 24, 32, 48, 64].map((fs) => ({
               value: String(fs),
-              label: `${fs}px`,
+              label: `${fs}`,
             }))}
           />
+        </Box>
+      )}
+
+      {/* Font Family */}
+      {showText && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+          >
+            Font Family
+          </Typography>
+          <NeuSegmentedControl
+            size="small"
+            value={activeFontFamily}
+            onChange={(ff) => onUpdateStyle({ fontFamily: ff })}
+            sx={{ width: '100%' }}
+            ariaLabel="Font Family"
+            options={[
+              { value: 'hand-drawn', label: 'Virgil' },
+              { value: 'sans-serif', label: 'Normal' },
+              { value: 'monospace', label: 'Code' },
+            ]}
+          />
+        </Box>
+      )}
+
+      {/* Text Alignment */}
+      {showText && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+          >
+            Text Align
+          </Typography>
+          <NeuSegmentedControl
+            size="small"
+            value={activeTextAlign}
+            onChange={(al) => onUpdateStyle({ textAlign: al as TextAlign })}
+            sx={{ width: '100%' }}
+            ariaLabel="Text Align"
+            options={[
+              { value: 'left', label: 'Left' },
+              { value: 'center', label: 'Center' },
+              { value: 'right', label: 'Right' },
+            ]}
+          />
+        </Box>
+      )}
+
+      {/* Edges / Roundness */}
+      {showRoundness && (
+        <Box>
+          <Typography
+            variant="caption"
+            sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+          >
+            Edges
+          </Typography>
+          <NeuSegmentedControl
+            size="small"
+            value={activeRoundness || 'sharp'}
+            onChange={(r) => onUpdateStyle({ roundness: r as 'sharp' | 'round' })}
+            sx={{ width: '100%' }}
+            ariaLabel="Edges"
+            options={[
+              { value: 'sharp', label: 'Sharp' },
+              { value: 'round', label: 'Round' },
+            ]}
+          />
+        </Box>
+      )}
+
+      {/* Arrowheads */}
+      {showArrowheads && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+          <Box>
+            <Typography
+              variant="caption"
+              sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+            >
+              Start Arrowhead
+            </Typography>
+            <NeuSegmentedControl
+              size="small"
+              value={activeStartArrowhead || 'none'}
+              onChange={(ah) => onUpdateStyle({ startArrowhead: ah as ArrowHead })}
+              sx={{ width: '100%' }}
+              ariaLabel="Start Arrowhead"
+              options={[
+                { value: 'none', label: 'None' },
+                { value: 'arrow', label: 'Arrow' },
+                { value: 'triangle', label: 'Triangle' },
+                { value: 'circle', label: 'Dot' },
+                { value: 'bar', label: 'Bar' },
+              ]}
+            />
+          </Box>
+          <Box>
+            <Typography
+              variant="caption"
+              sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+            >
+              End Arrowhead
+            </Typography>
+            <NeuSegmentedControl
+              size="small"
+              value={activeEndArrowhead || 'arrow'}
+              onChange={(ah) => onUpdateStyle({ endArrowhead: ah as ArrowHead })}
+              sx={{ width: '100%' }}
+              ariaLabel="End Arrowhead"
+              options={[
+                { value: 'none', label: 'None' },
+                { value: 'arrow', label: 'Arrow' },
+                { value: 'triangle', label: 'Triangle' },
+                { value: 'circle', label: 'Dot' },
+                { value: 'bar', label: 'Bar' },
+              ]}
+            />
+          </Box>
         </Box>
       )}
 
@@ -886,6 +1298,100 @@ function PropertiesPanelComponent({
               </Button>
             </Tooltip>
           </Box>
+
+          {/* Transform / Flip */}
+          {(onFlipHorizontal || onFlipVertical) && (
+            <Box sx={{ display: 'flex', gap: 0.8, mt: 0.2 }}>
+              {onFlipHorizontal && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={onFlipHorizontal}
+                  className="neu-btn"
+                  sx={{ fontSize: '0.62rem', py: 0.3, px: 0.6, flex: 1 }}
+                >
+                  Flip H
+                </Button>
+              )}
+              {onFlipVertical && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={onFlipVertical}
+                  className="neu-btn"
+                  sx={{ fontSize: '0.62rem', py: 0.3, px: 0.6, flex: 1 }}
+                >
+                  Flip V
+                </Button>
+              )}
+            </Box>
+          )}
+
+          {/* Align & Distribute */}
+          {showAlign && onAlign && (
+            <Box sx={{ mt: 0.2 }}>
+              <Typography
+                variant="caption"
+                sx={{ mb: 0.4, display: 'block', fontWeight: 600, fontSize: '0.68rem', color: 'var(--neu-text-primary)' }}
+              >
+                Align & Distribute
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px' }}>
+                <Tooltip title="Align Left">
+                  <IconButton size="small" onClick={() => onAlign('left')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignHorizontalLeftOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Align Center">
+                  <IconButton size="small" onClick={() => onAlign('center')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignHorizontalCenterOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Align Right">
+                  <IconButton size="small" onClick={() => onAlign('right')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignHorizontalRightOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Align Top">
+                  <IconButton size="small" onClick={() => onAlign('top')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignVerticalTopOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Align Middle">
+                  <IconButton size="small" onClick={() => onAlign('middle')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignVerticalCenterOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Align Bottom">
+                  <IconButton size="small" onClick={() => onAlign('bottom')} className="neu-icon-btn" sx={{ width: 26, height: 26 }}>
+                    <AlignVerticalBottomOutlined sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              {onDistribute && (
+                <Box sx={{ display: 'flex', gap: 0.8, mt: 0.6 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => onDistribute('horizontal')}
+                    className="neu-btn"
+                    sx={{ fontSize: '0.62rem', py: 0.2, px: 0.5, flex: 1 }}
+                  >
+                    Distribute H
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => onDistribute('vertical')}
+                    className="neu-btn"
+                    sx={{ fontSize: '0.62rem', py: 0.2, px: 0.5, flex: 1 }}
+                  >
+                    Distribute V
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
         </>
       )}
     </Paper>

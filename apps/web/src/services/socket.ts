@@ -262,6 +262,12 @@ class SocketService {
     return () => s.off('comment-deleted', callback);
   }
 
+  emitDocUpdate(updates: Record<string, unknown>, documentId?: string) {
+    const docId = documentId || this.currentDocId;
+    const s = this.connect();
+    s.emit('doc-update', { documentId: docId, updates });
+  }
+
   disconnect() {
     if (this.elementsThrottleTimer) clearTimeout(this.elementsThrottleTimer);
     if (this.cursorThrottleTimer) clearTimeout(this.cursorThrottleTimer);

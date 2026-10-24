@@ -43,6 +43,13 @@ import { CanvasComments } from "./components/CanvasComments";
 import { api } from "./services/api";
 import { socketService } from "./services/socket";
 import { useAuth } from "./context/AuthContext";
+import {
+  alignElements,
+  distributeElements,
+  flipElements,
+  groupElements,
+  ungroupElements,
+} from "./canvas/math";
 
 export function App() {
   const { user, token, isAuthenticated, isLoading, logout } = useAuth();
@@ -109,7 +116,7 @@ export function App() {
       if (saved === "canvas" || saved === "split" || saved === "notes")
         return saved;
     } catch {}
-    return "split";
+    return "canvas";
   });
   const [styleMode, setStyleMode] = useState<"rough" | "clean">(() => {
     try {
@@ -146,7 +153,7 @@ export function App() {
     description: "",
     notes: "",
     elements: [],
-    viewMode: "split",
+    viewMode: "canvas",
     canvasTheme: "dark",
     gridVisible: true,
     gridSnap: true,
@@ -181,6 +188,21 @@ export function App() {
   // Fast Command Palette State (⌘K / Ctrl+K)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
 
+  // Tool Lock (keep tool active after drawing)
+  const [isToolLocked, setIsToolLocked] = useState<boolean>(false);
+  const isToolLockedRef = useRef(isToolLocked);
+  isToolLockedRef.current = isToolLocked;
+
+  const handleToggleToolLock = useCallback(() => {
+    const next = !isToolLockedRef.current;
+    setIsToolLocked(next);
+    toast(next ? "Tool Lock Enabled (stays selected)" : "Tool Lock Disabled", {
+      id: "tool-lock-toast",
+      icon: next ? "🔒" : "🔓",
+      duration: 2000,
+    });
+  }, []);
+
   // Style Defaults for new elements
   const [currentStyle, setCurrentStyle] = useState({
     strokeColor: "#6366f1",
@@ -193,6 +215,11 @@ export function App() {
     opacity: 100,
     fontSize: 16,
     fillOpacity: 15,
+    roundness: "sharp" as const,
+    fontFamily: "hand-drawn",
+    textAlign: "center" as const,
+    startArrowhead: "none" as const,
+    endArrowhead: "arrow" as const,
   });
 
   // Undo / Redo History
@@ -273,114 +300,81 @@ export function App() {
     const dividerEl = dividerRef.current;
     if (!notesEl || !canvasEl) return;
 
-    if (isFirstLayoutMount.current) {
-      isFirstLayoutMount.current = false;
-      if (viewMode === "split") {
-        gsap.set(notesEl, { width: splitWidth, opacity: 1, display: "flex" });
-        gsap.set(canvasEl, { flexGrow: 1, opacity: 1, display: "block" });
-        if (dividerEl) gsap.set(dividerEl, { width: 6, opacity: 1, display: "block" });
-      } else if (viewMode === "canvas") {
-        gsap.set(notesEl, { width: 0, opacity: 0, display: "none" });
-        gsap.set(canvasEl, { flexGrow: 1, width: "100%", opacity: 1, display: "block" });
-        if (dividerEl) gsap.set(dividerEl, { width: 0, opacity: 0, display: "none" });
-      } else if (viewMode === "notes") {
-        gsap.set(notesEl, { width: "100%", flexGrow: 1, opacity: 1, display: "flex" });
-        gsap.set(canvasEl, { width: 0, opacity: 0, display: "none" });
-        if (dividerEl) gsap.set(dividerEl, { width: 0, opacity: 0, display: "none" });
+    if (viewMode === "canvas") {
+      gsap.killTweensOf([notesEl, canvasEl, dividerEl]);
+      gsap.to(notesEl, {
+        width: 0,
+        opacity: 0,
+        duration: 0.28,
+        ease: "power3.out",
+        onComplete: () => {
+          if (notesPanelRef.current) notesPanelRef.current.style.display = "none";
+        },
+      });
+      if (dividerEl) {
+        gsap.to(dividerEl, {
+          width: 0,
+          opacity: 0,
+          duration: 0.2,
+          ease: "power2.out",
+          onComplete: () => {
+            if (dividerRef.current) dividerRef.current.style.display = "none";
+          },
+        });
       }
-      return;
-    }
-
-    gsap.killTweensOf([notesEl, canvasEl, dividerEl]);
-
-    if (viewMode === "split") {
+      gsap.set(canvasEl, { display: "block" });
+      gsap.to(canvasEl, { opacity: 1, duration: 0.28, ease: "power3.out" });
+    } else if (viewMode === "split") {
+      gsap.killTweensOf([notesEl, canvasEl, dividerEl]);
       gsap.set(notesEl, { display: "flex" });
       gsap.set(canvasEl, { display: "block" });
       if (dividerEl) gsap.set(dividerEl, { display: "block" });
 
       gsap.to(notesEl, {
         width: splitWidth,
-        flexGrow: 0,
         opacity: 1,
-        duration: 0.35,
+        duration: 0.32,
         ease: "power3.out",
       });
-
-      gsap.to(canvasEl, {
-        opacity: 1,
-        duration: 0.35,
-        ease: "power3.out",
-      });
-
       if (dividerEl) {
         gsap.to(dividerEl, {
           width: 6,
           opacity: 1,
-          duration: 0.28,
-          ease: "power2.out",
-        });
-      }
-    } else if (viewMode === "canvas") {
-      gsap.to(notesEl, {
-        width: 0,
-        opacity: 0,
-        duration: 0.32,
-        ease: "power3.out",
-        onComplete: () => {
-          if (notesPanelRef.current) notesPanelRef.current.style.display = "none";
-        },
-      });
-
-      if (dividerEl) {
-        gsap.to(dividerEl, {
-          width: 0,
-          opacity: 0,
           duration: 0.25,
           ease: "power2.out",
-          onComplete: () => {
-            if (dividerRef.current) dividerRef.current.style.display = "none";
-          },
         });
       }
-
-      gsap.set(canvasEl, { display: "block" });
-      gsap.to(canvasEl, {
-        opacity: 1,
-        duration: 0.32,
-        ease: "power3.out",
-      });
+      gsap.to(canvasEl, { opacity: 1, duration: 0.32, ease: "power3.out" });
     } else if (viewMode === "notes") {
+      gsap.killTweensOf([notesEl, canvasEl, dividerEl]);
       gsap.set(notesEl, { display: "flex" });
       gsap.to(notesEl, {
         width: "100%",
-        flexGrow: 1,
         opacity: 1,
-        duration: 0.35,
+        duration: 0.32,
         ease: "power3.out",
       });
-
       if (dividerEl) {
         gsap.to(dividerEl, {
           width: 0,
           opacity: 0,
-          duration: 0.25,
+          duration: 0.2,
           ease: "power2.out",
           onComplete: () => {
             if (dividerRef.current) dividerRef.current.style.display = "none";
           },
         });
       }
-
       gsap.to(canvasEl, {
         opacity: 0,
-        duration: 0.25,
+        duration: 0.2,
         ease: "power2.out",
         onComplete: () => {
           if (canvasContainerRef.current) canvasContainerRef.current.style.display = "none";
         },
       });
     }
-  }, [viewMode]);
+  }, [viewMode, currentView, splitWidth]);
 
   // Synchronize width when user actively drags split resize handle
   useEffect(() => {
@@ -1178,7 +1172,129 @@ export function App() {
     });
   }, [doc.elements, handleZoomReset, triggerNavInteraction]);
 
-  // Global Keyboard Shortcuts (Zoom, Undo, Redo, Tools)
+  const handleSelectElements = useCallback((ids: string[]) => {
+    setSelectedElementIds(ids);
+    socketService.emitSelectionChange(ids);
+  }, []);
+
+  // Element Actions (Duplicate, Delete, Lock, Flip, Align, Group)
+  const handleDuplicate = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const offset = 24;
+    const duplicated: CanvasElement[] = [];
+    const newSelectedIds: string[] = [];
+
+    doc.elements.forEach((el) => {
+      if (selectedElementIds.includes(el.id)) {
+        const newId = `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        newSelectedIds.push(newId);
+        duplicated.push({
+          ...el,
+          id: newId,
+          x: el.x + offset,
+          y: el.y + offset,
+          seed: Math.floor(Math.random() * 100000),
+          version: 1,
+          updatedAt: Date.now(),
+        });
+      }
+    });
+
+    handleElementsChange([...doc.elements, ...duplicated]);
+    handleSelectElements(newSelectedIds);
+  }, [doc.elements, selectedElementIds, handleElementsChange, handleSelectElements, isViewer]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const updated = doc.elements.filter(
+      (el) => !selectedElementIds.includes(el.id),
+    );
+    handleElementsChange(updated);
+    handleSelectElements([]);
+  }, [doc.elements, selectedElementIds, handleElementsChange, handleSelectElements, isViewer]);
+
+  const handleBringToFront = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const selected = doc.elements.filter((el) =>
+      selectedElementIds.includes(el.id),
+    );
+    const others = doc.elements.filter(
+      (el) => !selectedElementIds.includes(el.id),
+    );
+    handleElementsChange([...others, ...selected]);
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleSendToBack = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const selected = doc.elements.filter((el) =>
+      selectedElementIds.includes(el.id),
+    );
+    const others = doc.elements.filter(
+      (el) => !selectedElementIds.includes(el.id),
+    );
+    handleElementsChange([...selected, ...others]);
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleLockToggle = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const anyUnlocked = doc.elements.some(
+      (el) => selectedElementIds.includes(el.id) && !el.locked
+    );
+    const updated = doc.elements.map((el) => {
+      if (selectedElementIds.includes(el.id)) {
+        return { ...el, locked: anyUnlocked, updatedAt: Date.now() };
+      }
+      return el;
+    });
+    handleElementsChange(updated, true);
+    toast.success(anyUnlocked ? "Locked selection" : "Unlocked selection");
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleFlipHorizontal = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const updated = flipElements(doc.elements, selectedElementIds, "horizontal");
+    handleElementsChange(updated, true);
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleFlipVertical = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const updated = flipElements(doc.elements, selectedElementIds, "vertical");
+    handleElementsChange(updated, true);
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleAlign = useCallback(
+    (alignment: "left" | "center" | "right" | "top" | "middle" | "bottom") => {
+      if (isViewer || selectedElementIds.length < 2) return;
+      const updated = alignElements(doc.elements, selectedElementIds, alignment);
+      handleElementsChange(updated, true);
+    },
+    [doc.elements, selectedElementIds, handleElementsChange, isViewer]
+  );
+
+  const handleDistribute = useCallback(
+    (direction: "horizontal" | "vertical") => {
+      if (isViewer || selectedElementIds.length < 2) return;
+      const updated = distributeElements(doc.elements, selectedElementIds, direction);
+      handleElementsChange(updated, true);
+    },
+    [doc.elements, selectedElementIds, handleElementsChange, isViewer]
+  );
+
+  const handleGroup = useCallback(() => {
+    if (isViewer || selectedElementIds.length < 2) return;
+    const updated = groupElements(doc.elements, selectedElementIds);
+    handleElementsChange(updated, true);
+    toast.success("Grouped elements");
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  const handleUngroup = useCallback(() => {
+    if (isViewer || selectedElementIds.length === 0) return;
+    const updated = ungroupElements(doc.elements, selectedElementIds);
+    handleElementsChange(updated, true);
+    toast.success("Ungrouped elements");
+  }, [doc.elements, selectedElementIds, handleElementsChange, isViewer]);
+
+  // Global Keyboard Shortcuts (Zoom, Undo, Redo, Tools, Lock, Flip)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -1190,6 +1306,24 @@ export function App() {
 
       // Ctrl + / Ctrl - / Ctrl 0 zoom shortcuts & Command Palette
       if (e.ctrlKey || e.metaKey) {
+        if (e.shiftKey && e.key.toLowerCase() === "l") {
+          e.preventDefault();
+          handleLockToggle();
+          return;
+        }
+
+        if (e.shiftKey && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          handleUngroup();
+          return;
+        }
+
+        if (!e.shiftKey && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          handleGroup();
+          return;
+        }
+
         if (e.key.toLowerCase() === "k") {
           e.preventDefault();
           setCommandPaletteOpen((prev) => !prev);
@@ -1242,9 +1376,27 @@ export function App() {
         return;
       }
 
+      // Shift + H / Shift + V for Flip Horizontal / Vertical
+      if (e.shiftKey) {
+        if (e.key.toUpperCase() === "H") {
+          e.preventDefault();
+          handleFlipHorizontal();
+          return;
+        }
+        if (e.key.toUpperCase() === "V") {
+          e.preventDefault();
+          handleFlipVertical();
+          return;
+        }
+      }
+
       // Tool shortcuts
       const key = e.key.toUpperCase();
       switch (key) {
+        case "Q":
+          e.preventDefault();
+          handleToggleToolLock();
+          break;
         case "V":
         case "1":
           setActiveTool("selection");
@@ -1284,8 +1436,10 @@ export function App() {
           if (canEdit) setActiveTool("text");
           break;
         case "S":
-        case "9":
           if (canEdit) setActiveTool("sticky");
+          break;
+        case "F":
+          if (canEdit) setActiveTool("frame");
           break;
         case "E":
         case "0":
@@ -1305,42 +1459,17 @@ export function App() {
     handleZoomIn,
     handleZoomOut,
     handleZoomReset,
+    handleDuplicate,
+    handleDeleteSelected,
+    handleLockToggle,
+    handleFlipHorizontal,
+    handleFlipVertical,
+    handleGroup,
+    handleUngroup,
     isViewer,
     canEdit,
     canComment,
   ]);
-
-  // Element Actions (Duplicate, Delete, Reorder)
-  const handleDuplicate = () => {
-    if (isViewer || selectedElementIds.length === 0) return;
-    const offset = 24;
-    const duplicated: CanvasElement[] = [];
-    const newSelectedIds: string[] = [];
-
-    doc.elements.forEach((el) => {
-      if (selectedElementIds.includes(el.id)) {
-        const newId = `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        newSelectedIds.push(newId);
-        duplicated.push({
-          ...el,
-          id: newId,
-          x: el.x + offset,
-          y: el.y + offset,
-          seed: Math.floor(Math.random() * 100000),
-          version: 1,
-          updatedAt: Date.now(),
-        });
-      }
-    });
-
-    handleElementsChange([...doc.elements, ...duplicated]);
-    handleSelectElements(newSelectedIds);
-  };
-
-  const handleSelectElements = useCallback((ids: string[]) => {
-    setSelectedElementIds(ids);
-    socketService.emitSelectionChange(ids);
-  }, []);
 
   const selectedElementIdsRef = useRef(selectedElementIds);
   selectedElementIdsRef.current = selectedElementIds;
@@ -1354,37 +1483,6 @@ export function App() {
     setActiveCommentId(null);
     setShowComments(true);
   }, []);
-
-  const handleDeleteSelected = () => {
-    if (isViewer || selectedElementIds.length === 0) return;
-    const updated = doc.elements.filter(
-      (el) => !selectedElementIds.includes(el.id),
-    );
-    handleElementsChange(updated);
-    handleSelectElements([]);
-  };
-
-  const handleBringToFront = () => {
-    if (isViewer || selectedElementIds.length === 0) return;
-    const selected = doc.elements.filter((el) =>
-      selectedElementIds.includes(el.id),
-    );
-    const others = doc.elements.filter(
-      (el) => !selectedElementIds.includes(el.id),
-    );
-    handleElementsChange([...others, ...selected]);
-  };
-
-  const handleSendToBack = () => {
-    if (isViewer || selectedElementIds.length === 0) return;
-    const selected = doc.elements.filter((el) =>
-      selectedElementIds.includes(el.id),
-    );
-    const others = doc.elements.filter(
-      (el) => !selectedElementIds.includes(el.id),
-    );
-    handleElementsChange([...selected, ...others]);
-  };
 
   const handleUpdateStyle = (updates: Partial<CanvasElement>) => {
     if (isViewer) return;
@@ -1412,7 +1510,7 @@ export function App() {
     setDocToDiagramOpen(true);
   }, [isViewer]);
 
-  // Import JSON File
+  // Import JSON or Excalidraw File
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1421,6 +1519,63 @@ export function App() {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
+
+        // 1. Excalidraw format detection
+        if (parsed.type === "excalidraw" || (Array.isArray(parsed.elements) && parsed.version === 2)) {
+          const imported = (parsed.elements || []).map((el: any) => {
+            let elType: ElementType = el.type;
+            if ((el.type as string) === "freedraw") elType = "draw";
+
+            let pts = el.points;
+            if (Array.isArray(pts) && pts.length > 0 && Array.isArray(pts[0])) {
+              pts = pts.map((p: any) => ({ x: p[0], y: p[1] }));
+            }
+
+            return {
+              id: el.id || `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              type: elType,
+              x: el.x || 0,
+              y: el.y || 0,
+              width: el.width || 100,
+              height: el.height || 100,
+              angle: el.angle || 0,
+              strokeColor: el.strokeColor || "#000000",
+              backgroundColor: el.backgroundColor || "transparent",
+              fillStyle: el.fillStyle || "hachure",
+              strokeWidth: el.strokeWidth || 2,
+              strokeStyle: el.strokeStyle || "solid",
+              roughness: el.roughness ?? 1,
+              opacity: el.opacity ?? 100,
+              roundness: el.roundness ? "round" : "sharp",
+              fontFamily:
+                el.fontFamily === 3
+                  ? "monospace"
+                  : el.fontFamily === 2
+                  ? "sans-serif"
+                  : "hand-drawn",
+              textAlign: el.textAlign || "center",
+              startArrowhead: el.startArrowhead || "none",
+              endArrowhead: el.endArrowhead || "none",
+              text: el.text || "",
+              fontSize: el.fontSize || 16,
+              imageUrl: el.imageUrl,
+              locked: Boolean(el.locked),
+              groupIds: el.groupIds,
+              points: pts,
+              seed: el.seed || Math.floor(Math.random() * 100000),
+              version: 1,
+              versionNonce: 1,
+              isDeleted: false,
+              updatedAt: Date.now(),
+            } as CanvasElement;
+          });
+
+          handleElementsChange(imported, true);
+          toast.success("Imported .excalidraw whiteboard!");
+          return;
+        }
+
+        // 2. Standard Sailboard format
         if (parsed.elements && Array.isArray(parsed.elements)) {
           handleElementsChange(parsed.elements);
           toast.success("Whiteboard elements imported!");
@@ -1431,7 +1586,7 @@ export function App() {
           toast.success("Document imported successfully!");
         }
       } catch (err) {
-        toast.error("Invalid JSON whiteboard file format");
+        toast.error("Invalid whiteboard file format");
       }
     };
     reader.readAsText(file);
@@ -1886,7 +2041,7 @@ export function App() {
           type="file"
           ref={fileInputRef}
           style={{ display: "none" }}
-          accept=".json,.sailboard"
+          accept=".json,.sailboard,.excalidraw"
           onChange={handleImportFile}
         />
 
@@ -1990,14 +2145,17 @@ export function App() {
           <Box
             ref={notesPanelRef}
             sx={{
+              width: viewMode === "split" ? `${splitWidth}px` : viewMode === "notes" ? "100%" : 0,
+              display: viewMode === "canvas" ? "none" : "flex",
+              opacity: viewMode === "canvas" ? 0 : 1,
               flexShrink: 0,
               minWidth: 0,
               height: "100%",
               bgcolor: "var(--neu-bg)",
-              display: "flex",
               flexDirection: "column",
               position: "relative",
               overflow: "hidden",
+              transition: isDraggingSplit ? "none" : "width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease",
             }}
           >
             <NotesEditor
@@ -2015,7 +2173,9 @@ export function App() {
             ref={dividerRef}
             onMouseDown={handleSplitMouseDown}
             sx={{
-              width: 6,
+              width: viewMode === "split" ? 6 : 0,
+              display: viewMode === "split" ? "block" : "none",
+              opacity: viewMode === "split" ? 1 : 0,
               cursor: "col-resize",
               bgcolor: isDraggingSplit
                 ? "var(--neu-primary)"
@@ -2035,8 +2195,10 @@ export function App() {
           <Box
             ref={canvasContainerRef}
             sx={{
-              flexGrow: 1,
+              display: viewMode === "notes" ? "none" : "block",
+              flexGrow: viewMode === "notes" ? 0 : 1,
               flexShrink: 1,
+              width: viewMode === "canvas" ? "100%" : viewMode === "notes" ? 0 : "auto",
               minWidth: 0,
               height: "100%",
               position: "relative",
@@ -2047,13 +2209,53 @@ export function App() {
               <Toolbar
                 activeTool={activeTool}
                 onToolSelect={setActiveTool}
+                isToolLocked={isToolLocked}
+                onToggleToolLock={handleToggleToolLock}
+                onImageSelected={(dataUrl) => {
+                  const newImgEl: CanvasElement = {
+                    id: `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                    type: "image",
+                    x: -pan.x / zoom + (canvasContainerRef.current?.clientWidth || 800) / (2 * zoom) - 150,
+                    y: -pan.y / zoom + (canvasContainerRef.current?.clientHeight || 600) / (2 * zoom) - 100,
+                    width: 300,
+                    height: 200,
+                    angle: 0,
+                    strokeColor: "transparent",
+                    backgroundColor: "transparent",
+                    fillStyle: "none",
+                    strokeWidth: 1,
+                    strokeStyle: "solid",
+                    roughness: 0,
+                    opacity: 100,
+                    imageUrl: dataUrl,
+                    seed: Math.floor(Math.random() * 100000),
+                    version: 1,
+                    versionNonce: 1,
+                    isDeleted: false,
+                    updatedAt: Date.now(),
+                  };
+                  handleElementsChange([...doc.elements, newImgEl], true);
+                  handleSelectElements([newImgEl.id]);
+                }}
                 theme={effectiveThemeMode}
                 isViewer={isViewer}
                 canComment={canComment}
               />
 
-              {/* Floating Properties Inspector (Hidden for Viewers) */}
-              {!isViewer && (
+              {/* Floating Properties Inspector (Only open when user selects a shape or picks a draw tool) */}
+              {!isViewer &&
+                (selectedElements.length > 0 ||
+                  [
+                    'rectangle',
+                    'diamond',
+                    'ellipse',
+                    'arrow',
+                    'line',
+                    'draw',
+                    'text',
+                    'sticky',
+                    'frame',
+                  ].includes(activeTool)) && (
                 <PropertiesPanel
                   selectedElements={selectedElements}
                   currentStyle={currentStyle}
@@ -2064,6 +2266,11 @@ export function App() {
                   onSendToBack={handleSendToBack}
                   theme={effectiveThemeMode}
                   activeTool={activeTool}
+                  onLockToggle={handleLockToggle}
+                  onFlipHorizontal={handleFlipHorizontal}
+                  onFlipVertical={handleFlipVertical}
+                  onAlign={handleAlign}
+                  onDistribute={handleDistribute}
                 />
               )}
 
@@ -2077,6 +2284,7 @@ export function App() {
                 onToolChange={setActiveTool}
                 onDropCommentPin={handleDropCommentPin}
                 theme={effectiveThemeMode}
+                isToolLocked={isToolLocked}
                 styleMode={styleMode}
                 gridVisible={gridVisible}
                 gridSnap={gridSnap}
